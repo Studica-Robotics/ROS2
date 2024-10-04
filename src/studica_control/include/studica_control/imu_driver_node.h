@@ -6,11 +6,12 @@
 #include "VMXPi.h"
 # include <studica_control/srv/set_data.hpp>
 #include <std_msgs/msg/string.hpp>
+#include "studica_control/device.h"
 
-class ImuDriver : public rclcpp::Node {
+class ImuDriver : public Device {
 public:
     ImuDriver();
-    int cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);
+    void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);
 
 private:
     void publish_imu_data();

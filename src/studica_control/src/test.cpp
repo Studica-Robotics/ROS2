@@ -74,13 +74,10 @@ private:
 
 int main(int argc, char **argv)
 {
-    rclcpp::init(argc, argv);  // Initialize ROS2
-    auto node = std::make_shared<ServiceClientNode>();  // Create the service client node
-    rclcpp::spin(node);  // Spin the node
-    rclcpp::shutdown();  // Shutdown ROS2
+    std::cout << "EYFAHD";
     return 0;
 }
-
+ 
 // int main(int argc, char *argv[]) {
 //     rclcpp::init(argc, argv);
 //     auto imu_node = std::make_shared<ImuDriver>();

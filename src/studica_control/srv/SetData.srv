@@ -1,5 +1,6 @@
 string command
 string name
+string component
 string params
 ---
 bool success

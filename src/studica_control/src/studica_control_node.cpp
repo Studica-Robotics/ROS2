@@ -17,13 +17,14 @@
 #include <map>
 # include <rclcpp_action/rclcpp_action.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include "studica_control/device.h"
 
-class DynamicPublisher : public rclcpp::Node
+class DynamicPublisher : public Device
 // tell servo to change stuff 
 // send commands to sensors?
 {
 public:
-    DynamicPublisher(const std::string &name) : Node(name)
+    DynamicPublisher(const std::string &name) : Device(name)
     {
         publisher_ = this->create_publisher<std_msgs::msg::String>("topic_" + name, 10);
         timer_ = this->create_wall_timer(
@@ -99,8 +100,39 @@ public:
 private:
     // SERVICES
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr dynamic_publisher_service_;
-    std::map<std::string, std::shared_ptr<DynamicPublisher>> component_map; // Store publisher objects
+    std::map<std::string, std::shared_ptr<Device>> component_map; // Store publisher objects
     std::shared_ptr<rclcpp::executors::MultiThreadedExecutor> executor_;
+
+    void handle_initialize(const std::shared_ptr<studica_control::srv::SetData::Request> request,
+                           std::shared_ptr<studica_control::srv::SetData::Response> response) {
+        std::string name = request->name.c_str();
+        if (component_map.find(name) != component_map.end()) {
+            response->success = false;
+            response->message = name + " is already running.";
+            RCLCPP_INFO(this->get_logger(), "%s is already running.", name.c_str());
+        } else {
+            std::string component = request->component.c_str();
+            if (component == "publisher") {
+                auto publisher_node = std::make_shared<DynamicPublisher>(name);
+                component_map[name] = publisher_node;
+                executor_->add_node(publisher_node);
+                response->success = true;
+                response->message = name + " started.";
+                RCLCPP_INFO(this->get_logger(), "%s started.", name.c_str());
+            }
+            else if (component == "imu") {
+                RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component, name.c_str());
+                auto imu_node = std::make_shared<ImuDriver>();
+                component_map[name] = imu_node;
+                executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(imu_node));
+            }
+            else {
+                response->success = false;
+                response->message = "No such component '" + component + "'";
+                RCLCPP_INFO(this->get_logger(), "No such component '%s'", component);
+            }
+        }
+    }
 
     void manage_dynamic_publisher_callback(const std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
         std::string action = std::string(request->command);
@@ -109,26 +141,28 @@ private:
 
         if (action == "initialize")
         {
-            // Check if the publisher is already running
-            if (component_map.find(name) != component_map.end())
-            {
-                response->success = false;
-                response->message = name + " is already running.";
-                RCLCPP_INFO(this->get_logger(), "%s is already running.", name.c_str());
-            }
-            else
-            {
-                // Create and start a new publisher node
-                RCLCPP_INFO(this->get_logger(), "Starting %s...", name.c_str());
-                auto publisher_node = std::make_shared<DynamicPublisher>(name);
-                component_map[name] = publisher_node;
+            // handle_initialize
+            handle_initialize(request, response);
+            // // Check if the publisher is already running
+            // if (component_map.find(name) != component_map.end())
+            // {
+            //     response->success = false;
+            //     response->message = name + " is already running.";
+            //     RCLCPP_INFO(this->get_logger(), "%s is already running.", name.c_str());
+            // }
+            // else
+            // {
+            //     // Create and start a new publisher node
+            //     RCLCPP_INFO(this->get_logger(), "Starting %s...", name.c_str());
+            //     auto publisher_node = std::make_shared<DynamicPublisher>(name);
+            //     component_map[name] = publisher_node;
 
-                executor_->add_node(publisher_node);
+            //     executor_->add_node(publisher_node);
                 
-                response->success = true;
-                response->message = name + " started.";
-                RCLCPP_INFO(this->get_logger(), "%s started.", name.c_str());
-            }
+            //     response->success = true;
+            //     response->message = name + " started.";
+            //     RCLCPP_INFO(this->get_logger(), "%s started.", name.c_str());
+            // }
         }
         else if (action == "terminate")
         {
@@ -167,118 +201,6 @@ private:
             response->message = "No such action '" + action + "'";
 ;        }
     }
-    // void handle_read_data(
-    //     const std::shared_ptr<studica_control::srv::Trigger::Request> request,
-    //     std::shared_ptr<studica_control::srv::Trigger::Response> response
-    // ) {
-    //     RCLCPP_INFO(this->get_logger(), "Received request to read data");
-
-    //     // Placeholder logic for reading data
-    //     // Implement your actual data reading logic here
-    //     bool data_value = true;  // Placeholder data value
-    //     if (request->data == "a") {
-    //         log("a");
-    //     }
-
-    //     // Send response
-    //     response->success = true;
-    //     response->message = data_value ? "Data is true" : "Data is false";
-    // }
-
-    // void handle_set_data(
-    //     const std::shared_ptr<studica_control::srv::SetBool::Request> request,
-    //     std::shared_ptr<studica_control::srv::SetBool::Response> response
-    // ) {
-    //     RCLCPP_INFO(this->get_logger(), "Received request to set data: %s", request->data ? "true" : "false");
-    //     if (request->data) {
-    //         boolean = true;
-    //         RCLCPP_INFO(this->get_logger(), "Data has been set to true.");
-    //     } else {
-    //         boolean = false;
-    //         RCLCPP_INFO(this->get_logger(), "Data has been set to false.");
-    //     }
-
-    //     // Send response
-    //     response->success = true;
-    //     response->message = "Data set successfully";
-    // }
-
-    // void handle_imu_service(const std::shared_ptr<studica_control::srv::ControlImu::Request> request,
-    //                         std::shared_ptr<studica_control::srv::ControlImu::Response> response) {
-    //     if (request->start) {
-    //         if (!imu_publisher_thread_) {
-    //             imu_node_ = std::make_shared<ImuDriver>();  // Create the ImuDriver node
-    //             imu_publisher_thread_ = std::make_shared<std::thread>(
-    //                 [this]() {
-    //                     RCLCPP_INFO(this->get_logger(), "Spinning IMU publisher node...");
-    //                     rclcpp::spin(imu_node_);
-    //                 });
-    //             response->success = true;
-    //             response->message = "IMU publisher started.";
-    //         } else {
-    //             RCLCPP_WARN(this->get_logger(), "IMU publisher node is already running.");
-    //             response->success = false;
-    //             response->message = "IMU publisher is already running.";
-    //         }
-    //     } else {
-    //         if (imu_publisher_thread_ && imu_node_) {
-    //             RCLCPP_INFO(this->get_logger(), "Stopping IMU publisher node...");
-    //             imu_node_.reset();
-    //             imu_publisher_thread_.reset();
-    //             response->success = true;
-    //             response->message = "IMU publisher stopped.";
-    //         } else {
-    //             RCLCPP_WARN(this->get_logger(), "IMU publisher node is not running.");
-    //             response->success = false;
-    //             response->message = "IMU publisher is not running.";
-    //         }
-    //     }
-    // }
-
-    // void handle_motor_service(const std::shared_ptr<studica_control::srv::ControlMotor::Request> request,
-    //                            std::shared_ptr<studica_control::srv::ControlMotor::Response> response) {
-    //     // Set the motor speed based on the request
-    //     set_motor_speed(request->speed);
-    //     response->success = true;
-    // }
-
-    // void publish_imu_data() {
-    //     auto imu_msg = sensor_msgs::msg::Imu();
-    //     // Fill the imu_msg with your IMU data
-    //     imu_msg.header.stamp = this->get_clock()->now();
-    //     imu_msg.header.frame_id = "imu_link";
-
-    //     // Example data
-    //     imu_msg.orientation.x = 0.0; // Replace with actual data
-    //     imu_msg.orientation.y = 0.0; // Replace with actual data
-    //     imu_msg.orientation.z = 0.0; // Replace with actual data
-    //     imu_msg.orientation.w = 1.0; // Replace with actual data
-
-    //     imu_publisher_->publish(imu_msg);
-    //     RCLCPP_INFO(this->get_logger(), "Published IMU Data.");
-    // }
-
-    // void set_motor_speed(double speed) {
-    //     // Here you would add the logic to control the motor speed
-    //     RCLCPP_INFO(this->get_logger(), "Setting motor speed to: %f", speed);
-    //     // For example, send a command to a motor controller here
-    // }
-
-// SERVICE DECLARATIONS
-// 
-//
-//
-    // Controller
-    // rclcpp::Service<studica_control::srv::SetBool>::SharedPtr set_data_service_;
-
-    // Components
-    // rclcpp::Service<studica_control::srv::ControlImu>::SharedPtr imu_service_;
-    // rclcpp::Service<studica_control::srv::ControlMotor>::SharedPtr motor_service_;
-    // rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_publisher_;
-    // std::shared_ptr<ImuDriver> imu_node_;  // Shared pointer to the ImuDriver node
-    // std::shared_ptr<std::thread> imu_publisher_thread_;  // Thread for spinning the node
-
-    // rclcpp::TimerBase::SharedPtr timer_;
 
 public:
     // Function to adjust publisher parameters dynamically
@@ -299,33 +221,33 @@ public:
     }
 };
 
-// int main(int argc, char **argv)
-// {
-//     rclcpp::init(argc, argv);
-
-//     auto node_manager = std::make_shared<StudicaControlServer>();
-//     auto executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
-
-//     // Set the executor in the node manager
-//     node_manager->set_executor(executor);
-
-//     // Add the NodeManager to the executor
-//     executor->add_node(node_manager);
-
-//     // Adjust the publisher rate (can be based on user input or some logic)
-//     node_manager->adjust_publisher_rate("publisher_1", std::chrono::milliseconds(500)); // Adjust rate to 500ms
-
-//     // Run the executor
-//     executor->spin();
-
-//     rclcpp::shutdown();
-//     return 0;
-// }
-
-int main(int argc, char *argv[]) {
+int main(int argc, char **argv)
+{
     rclcpp::init(argc, argv);
-    auto imu_node = std::make_shared<ImuDriver>();
-    rclcpp::spin(imu_node);
+
+    auto node_manager = std::make_shared<StudicaControlServer>();
+    auto executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
+
+    // Set the executor in the node manager
+    node_manager->set_executor(executor);
+
+    // Add the NodeManager to the executor
+    executor->add_node(node_manager);
+
+    // Adjust the publisher rate (can be based on user input or some logic)
+    node_manager->adjust_publisher_rate("publisher_1", std::chrono::milliseconds(500)); // Adjust rate to 500ms
+
+    // Run the executor
+    executor->spin();
+
     rclcpp::shutdown();
     return 0;
 }
+
+// int main(int argc, char *argv[]) {
+//     rclcpp::init(argc, argv);
+//     auto imu_node = std::make_shared<ImuDriver>();
+//     rclcpp::spin(imu_node);
+//     rclcpp::shutdown();
+//     return 0;
+// }
