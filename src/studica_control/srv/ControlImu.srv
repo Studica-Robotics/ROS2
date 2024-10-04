@@ -1,0 +1,6 @@
+# ControlImu.srv
+
+bool start  # Request to start the IMU data collection
+---
+bool success  # Response indicating success or failure
+string message
