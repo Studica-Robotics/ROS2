@@ -61,7 +61,12 @@ ament_target_dependencies(tester ${dependencies})
 target_link_libraries(tester "${cpp_typesupport_target}")
 
 
-install(TARGETS studica_control_node tester # <- Executable targets
+# add_executable(dio src/dio.cpp)
+# ament_target_dependencies(dio ${dependencies})
+# target_link_libraries(dio "${cpp_typesupport_target}")
+
+
+install(TARGETS studica_control_node tester  # <- Executable targets
   DESTINATION lib/${PROJECT_NAME}
 )
 

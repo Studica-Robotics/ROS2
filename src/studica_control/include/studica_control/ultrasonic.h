@@ -9,7 +9,7 @@
 
 class UltrasonicDriver : public Device {
 public:
-    UltrasonicDriver(std::shared_ptr<VMXPi> vmx, VMXChannelIndex ping, VMXChannelIndex echo);
+    UltrasonicDriver(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping, VMXChannelIndex echo);
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);
 
 private:

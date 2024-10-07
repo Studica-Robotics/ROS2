@@ -1,11 +1,11 @@
 #include "studica_control/ultrasonic.h"
 static constexpr double kPingTime = 10 * 1e-6;
 
-UltrasonicDriver::UltrasonicDriver(std::shared_ptr<VMXPi> vmx, VMXChannelIndex ping, VMXChannelIndex echo) : Device("ultrasonic_driver_node_"), vmx_(vmx) {
+UltrasonicDriver::UltrasonicDriver(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping, VMXChannelIndex echo) : Device("ultrasonic_driver_node_"), vmx_(vmx) {
     is_reading_ = false;
 
     // Create a publisher for distance data
-    distance_publisher_ = this->create_publisher<std_msgs::msg::Float32>("ultrasonic/distance", 10);
+    distance_publisher_ = this->create_publisher<std_msgs::msg::Float32>("ultrasonic/distance_" +  name, 10);
 
     // Check if VMXPi is open
     if (vmx_->IsOpen()) {

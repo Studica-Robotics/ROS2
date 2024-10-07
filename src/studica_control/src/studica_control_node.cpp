@@ -151,7 +151,7 @@ private:
             RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
             uint8_t ping = request->initparams.ping;
             uint8_t echo = request->initparams.echo;
-            auto ultrasonic_node = std::make_shared<UltrasonicDriver>(vmx_, ping, echo);
+            auto ultrasonic_node = std::make_shared<UltrasonicDriver>(vmx_, std::string(name), ping, echo);
             component_map[name] = ultrasonic_node;
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(ultrasonic_node));
         }
