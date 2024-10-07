@@ -6,9 +6,9 @@
 // #include <studica_control/srv/control_motor.hpp>
 
 #include "studica_control/imu_driver_node.h" 
+#include "studica_control/sharp_sensor_node.h"
 
 // void log(string s) { RCLCPP_INFO(this->get_logger(), s); }
-
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -143,6 +143,12 @@ private:
             auto imu_node = std::make_shared<ImuDriver>();
             component_map[name] = imu_node;
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(imu_node));
+        }
+        else if (component == "analog") {
+            RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component, name.c_str());
+            auto sharp_node = std::make_shared<SharpSensor>();
+            component_map[name] = sharp_node;
+            executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(sharp_node));
         }
         else {
             response->success = false;
