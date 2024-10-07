@@ -9,7 +9,7 @@
 
 class SharpSensor : public Device {
 public:
-    SharpSensor();
+    SharpSensor(std::shared_ptr<VMXPi> vmx);
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response) override;
     
     void start_publishing();  // Method to start publishing
@@ -20,7 +20,7 @@ private:
     void Spin();
     void publish_message();
 
-    std::shared_ptr<VMXPi> vmx;
+    std::shared_ptr<VMXPi> vmx_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr sharp_publisher_;
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_;
