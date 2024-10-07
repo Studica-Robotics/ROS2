@@ -156,8 +156,8 @@ private:
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(ultrasonic_node));
         }
         else if (component == "analog") {
-            RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component, name.c_str());
-            auto sharp_node = std::make_shared<SharpSensor>();
+            RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
+            auto sharp_node = std::make_shared<SharpSensor>(vmx_); // pass vmx
             component_map[name] = sharp_node;
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(sharp_node));
         }
@@ -223,3 +223,4 @@ int main(int argc, char **argv)
 //     rclcpp::shutdown();
 //     return 0;
 // }
+

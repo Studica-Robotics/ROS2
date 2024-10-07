@@ -1,22 +1,12 @@
 #include "studica_control/sharp_sensor_node.h"
 
-void DisplayVMXError(VMXErrorCode vmxerr) {
-    const char *p_err_description = GetVMXErrorString(vmxerr);
-    printf("VMXError %d:  %s\n", vmxerr, p_err_description);
-}
-
-SharpSensor::SharpSensor() : Device("sharp_sensor_node"), is_publishing_(false), count_(0) {
+SharpSensor::SharpSensor(std::shared_ptr<VMXPi> vmx) : Device("sharp_sensor_node"), is_publishing_(false), count_(0), vmx_(vmx) {
     // Init publishers
     sharp_publisher_ = this->create_publisher<std_msgs::msg::String>("sharp_sensor/data", 10);
     publisher_ = this->create_publisher<std_msgs::msg::String>("sharp_sensor/message", 10);
 
-    // Init VMX
-    bool realtime = true;
-    uint8_t update_rate_hz = 50;
-    vmx = std::make_shared<VMXPi>(realtime, update_rate_hz);
-
     // Verify VMX connection
-    if (vmx->IsOpen()) {
+    if (vmx_->IsOpen()) {
         RCLCPP_INFO(this->get_logger(), "Sharp Sensor Connected");
 
         // Setup publishing timer
@@ -27,16 +17,15 @@ SharpSensor::SharpSensor() : Device("sharp_sensor_node"), is_publishing_(false),
         // Get full scale voltage of analog input
         VMXErrorCode vmxerr;
         float full_scale_voltage;
-        if (vmx->io.Accumulator_GetFullScaleVoltage(full_scale_voltage, &vmxerr)) {
+        if (vmx_->io.Accumulator_GetFullScaleVoltage(full_scale_voltage, &vmxerr)) {
             printf("Analog input voltage: %0.1f\n", full_scale_voltage);
         } else {
             printf("ERROR acquiring Analog Input Voltage.\n");
-            DisplayVMXError(vmxerr);
         }
 
         // Configure analog accumulator resources
         VMXChannelIndex first_anin_channel;
-        uint8_t num_analog_inputs = vmx->io.GetNumChannelsByType(VMXChannelType::AnalogIn, first_anin_channel);
+        uint8_t num_analog_inputs = vmx_->io.GetNumChannelsByType(VMXChannelType::AnalogIn, first_anin_channel);
         accumulator_res_handles.resize(num_analog_inputs);  // Resize to hold resource handles
 
         for (uint8_t analog_in_chan_index = first_anin_channel; 
@@ -45,13 +34,12 @@ SharpSensor::SharpSensor() : Device("sharp_sensor_node"), is_publishing_(false),
             VMXResourceIndex accum_res_index = analog_in_chan_index - first_anin_channel;
             AccumulatorConfig accum_config;
             accum_config.SetNumAverageBits(9);
-            if (!vmx->io.ActivateSinglechannelResource(
+            if (!vmx_->io.ActivateSinglechannelResource(
                     VMXChannelInfo(analog_in_chan_index, VMXChannelCapability::AccumulatorInput),
                     &accum_config, 
                     accumulator_res_handles[accum_res_index], 
                     &vmxerr)) {
                 printf("Error Activating Singlechannel Resource Accumulator for Channel index %d.\n", analog_in_chan_index);
-                DisplayVMXError(vmxerr);
             } else {
                 printf("Analog Input Channel %d activated on Resource type %d, index %d\n", 
                        analog_in_chan_index,
@@ -73,14 +61,22 @@ void SharpSensor::publish_message() {
 
 // Publish analog data from Sharp Sensor
 void SharpSensor::publish_analog_data() {
+    // CONVERT VOLTAGE TO DISTANCE:
+    // //Create an accessor function
+    // double getDistance(void)
+    // {
+    //     return (pow(sharp.GetAverageVoltage(), -1.2045)) * 27.726;
+    // }
+
+
     VMXErrorCode vmxerr;
     float analog_voltage;
     std::ostringstream voltage_stream; // accum voltage readings
 
     // Loop through the accumulator resource handles to get the average voltage for each channel
     for (size_t j = 0; j < accumulator_res_handles.size(); j++) {
-        if (vmx->io.Accumulator_GetAverageVoltage(accumulator_res_handles[j], analog_voltage, &vmxerr)) {
-            voltage_stream << analog_voltage;  // appennd
+        if (vmx_->io.Accumulator_GetAverageVoltage(accumulator_res_handles[j], analog_voltage, &vmxerr)) {
+            voltage_stream << analog_voltage;  // append voltage reads
 
             // Add a comma and space for separation except for the last element
             if (j < accumulator_res_handles.size() - 1) {
@@ -88,7 +84,6 @@ void SharpSensor::publish_analog_data() {
             }
         } else {
             RCLCPP_ERROR(this->get_logger(), "Error getting Average Voltage of analog accumulator %d", j);
-            DisplayVMXError(vmxerr);
         }
     }
 
