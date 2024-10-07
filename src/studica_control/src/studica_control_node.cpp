@@ -6,6 +6,7 @@
 // #include <studica_control/srv/control_motor.hpp>
 
 #include "studica_control/imu_driver_node.h" 
+#include "studica_control/ultrasonic.h"
 
 // void log(string s) { RCLCPP_INFO(this->get_logger(), s); }
 
@@ -15,8 +16,9 @@
 #include <memory>
 #include <string>
 #include <map>
-# include <rclcpp_action/rclcpp_action.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include <studica_control/msg/initialize_params.hpp>
 #include "studica_control/device.h"
 
 class DynamicPublisher : public Device
@@ -77,8 +79,9 @@ public:
 private:
     // SERVICES
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr dynamic_publisher_service_;
-    std::map<std::string, std::shared_ptr<Device>> component_map; // Store publisher objects
     std::shared_ptr<rclcpp::executors::MultiThreadedExecutor> executor_;
+    std::shared_ptr<VMXPi> vmx_;
+    std::map<std::string, std::shared_ptr<Device>> component_map; // Store publisher objects
 
     void manage_service_callback(const std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
         std::string action = std::string(request->command);
@@ -139,15 +142,23 @@ private:
             RCLCPP_INFO(this->get_logger(), "%s started.", name.c_str());
         }
         else if (component == "imu") {
-            RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component, name.c_str());
-            auto imu_node = std::make_shared<ImuDriver>();
+            RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
+            auto imu_node = std::make_shared<ImuDriver>(vmx_);
             component_map[name] = imu_node;
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(imu_node));
         }
+        else if (component == "ultrasonic") {
+            RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
+            uint8_t ping = request->initparams.ping;
+            uint8_t echo = request->initparams.echo;
+            auto ultrasonic_node = std::make_shared<UltrasonicDriver>(vmx_, ping, echo);
+            component_map[name] = ultrasonic_node;
+            executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(ultrasonic_node));
+        }
         else {
             response->success = false;
-            response->message = "No such component '" + component + "'";
-            RCLCPP_INFO(this->get_logger(), "No such component '%s'", component);
+            response->message = "No such component '" + std::string(component) + "'";
+            RCLCPP_INFO(this->get_logger(), "No such component '%s'", std::string(component));
         }
     }
 
@@ -172,14 +183,25 @@ public:
     {
         executor_ = exec;
     }
+    void set_hal(const std::shared_ptr<VMXPi>& vmx)
+    {
+        vmx_ = vmx;
+    }
 };
 
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
 
+
+    bool realtime = true;
+    uint8_t update_rate_hz = 50;
+    auto vmx = std::make_shared<VMXPi>(realtime, update_rate_hz);
+
     auto node_manager = std::make_shared<StudicaControlServer>();
     auto executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
+
+    node_manager->set_hal(vmx);
     node_manager->set_executor(executor);
     executor->add_node(node_manager);
     executor->spin();

@@ -19,7 +19,7 @@ include_directories(include /usr/local/include/vmxpi) # <- #include <"">
 
 rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files
   # "action/RotateAbsolute.action"
-  # "msg/Color.msg"
+  "msg/InitializeParams.msg"
   "srv/ControlImu.srv"
   "srv/SetData.srv"
   )
@@ -45,11 +45,12 @@ set(studica_control_SRCS # <- source files
   src/studica_control_node.cpp
   src/imu_driver_node.cpp
   src/dynamic_publisher.cpp
+  src/ultrasonic.cpp
 )
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 
-add_executable(studica_control_node ${studica_control_SRCS} include/studica_control/imu_driver_node.h)
+add_executable(studica_control_node ${studica_control_SRCS} include/studica_control/imu_driver_node.h include/studica_control/ultrasonic.h)
 target_link_libraries(studica_control_node /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so)
 ament_target_dependencies(studica_control_node ${dependencies})
 target_link_libraries(studica_control_node "${cpp_typesupport_target}")

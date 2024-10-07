@@ -1,6 +1,6 @@
 #include "studica_control/imu_driver_node.h"
 
-ImuDriver::ImuDriver(std::shared_ptr<VMXPi> vmx) : Device("imu_driver_node_"), vmx_(vmx) {
+ImuDriver::ImuDriver() : Device("imu_driver_node_") {
     is_publishing_ = false;
     // Create a publisher for IMU data
     imu_publisher_ = this->create_publisher<sensor_msgs::msg::Imu>("imu/data", 10);
@@ -13,10 +13,10 @@ ImuDriver::ImuDriver(std::shared_ptr<VMXPi> vmx) : Device("imu_driver_node_"), v
 
     bool realtime = true;
     uint8_t update_rate_hz = 50;
-    vmx_ = vmx;
+    vmx = std::make_shared<VMXPi>(realtime, update_rate_hz);
 
     // Check if VMXPi is open
-    if (vmx_->IsOpen()) {
+    if (vmx->IsOpen()) {
         RCLCPP_INFO(this->get_logger(), "IMU Connected");
         timer_ = this->create_wall_timer(
             std::chrono::milliseconds(1000), 
@@ -30,13 +30,13 @@ ImuDriver::ImuDriver(std::shared_ptr<VMXPi> vmx) : Device("imu_driver_node_"), v
 void ImuDriver::publish_message() {
     auto message = std_msgs::msg::String();
     message.data = std::string("Message from ") + this->get_name() + std::string(": ") + std::to_string(count_++);
-    // std::cout << this->get_name() << ": " << count_ << std::endl;
+    std::cout << this->get_name() << ": " << count_ << std::endl;
     publisher_->publish(message);
 }
 
 // Publish IMU data
 void ImuDriver::publish_imu_data() {
-    vmx::AHRS& ahrs_ref = vmx_->ahrs;
+    vmx::AHRS& ahrs_ref = vmx->ahrs;
     auto imu_msg = sensor_msgs::msg::Imu();
 
     imu_msg.header.stamp = this->get_clock()->now();
@@ -59,7 +59,7 @@ void ImuDriver::publish_imu_data() {
 
     // Publish the IMU data
     imu_publisher_->publish(imu_msg);
-    // std::cout << "Published IMU Data: " << imu_msg.orientation.x << ", " << imu_msg.orientation.y << ", " << imu_msg.orientation.z << std::endl;
+    std::cout << "Published IMU Data: " << imu_msg.orientation.x << ", " << imu_msg.orientation.y << ", " << imu_msg.orientation.z << std::endl;
 }
 
 // Main loop where publishing happens if enabled
