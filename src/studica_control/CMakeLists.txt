@@ -47,6 +47,7 @@ set(studica_control_SRCS # <- source files
   src/dynamic_publisher.cpp
   src/ultrasonic.cpp
   src/sharp_sensor_node.cpp
+  src/DIOPin.cpp
 )
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")

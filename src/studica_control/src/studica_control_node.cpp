@@ -20,6 +20,7 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <studica_control/msg/initialize_params.hpp>
 #include "studica_control/device.h"
+#include "studica_control/DIOPin.h"
 
 class DynamicPublisher : public Device
 // tell servo to change stuff 
@@ -192,7 +193,7 @@ private:
             std::vector<std::pair<uint8_t, uint8_t>> valid_pairs = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {8, 9}, {10, 11}};
             if (std::find(valid_pairs.begin(), valid_pairs.end(), std::make_pair(ping, echo)) == valid_pairs.end()) {
                 response->success = false;
-                response->message = "Invalid pin pair.";
+                response->message = "Invalid pin pair (ping, echo).";
                 RCLCPP_INFO(this->get_logger(), "Invalid pin pair.");
                 return;
             }
@@ -208,6 +209,23 @@ private:
             auto sharp_node = std::make_shared<SharpSensor>(vmx_); // pass vmx
             component_map[name] = {name, sharp_node, {}};
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(sharp_node));
+        }
+        else if (component == "dio") {
+            RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
+            uint8_t pin = request->initparams.pin;
+            // Checks
+            if (get_pin_state(pin)) {
+                response->success = false;
+                response->message = "Pin already in use.";
+                RCLCPP_INFO(this->get_logger(), "Pin already in use.");
+                return;
+            }
+            // Initialize
+            auto dio_node = std::make_shared<DIOPin>(vmx_, pin, DIOPin::PinMode::OUTPUT);
+            component_map[name] = {name, dio_node, {pin}};
+            executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(dio_node));
+            response->success = true;
+            response->message = name + " started.";
         }
         else {
             response->success = false;
