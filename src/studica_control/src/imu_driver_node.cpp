@@ -1,6 +1,8 @@
 #include "studica_control/imu_driver_node.h"
 
-ImuDriver::ImuDriver(std::shared_ptr<VMXPi> vmx) : Device("imu_driver_node_"), vmx_(vmx) {
+ImuDriver::ImuDriver(std::shared_ptr<VMXPi> vmx)
+    : Device("imu_driver_node_"), vmx_(vmx) {
+        
     is_publishing_ = false;
     // Create a publisher for IMU data
     imu_publisher_ = this->create_publisher<sensor_msgs::msg::Imu>("imu/data", 10);
@@ -16,18 +18,22 @@ ImuDriver::ImuDriver(std::shared_ptr<VMXPi> vmx) : Device("imu_driver_node_"), v
     vmx_ = vmx;
 
     // Check if VMXPi is open
-    if (vmx_->IsOpen()) {
+    if (vmx_->IsOpen())
+    {
         RCLCPP_INFO(this->get_logger(), "IMU Connected");
         timer_ = this->create_wall_timer(
-            std::chrono::milliseconds(1000), 
-            std::bind(&ImuDriver::Spin, this));  // Will check the state before publishing
-    } else {
+            std::chrono::milliseconds(1000),
+            std::bind(&ImuDriver::Spin, this)); // Will check the state before publishing
+    }
+    else
+    {
         RCLCPP_ERROR(this->get_logger(), "Error: Unable to open VMX Client.");
     }
 }
 
 // Publish a simple message
-void ImuDriver::publish_message() {
+void ImuDriver::publish_message()
+{
     auto message = std_msgs::msg::String();
     message.data = std::string("Message from ") + this->get_name() + std::string(": ") + std::to_string(count_++);
     // std::cout << this->get_name() << ": " << count_ << std::endl;
@@ -35,8 +41,9 @@ void ImuDriver::publish_message() {
 }
 
 // Publish IMU data
-void ImuDriver::publish_imu_data() {
-    vmx::AHRS& ahrs_ref = vmx_->ahrs;
+void ImuDriver::publish_imu_data()
+{
+    vmx::AHRS &ahrs_ref = vmx_->ahrs;
     auto imu_msg = sensor_msgs::msg::Imu();
 
     imu_msg.header.stamp = this->get_clock()->now();
@@ -47,13 +54,16 @@ void ImuDriver::publish_imu_data() {
     bool publish_pitch = this->get_parameter("publish_pitch").as_bool();
     bool publish_roll = this->get_parameter("publish_roll").as_bool();
 
-    if (publish_yaw) {
+    if (publish_yaw)
+    {
         imu_msg.orientation.x = ahrs_ref.GetYaw();
     }
-    if (publish_pitch) {
+    if (publish_pitch)
+    {
         imu_msg.orientation.y = ahrs_ref.GetPitch();
     }
-    if (publish_roll) {
+    if (publish_roll)
+    {
         imu_msg.orientation.z = ahrs_ref.GetRoll();
     }
 
@@ -63,44 +73,60 @@ void ImuDriver::publish_imu_data() {
 }
 
 // Main loop where publishing happens if enabled
-void ImuDriver::Spin() { 
-    if (is_publishing_) {  // Check if publishing is enabled
-        publish_imu_data(); 
+void ImuDriver::Spin()
+{
+    if (is_publishing_)
+    { // Check if publishing is enabled
+        publish_imu_data();
         publish_message();
     }
 }
 
 // Start publishing
-void ImuDriver::start_publishing() {
-    if (!is_publishing_) {
+void ImuDriver::start_publishing()
+{
+    if (!is_publishing_)
+    {
         is_publishing_ = true;
         RCLCPP_INFO(this->get_logger(), "Publishing started");
-    } else {
+    }
+    else
+    {
         RCLCPP_INFO(this->get_logger(), "Already publishing");
     }
 }
 
 // Stop publishing
-void ImuDriver::stop_publishing() {
-    if (is_publishing_) {
+void ImuDriver::stop_publishing()
+{
+    if (is_publishing_)
+    {
         is_publishing_ = false;
         RCLCPP_INFO(this->get_logger(), "Publishing stopped");
-    } else {
+    }
+    else
+    {
         RCLCPP_INFO(this->get_logger(), "Already stopped");
     }
 }
 
 // Override the cmd function to handle start/stop commands
-void ImuDriver::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response) {
-    if (params == "start") {
+void ImuDriver::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response)
+{
+    if (params == "start")
+    {
         start_publishing();
         response->success = true;
         response->message = "Publishing started";
-    } else if (params == "stop") {
+    }
+    else if (params == "stop")
+    {
         stop_publishing();
         response->success = true;
         response->message = "Publishing stopped";
-    } else {
+    }
+    else
+    {
         response->success = false;
         response->message = "Unknown command";
     }

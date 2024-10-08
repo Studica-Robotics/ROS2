@@ -81,7 +81,13 @@ private:
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr dynamic_publisher_service_;
     std::shared_ptr<rclcpp::executors::MultiThreadedExecutor> executor_;
     std::shared_ptr<VMXPi> vmx_;
-    std::map<std::string, std::shared_ptr<Device>> component_map; // Store publisher objects
+    struct Component {
+        std::string name;
+        std::shared_ptr<Device> component;
+        std::vector<int> pins;
+    };
+    std::map<std::string, Component> component_map; // Store publisher objects
+#define IMU_PIN 600
 
     void manage_service_callback(const std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
         std::string action = std::string(request->command);
@@ -120,7 +126,7 @@ private:
                 return;
             }
             RCLCPP_INFO(this->get_logger(), "Running cmd %s %s", name.c_str(), params.c_str());
-            component_map[name]->cmd(params, response);
+            component_map[name].component->cmd(params, response);
         }
         else
         {
@@ -129,13 +135,28 @@ private:
         }
     }
 
+    bool is_name_initialized(const std::string &name) {
+        return component_map.find(name) != component_map.end();
+    }
+
+    bool get_pin_state(int pin) {
+        for (auto &component : component_map) {
+            for (auto &component_pin : component.second.pins) {
+                if (component_pin == pin) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     void handle_initialize(const std::shared_ptr<studica_control::srv::SetData::Request> request,
                            std::shared_ptr<studica_control::srv::SetData::Response> response) {
         std::string name = request->name.c_str();
         std::string component = request->component.c_str();
         if (component == "publisher") {
             auto publisher_node = std::make_shared<DynamicPublisher>(name);
-            component_map[name] = publisher_node;
+            component_map[name] = {name, publisher_node, {}};
             executor_->add_node(publisher_node);
             response->success = true;
             response->message = name + " started.";
@@ -143,22 +164,49 @@ private:
         }
         else if (component == "imu") {
             RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
+            // Checks
+            if (get_pin_state(IMU_PIN)) {
+                response->success = false;
+                response->message = "Pin already in use.";
+                RCLCPP_INFO(this->get_logger(), "Pin already in use.");
+                return;
+            }
+            // Initialize
             auto imu_node = std::make_shared<ImuDriver>(vmx_);
-            component_map[name] = imu_node;
+            component_map[name] = {name, imu_node, {IMU_PIN}};
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(imu_node));
+            response->success = true;
+            response->message = name + " started.";
         }
         else if (component == "ultrasonic") {
             RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
             uint8_t ping = request->initparams.ping;
             uint8_t echo = request->initparams.echo;
+            // Checks
+            if (get_pin_state(ping) || get_pin_state(echo)) {
+                response->success = false;
+                response->message = "Pin already in use.";
+                RCLCPP_INFO(this->get_logger(), "Pin already in use.");
+                return;
+            }
+            std::vector<std::pair<uint8_t, uint8_t>> valid_pairs = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {8, 9}, {10, 11}};
+            if (std::find(valid_pairs.begin(), valid_pairs.end(), std::make_pair(ping, echo)) == valid_pairs.end()) {
+                response->success = false;
+                response->message = "Invalid pin pair.";
+                RCLCPP_INFO(this->get_logger(), "Invalid pin pair.");
+                return;
+            }
+            // Initialize
             auto ultrasonic_node = std::make_shared<UltrasonicDriver>(vmx_, std::string(name), ping, echo);
-            component_map[name] = ultrasonic_node;
+            component_map[name] = {name, ultrasonic_node, {ping, echo}};
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(ultrasonic_node));
+            response->success = true;
+            response->message = name + " started.";
         }
         else if (component == "analog") {
             RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
             auto sharp_node = std::make_shared<SharpSensor>(vmx_); // pass vmx
-            component_map[name] = sharp_node;
+            component_map[name] = {name, sharp_node, {}};
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(sharp_node));
         }
         else {
@@ -180,7 +228,7 @@ private:
     void handle_cmd(const std::shared_ptr<studica_control::srv::SetData::Request> request,
                     std::shared_ptr<studica_control::srv::SetData::Response> response) {
         std::string name = request->name.c_str();
-        component_map[name]->cmd(request->params.c_str(), response);
+        component_map[name].component->cmd(request->params.c_str(), response);
     }
 
 
