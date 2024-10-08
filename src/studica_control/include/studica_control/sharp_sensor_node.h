@@ -9,7 +9,7 @@
 
 class SharpSensor : public Device {
 public:
-    SharpSensor(std::shared_ptr<VMXPi> vmx);
+    SharpSensor(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping);
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response) override;
     
     void start_publishing();  // Method to start publishing
@@ -28,7 +28,8 @@ private:
     int count_;
     bool is_publishing_;
 
-    std::vector<VMXResourceHandle> accumulator_res_handles; // Add this line in the SharpSensor class
+    VMXResourceHandle accumulator_res_handle;
+    VMXChannelIndex ping_channel_index;
 };
 
  #endif // SHARP_NODE_HPP_

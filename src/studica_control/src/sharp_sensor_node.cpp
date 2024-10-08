@@ -1,9 +1,8 @@
 #include "studica_control/sharp_sensor_node.h"
 
-SharpSensor::SharpSensor(std::shared_ptr<VMXPi> vmx) : Device("sharp_sensor_node"), is_publishing_(false), count_(0), vmx_(vmx) {
+SharpSensor::SharpSensor(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping) : Device("sharp_sensor_node"), is_publishing_(false), count_(0), vmx_(vmx) {
     // Init publishers
-    sharp_publisher_ = this->create_publisher<std_msgs::msg::String>("sharp_sensor/data", 10);
-    publisher_ = this->create_publisher<std_msgs::msg::String>("sharp_sensor/message", 10);
+    sharp_publisher_ = this->create_publisher<std_msgs::msg::String>("sharp/distance_" + name, 10);
 
     // Verify VMX connection
     if (vmx_->IsOpen()) {
@@ -14,6 +13,9 @@ SharpSensor::SharpSensor(std::shared_ptr<VMXPi> vmx) : Device("sharp_sensor_node
             std::chrono::milliseconds(1000),
             std::bind(&SharpSensor::Spin, this));  // Periodic execution of Spin
 
+        // input channel index
+        ping_channel_index = ping;
+
         // Get full scale voltage of analog input
         VMXErrorCode vmxerr;
         float full_scale_voltage;
@@ -23,84 +25,51 @@ SharpSensor::SharpSensor(std::shared_ptr<VMXPi> vmx) : Device("sharp_sensor_node
             printf("ERROR acquiring Analog Input Voltage.\n");
         }
 
-        // Configure analog accumulator resources
-        VMXChannelIndex first_anin_channel;
-        uint8_t num_analog_inputs = vmx_->io.GetNumChannelsByType(VMXChannelType::AnalogIn, first_anin_channel);
-        accumulator_res_handles.resize(num_analog_inputs);  // Resize to hold resource handles
-
-        for (uint8_t analog_in_chan_index = first_anin_channel; 
-             analog_in_chan_index < first_anin_channel + num_analog_inputs; 
-             analog_in_chan_index++) {
-            VMXResourceIndex accum_res_index = analog_in_chan_index - first_anin_channel;
-            AccumulatorConfig accum_config;
-            accum_config.SetNumAverageBits(9);
-            if (!vmx_->io.ActivateSinglechannelResource(
-                    VMXChannelInfo(analog_in_chan_index, VMXChannelCapability::AccumulatorInput),
-                    &accum_config, 
-                    accumulator_res_handles[accum_res_index], 
-                    &vmxerr)) {
-                printf("Error Activating Singlechannel Resource Accumulator for Channel index %d.\n", analog_in_chan_index);
-            } else {
-                printf("Analog Input Channel %d activated on Resource type %d, index %d\n", 
-                       analog_in_chan_index,
-                       EXTRACT_VMX_RESOURCE_TYPE(accumulator_res_handles[accum_res_index]),
-                       EXTRACT_VMX_RESOURCE_INDEX(accumulator_res_handles[accum_res_index]));
-            }
+        // Configure analog accumulator for the given ping channel
+        AccumulatorConfig accum_config;
+        accum_config.SetNumAverageBits(9);
+        accumulator_res_handle = VMXResourceHandle();
+        if (!vmx_->io.ActivateSinglechannelResource(
+                VMXChannelInfo(ping_channel_index, VMXChannelCapability::AccumulatorInput),
+                &accum_config, 
+                accumulator_res_handle, 
+                &vmxerr)) {
+            printf("Error Activating Singlechannel Resource Accumulator for Channel index %d.\n", ping_channel_index);
+        } else {
+            printf("Analog Input Channel %d activated on Resource type %d, index %d\n", 
+                   ping_channel_index,
+                   EXTRACT_VMX_RESOURCE_TYPE(accumulator_res_handle),
+                   EXTRACT_VMX_RESOURCE_INDEX(accumulator_res_handle));
         }
     } else {
         RCLCPP_ERROR(this->get_logger(), "Error: Unable to open VMX Client.");
     }
 }
 
-void SharpSensor::publish_message() {
-    auto message = std_msgs::msg::String();
-    message.data = std::string("Message from ") + this->get_name() + std::string(": ") + std::to_string(count_++);
-    publisher_->publish(message);
-    std::cout << this->get_name() << ": " << count_ << std::endl;
-}
-
 // Publish analog data from Sharp Sensor
 void SharpSensor::publish_analog_data() {
-    // CONVERT VOLTAGE TO DISTANCE:
-    // //Create an accessor function
-    // double getDistance(void)
-    // {
-    //     return (pow(sharp.GetAverageVoltage(), -1.2045)) * 27.726;
-    // }
-
+    // CONVERT VOLTAGE TO DISTANCE (example provided in the comment above)
 
     VMXErrorCode vmxerr;
     float analog_voltage;
-    std::ostringstream voltage_stream; // accum voltage readings
 
-    // Loop through the accumulator resource handles to get the average voltage for each channel
-    for (size_t j = 0; j < accumulator_res_handles.size(); j++) {
-        if (vmx_->io.Accumulator_GetAverageVoltage(accumulator_res_handles[j], analog_voltage, &vmxerr)) {
-            voltage_stream << analog_voltage;  // append voltage reads
-
-            // Add a comma and space for separation except for the last element
-            if (j < accumulator_res_handles.size() - 1) {
-                voltage_stream << ", ";
-            }
-        } else {
-            RCLCPP_ERROR(this->get_logger(), "Error getting Average Voltage of analog accumulator %d", j);
-        }
+    // Get the average voltage for the specified ping channel
+    if (vmx_->io.Accumulator_GetAverageVoltage(accumulator_res_handle, analog_voltage, &vmxerr)) {
+        std::cout << "Analog Input Voltage (V) for channel " << std::to_string(ping_channel_index) << ": " << analog_voltage << std::endl;
+        
+        // Publish the voltage
+        auto sharp_msg = std_msgs::msg::String();
+        sharp_msg.data = "Sharp Sensor Voltage for channel " + std::to_string(ping_channel_index) + ": " + std::to_string(analog_voltage);
+        sharp_publisher_->publish(sharp_msg);
+    } else {
+        RCLCPP_ERROR(this->get_logger(), "Error getting Average Voltage of analog accumulator for channel %d", ping_channel_index);
     }
-
-    // Print the formatted output once
-    std::cout << "Analog Input Voltage (V): " << voltage_stream.str() << std::endl;
-
-    // Publish the accumulated voltages
-    auto sharp_msg = std_msgs::msg::String();
-    sharp_msg.data = "Sharp Sensor Voltages: " + voltage_stream.str();
-    sharp_publisher_->publish(sharp_msg);
 }
 
 // Main loop to manage publishing state
 void SharpSensor::Spin() {
     if (is_publishing_) {
         publish_analog_data();  // Publish sensor data
-        publish_message();      // Publish a test message
     }
 }
 

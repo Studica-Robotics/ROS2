@@ -203,11 +203,27 @@ private:
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(ultrasonic_node));
             response->success = true;
             response->message = name + " started.";
-        }
-        else if (component == "analog") {
+        } else if (component == "sharp") {
             RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
-            auto sharp_node = std::make_shared<SharpSensor>(vmx_); // pass vmx
-            component_map[name] = {name, sharp_node, {}};
+            uint8_t ping = request->initparams.ping;
+            // validate ping values
+            if (ping != 0 && ping != 1 && ping != 2 && ping != 3) {
+                response->success = false;
+                response->message = "Invalid ping value.";
+                RCLCPP_ERROR(this->get_logger(), "Invalid ping value: %d. Allowed values are 0, 1, 2, or 3.", ping);
+                return;
+            }
+            ping += 22; // true ping channel index
+            // Check availability
+            if (get_pin_state(ping)) {
+                response->success = false;
+                response->message = "Pin already in use.";
+                RCLCPP_INFO(this->get_logger(), "Pin already in use.");
+                return;
+            }
+            // init sharp node
+            auto sharp_node = std::make_shared<SharpSensor>(vmx_, name, ping);
+            component_map[name] = {name, sharp_node, {ping}};
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(sharp_node));
         }
         else if (component == "dio") {
