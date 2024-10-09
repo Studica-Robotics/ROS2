@@ -47,6 +47,7 @@ set(studica_control_SRCS # <- source files
   src/dynamic_publisher.cpp
   src/ultrasonic.cpp
   src/sharp_sensor_node.cpp
+  src/DIOPin.cpp
   src/cobra_sensor_node.cpp
 )
 
