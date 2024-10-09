@@ -8,6 +8,7 @@
 #include "studica_control/imu_driver_node.h" 
 #include "studica_control/ultrasonic.h"
 #include "studica_control/sharp_sensor_node.h"
+#include "studica_control/cobra_sensor_node.h"
 
 // void log(string s) { RCLCPP_INFO(this->get_logger(), s); }
 
@@ -224,6 +225,19 @@ private:
             auto sharp_node = std::make_shared<SharpSensor>(vmx_, name, ping);
             component_map[name] = {name, sharp_node, {ping}};
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(sharp_node));
+        } else if (component == "cobra") {
+            float vref = request->initparams.vref;
+            uint8_t mux_ch = request->initparams.mux_ch;
+            if (mux_ch < 0 || mux_ch > 3) {
+                response->success = false;
+                response->message = "Unavailable multiplexer channel.";
+                RCLCPP_INFO(this->get_logger(), "Unavailable multiplexer channel %d. Allowed channels are 0 - 3.", mux_ch);
+                return;
+            }
+            RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
+            auto cobra_node = std::make_shared<CobraSensor>(vmx_, name, vref, mux_ch);
+            component_map[name] = {name, cobra_node, {}};
+            executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(cobra_node));
         } else {
             response->success = false;
             response->message = "No such component '" + std::string(component) + "'";
@@ -236,8 +250,8 @@ private:
         std::string name = request->name.c_str();
         component_map.erase(name);
         response->success = true;
-        response->message = name + " stopped.";
-        RCLCPP_INFO(this->get_logger(), "%s stopped.", name.c_str());
+        response->message = name + " terminated.";
+        RCLCPP_INFO(this->get_logger(), "%s terminated.", name.c_str());
     }
 
     void handle_cmd(const std::shared_ptr<studica_control::srv::SetData::Request> request,

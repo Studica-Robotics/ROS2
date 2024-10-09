@@ -47,11 +47,21 @@ set(studica_control_SRCS # <- source files
   src/dynamic_publisher.cpp
   src/ultrasonic.cpp
   src/sharp_sensor_node.cpp
+  src/cobra_sensor_node.cpp
+)
+
+set(studica_control_HDRS
+  include/studica_control/device.h
+  include/studica_control/studica_control_node.h
+  include/studica_control/imu_driver_node.h
+  include/studica_control/ultrasonic.h
+  include/studica_control/cobra_sensor_node.h
+  include/studica_control/sharp_sensor_node.h
 )
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 
-add_executable(studica_control_node ${studica_control_SRCS} include/studica_control include/studica_control/imu_driver_node.h include/studica_control/ultrasonic.h)
+add_executable(studica_control_node ${studica_control_SRCS} ${studica_control_HDRS})
 target_link_libraries(studica_control_node /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so)
 ament_target_dependencies(studica_control_node ${dependencies})
 target_link_libraries(studica_control_node "${cpp_typesupport_target}")
