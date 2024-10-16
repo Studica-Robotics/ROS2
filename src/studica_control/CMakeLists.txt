@@ -46,9 +46,11 @@ set(studica_control_SRCS # <- source files
   src/imu_driver_node.cpp
   src/dynamic_publisher.cpp
   src/ultrasonic.cpp
+  src/analog_input.cpp
   src/sharp_sensor_node.cpp
   src/DIOPin.cpp
   src/cobra_sensor_node.cpp
+  # src/titan.cpp
 )
 
 set(studica_control_HDRS
@@ -57,7 +59,9 @@ set(studica_control_HDRS
   include/studica_control/imu_driver_node.h
   include/studica_control/ultrasonic.h
   include/studica_control/cobra_sensor_node.h
+  include/studica_control/analog_input.h
   include/studica_control/sharp_sensor_node.h
+  # include/studica_control/titan.h
 )
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")

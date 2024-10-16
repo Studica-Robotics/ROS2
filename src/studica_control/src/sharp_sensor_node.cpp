@@ -1,7 +1,9 @@
 #include "studica_control/sharp_sensor_node.h"
 
-SharpSensor::SharpSensor(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping) : Device("sharp_sensor_node"), is_publishing_(false), count_(0), vmx_(vmx) {
-    // Init publishers
+SharpSensor::SharpSensor(std::shared_ptr<VMXPi> vmx, const std::string &name, std::shared_ptr<AnalogInput> analog_input)
+    : Device("sharp_sensor_node"), vmx_(vmx), is_publishing_(false), analog_input_(analog_input) {
+    
+    // Init publishers 
     sharp_publisher_ = this->create_publisher<std_msgs::msg::String>("sharp/distance_" + name, 10);
 
     // Verify VMX connection
@@ -13,33 +15,9 @@ SharpSensor::SharpSensor(std::shared_ptr<VMXPi> vmx, const std::string &name, VM
             std::chrono::milliseconds(1000),
             std::bind(&SharpSensor::Spin, this));  // Periodic execution of Spin
 
-        // input channel index
-        ping_channel_index = ping;
-
-        // Get full scale voltage of analog input
-        VMXErrorCode vmxerr;
-        float full_scale_voltage;
-        if (vmx_->io.Accumulator_GetFullScaleVoltage(full_scale_voltage, &vmxerr)) {
-            printf("Analog input voltage: %0.1f\n", full_scale_voltage);
-        } else {
-            printf("ERROR acquiring Analog Input Voltage.\n");
-        }
-
-        // Configure analog accumulator for the given ping channel
-        AccumulatorConfig accum_config;
-        accum_config.SetNumAverageBits(9);
-        accumulator_res_handle = VMXResourceHandle();
-        if (!vmx_->io.ActivateSinglechannelResource(
-                VMXChannelInfo(ping_channel_index, VMXChannelCapability::AccumulatorInput),
-                &accum_config, 
-                accumulator_res_handle, 
-                &vmxerr)) {
-            printf("Error Activating Singlechannel Resource Accumulator for Channel index %d.\n", ping_channel_index);
-        } else {
-            printf("Analog Input Channel %d activated on Resource type %d, index %d\n", 
-                   ping_channel_index,
-                   EXTRACT_VMX_RESOURCE_TYPE(accumulator_res_handle),
-                   EXTRACT_VMX_RESOURCE_INDEX(accumulator_res_handle));
+        // The AnalogInput has already been activated during the creation of the input
+        if (!analog_input_->is_active()) {
+            RCLCPP_ERROR(this->get_logger(), "Failed to activate analog input for Sharp sensor.");
         }
     } else {
         RCLCPP_ERROR(this->get_logger(), "Error: Unable to open VMX Client.");
@@ -48,21 +26,19 @@ SharpSensor::SharpSensor(std::shared_ptr<VMXPi> vmx, const std::string &name, VM
 
 // Publish analog data from Sharp Sensor
 void SharpSensor::publish_analog_data() {
-    // CONVERT VOLTAGE TO DISTANCE (example provided in the comment above)
-
-    VMXErrorCode vmxerr;
     float analog_voltage;
 
-    // Get the average voltage for the specified ping channel
-    if (vmx_->io.Accumulator_GetAverageVoltage(accumulator_res_handle, analog_voltage, &vmxerr)) {
-        std::cout << "Analog Input Voltage (V) for channel " << std::to_string(ping_channel_index) << ": " << analog_voltage << std::endl;
-        
-        // Publish the voltage
+    // Get the average voltage using the AnalogInput object
+    if (analog_input_->get_average_voltage(analog_voltage)) {
+        double distance = std::pow(analog_voltage, -1.2045) * 27.726;
+        RCLCPP_INFO(this->get_logger(), "[LOG] Analog Input Voltage(V): %f, Distance(cm): %f", analog_voltage, distance);
+        // publish distance
         auto sharp_msg = std_msgs::msg::String();
-        sharp_msg.data = "Sharp Sensor Voltage for channel " + std::to_string(ping_channel_index) + ": " + std::to_string(analog_voltage);
+        sharp_msg.data = "[PUB] Analog Input Voltage(V): " + std::to_string(analog_voltage) +
+                        ", Distance(cm): " + std::to_string(distance);
         sharp_publisher_->publish(sharp_msg);
     } else {
-        RCLCPP_ERROR(this->get_logger(), "Error getting Average Voltage of analog accumulator for channel %d", ping_channel_index);
+        RCLCPP_ERROR(this->get_logger(), "Error getting average voltage for analog input.");
     }
 }
 
