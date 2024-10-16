@@ -8,6 +8,8 @@
 #include "studica_control/imu_driver_node.h" 
 #include "studica_control/ultrasonic.h"
 #include "studica_control/sharp_sensor_node.h"
+#include "studica_control/analog_input.h"
+// #include "studica_control/titan.h"
 #include "studica_control/cobra_sensor_node.h"
 #include "studica_control/servo.h"
 
@@ -75,7 +77,7 @@ class StudicaControlServer : public rclcpp::Node {
 public:
     StudicaControlServer() : Node("studica_control_server") { // CONSTRUCTOR
         dynamic_publisher_service_ = this->create_service<studica_control::srv::SetData>(
-            "manage_dynamic_publisher", 
+            "manage_dynamic_publisher2", 
             std::bind(&StudicaControlServer::manage_service_callback, this, std::placeholders::_1, std::placeholders::_2));
         RCLCPP_INFO(this->get_logger(), "Dynamic publisher ready");
         // spin on feeding the watchdog
@@ -227,20 +229,36 @@ private:
         } else if (component == "sharp") {
             RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
             uint8_t ping = request->initparams.ping;
-            // validate ping values
+            
+            // Validate ping values
             if (ping != 0 && ping != 1 && ping != 2 && ping != 3) {
                 response->success = false;
                 response->message = "Invalid ping value.";
                 RCLCPP_ERROR(this->get_logger(), "Invalid ping value: %d. Allowed values are 0, 1, 2, or 3.", ping);
                 return;
             }
-            ping += 22; // true ping channel index
+            ping += 22; // True ping channel index
+            
             // Check availability
             if (!check_pin_is_available(ping, response)) return;
-            // init sharp node
-            auto sharp_node = std::make_shared<SharpSensor>(vmx_, name, ping);
+
+            // Initialize analog input
+            auto analog_input = std::make_shared<AnalogInput>(vmx_, ping);
+            if (!analog_input->activate_channel()) {
+                response->success = false;
+                response->message = "Failed to activate analog input.";
+                RCLCPP_ERROR(this->get_logger(), "Failed to activate analog input for ping: %d", ping);
+                return;
+            }
+
+            // Initialize SharpSensor node with analog input
+            auto sharp_node = std::make_shared<SharpSensor>(vmx_, name, analog_input);
             component_map[name] = {name, sharp_node, {ping}};
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(sharp_node));
+
+            response->success = true;
+            response->message = "Sharp sensor initialized successfully.";
+            RCLCPP_INFO(this->get_logger(), "Sharp sensor initialized successfully for ping: %d", ping);
         } else if (component == "cobra") {
             float vref = request->initparams.vref;
             uint8_t mux_ch = request->initparams.mux_ch;
@@ -310,7 +328,18 @@ private:
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(servo_node));
             response->success = true;
             response->message = name + " started.";
-        }
+        } 
+        // else if (component == "titan") {
+        //     RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
+        //     uint8_t nEncoder = request->initparams.n_encoder;
+        //     float distPerTick = request->initparams.dist_per_tick;
+        //     float speed = request->initparams.speed; // 
+        //     uint8_t canID = request->initparams.can_id; // (0,64)
+        //     uint16_t motorFreq = request->initparams.motor_freq; // [0,20000]
+
+        //     auto titan_node = std::make_shared<Titan>(vmx_, name, canID, motorFreq, nEncoder, distPerTick, speed); // canID, motorFrequency
+        //     component_map[name] = {name, titan_node, {}};
+        // }
         else {
             response->success = false;
             response->message = "No such component '" + std::string(component) + "'";

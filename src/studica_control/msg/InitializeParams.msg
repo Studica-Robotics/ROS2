@@ -3,4 +3,9 @@ int32 echo
 float32 vref
 int32 mux_ch
 int32 pin
+int32 n_encoder
+float32 dist_per_tick
+float32 speed
+int32 can_id
+int32 motor_freq
 string servo_type
