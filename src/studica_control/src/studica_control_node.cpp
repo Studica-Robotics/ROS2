@@ -78,9 +78,16 @@ public:
             "manage_dynamic_publisher2", 
             std::bind(&StudicaControlServer::manage_service_callback, this, std::placeholders::_1, std::placeholders::_2));
         RCLCPP_INFO(this->get_logger(), "Dynamic publisher ready");
+        // spin on feeding the watchdog
+        timer_ = this->create_wall_timer(
+            std::chrono::milliseconds(250),
+            std::bind(&StudicaControlServer::spin, this));
     }
 
 private:
+    rclcpp::TimerBase::SharedPtr timer_;
+    bool feeding = true;
+
     // SERVICES
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr dynamic_publisher_service_;
     std::shared_ptr<rclcpp::executors::MultiThreadedExecutor> executor_;
@@ -97,6 +104,17 @@ private:
         std::string action = std::string(request->command);
         std::string name = std::string(request->name);
         std::string params = std::string(request->params);
+
+        if (action == "feed_watchdog")
+        {
+            feeding = true;
+            response->success = true;
+            response->message = "Watchdog fed.";
+        } else if (action == "stop_watchdog") {
+            feeding = false;
+            response->success = true;
+            response->message = "Watchdog stopped.";
+        }
 
         if (component_map.find(name) == component_map.end() && action != "initialize")
         {
@@ -267,8 +285,21 @@ private:
                 RCLCPP_INFO(this->get_logger(), "Pin already in use.");
                 return;
             }
+            // pinmode variable
+            std::string params = request->params.c_str();
+            DPIN::PinMode pin_mode;
+            if (params == "input") {
+                pin_mode = DPIN::INPUT;
+            } else if (params == "output") {
+                pin_mode = DPIN::OUTPUT;
+            } else {
+                response->success = false;
+                response->message = "Invalid pin mode.";
+                RCLCPP_INFO(this->get_logger(), "Invalid pin mode. Allowed values are 'input' or 'output'.");
+                return;
+            }
             // Initialize
-            auto dio_node = std::make_shared<DIOPin>(vmx_, pin, DIOPin::PinMode::OUTPUT);
+            auto dio_node = std::make_shared<DIOPin>(vmx_, pin, pin_mode);
             component_map[name] = {name, dio_node, {pin}};
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(dio_node));
             response->success = true;
@@ -317,6 +348,76 @@ public:
     {
         vmx_ = vmx;
     }
+
+
+    void initialize_watchdog()
+    {
+        VMXErrorCode vmxerr;
+        // vmx_->io.SetWatchdogManagedOutputs(true, true, true, &vmxerr);
+        // vmx_->io.SetWatchdogTimeoutPeriodMS(250, &vmxerr);
+        // vmx_->io.SetWatchdogEnabled(true, &vmxerr);
+        if (vmx_->io.SetWatchdogManagedOutputs(true, true, true, &vmxerr))
+        {
+            RCLCPP_INFO(this->get_logger(), "Watchdog managed outputs set.");
+        }
+        else
+        {
+            RCLCPP_ERROR(this->get_logger(), "Failed to set managed outputs.");
+            // DisplayVMXError(vmxerr);
+        }
+        if (vmx_->io.SetWatchdogTimeoutPeriodMS(250, &vmxerr))
+        {
+            RCLCPP_INFO(this->get_logger(), "Watchdog timeout period set to 250 milliseconds.");
+        }
+        else
+        {
+            RCLCPP_ERROR(this->get_logger(), "Failed to set timeout period.");
+            // DisplayVMXError(vmxerr);
+        }
+        if (vmx_->io.SetWatchdogEnabled(true, &vmxerr))
+        {
+            RCLCPP_INFO(this->get_logger(), "Watchdog enabled.");
+        }
+        else
+        {
+            RCLCPP_ERROR(this->get_logger(), "Failed to enable watchdog.");
+            // DisplayVMXError(vmxerr);
+        }
+    }
+    void feed_watchdog()
+    {
+        VMXErrorCode vmxerr;
+        if (!vmx_->io.FeedWatchdog(&vmxerr))
+        {
+            RCLCPP_ERROR(this->get_logger(), "Failed to feed watchdog.");
+            // DisplayVMXError(vmxerr);
+        }
+        else 
+        {
+            RCLCPP_INFO(this->get_logger(), "Watchdog fed.");
+        }
+    }
+
+    void stop_feeding_watchdog()
+    {
+        feeding = false;
+    }
+
+    void start_feeding_watchdog()
+    {
+        feeding = true;
+    }
+
+    void spin() {
+        if (feeding) {
+            feed_watchdog();
+        }
+            bool fed;
+            VMXErrorCode vmxerr;
+// bool IOCXClient::get_io_watchdog_expired(bool& expired){}
+            vmx_->io.GetWatchdogExpired(fed, &vmxerr);
+            RCLCPP_INFO(this->get_logger(), "Watchdog: %s", fed ? "EXPIRED" : "FED");
+    }
 };
 
 int main(int argc, char **argv)
@@ -333,6 +434,7 @@ int main(int argc, char **argv)
 
     node_manager->set_hal(vmx);
     node_manager->set_executor(executor);
+    node_manager->initialize_watchdog();
     executor->add_node(node_manager);
     executor->spin();
 
