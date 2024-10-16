@@ -9,6 +9,7 @@
 #include "studica_control/ultrasonic.h"
 #include "studica_control/sharp_sensor_node.h"
 #include "studica_control/cobra_sensor_node.h"
+#include "studica_control/servo.h"
 
 // void log(string s) { RCLCPP_INFO(this->get_logger(), s); }
 
@@ -55,6 +56,7 @@ public:
     }
     
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response) {
+        response->success = true; //CHANGE THIS
         if(std::string(params.c_str()) == "rate") {
             this->adjust_publishing_rate(std::chrono::milliseconds(500));
         }
@@ -84,7 +86,7 @@ public:
 
 private:
     rclcpp::TimerBase::SharedPtr timer_;
-    bool feeding = true;
+    bool feeding = false;
 
     // SERVICES
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr dynamic_publisher_service_;
@@ -170,6 +172,16 @@ private:
         return false;
     }
 
+    bool check_pin_is_available(int pin, std::shared_ptr<studica_control::srv::SetData::Response> response) {
+        if (get_pin_state(pin)) {
+            response->success = false;
+            response->message = "Pin already in use.";
+            RCLCPP_INFO(this->get_logger(), "Pin already in use.");
+            return false;
+        }
+        return true;
+    }
+
     void handle_initialize(const std::shared_ptr<studica_control::srv::SetData::Request> request,
                            std::shared_ptr<studica_control::srv::SetData::Response> response) {
         std::string name = request->name.c_str();
@@ -185,12 +197,7 @@ private:
         else if (component == "imu") {
             RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
             // Checks
-            if (get_pin_state(IMU_PIN)) {
-                response->success = false;
-                response->message = "Pin already in use.";
-                RCLCPP_INFO(this->get_logger(), "Pin already in use.");
-                return;
-            }
+            if (!check_pin_is_available(IMU_PIN, response)) return;
             // Initialize
             auto imu_node = std::make_shared<ImuDriver>(vmx_);
             component_map[name] = {name, imu_node, {IMU_PIN}};
@@ -203,12 +210,7 @@ private:
             uint8_t ping = request->initparams.ping;
             uint8_t echo = request->initparams.echo;
             // Checks
-            if (get_pin_state(ping) || get_pin_state(echo)) {
-                response->success = false;
-                response->message = "Pin already in use.";
-                RCLCPP_INFO(this->get_logger(), "Pin already in use.");
-                return;
-            }
+            if (!check_pin_is_available(ping, response) || !check_pin_is_available(echo, response)) return;
             std::vector<std::pair<uint8_t, uint8_t>> valid_pairs = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {8, 9}, {10, 11}};
             if (std::find(valid_pairs.begin(), valid_pairs.end(), std::make_pair(ping, echo)) == valid_pairs.end()) {
                 response->success = false;
@@ -234,12 +236,7 @@ private:
             }
             ping += 22; // true ping channel index
             // Check availability
-            if (get_pin_state(ping)) {
-                response->success = false;
-                response->message = "Pin already in use.";
-                RCLCPP_INFO(this->get_logger(), "Pin already in use.");
-                return;
-            }
+            if (!check_pin_is_available(ping, response)) return;
             // init sharp node
             auto sharp_node = std::make_shared<SharpSensor>(vmx_, name, ping);
             component_map[name] = {name, sharp_node, {ping}};
@@ -247,7 +244,7 @@ private:
         } else if (component == "cobra") {
             float vref = request->initparams.vref;
             uint8_t mux_ch = request->initparams.mux_ch;
-            if (mux_ch < 0 || mux_ch > 3) {
+            if (mux_ch > 3) {
                 response->success = false;
                 response->message = "Unavailable multiplexer channel.";
                 RCLCPP_INFO(this->get_logger(), "Unavailable multiplexer channel %d. Allowed channels are 0 - 3.", mux_ch);
@@ -257,24 +254,18 @@ private:
             auto cobra_node = std::make_shared<CobraSensor>(vmx_, name, vref, mux_ch);
             component_map[name] = {name, cobra_node, {}};
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(cobra_node));
-        }
-        else if (component == "dio") {
+        } else if (component == "dio") {
             RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
             uint8_t pin = request->initparams.pin;
             // Checks
-            if (get_pin_state(pin)) {
-                response->success = false;
-                response->message = "Pin already in use.";
-                RCLCPP_INFO(this->get_logger(), "Pin already in use.");
-                return;
-            }
+            if (!check_pin_is_available(pin, response)) return;
             // pinmode variable
             std::string params = request->params.c_str();
-            DPIN::PinMode pin_mode;
+            DIOPin::PinMode pin_mode;
             if (params == "input") {
-                pin_mode = DPIN::INPUT;
+                pin_mode = DIOPin::PinMode::INPUT;
             } else if (params == "output") {
-                pin_mode = DPIN::OUTPUT;
+                pin_mode = DIOPin::PinMode::OUTPUT;
             } else {
                 response->success = false;
                 response->message = "Invalid pin mode.";
@@ -287,11 +278,43 @@ private:
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(dio_node));
             response->success = true;
             response->message = name + " started.";
+        } else if (component == "servo") {
+            RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
+            uint8_t pin = request->initparams.pin;
+            if (!check_pin_is_available(pin, response)) return;
+            // Initialize
+            string servo_type_str = request->initparams.servo_type;
+            ServoType servo_type;
+            int min;
+            int max;
+            if (servo_type_str == "standard") {
+                servo_type = ServoType::Standard;
+                min = -150;
+                max = 150;
+            } else if (servo_type_str == "continuous") {
+                servo_type = ServoType::Continuous;
+                min = -100;
+                max = 100;
+            } else if (servo_type_str == "linear") {
+                servo_type = ServoType::Linear;
+                min = 0.9;
+                max = 2.1;
+            } else {
+                response->success = false;
+                response->message = "Invalid servo type.";
+                RCLCPP_INFO(this->get_logger(), "Invalid servo type. Allowed values are 'standard' or 'continuous'.");
+                return;
+            }
+            auto servo_node = std::make_shared<Servo>(vmx_, pin, servo_type, min, max);
+            component_map[name] = {name, servo_node, {pin}};
+            executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(servo_node));
+            response->success = true;
+            response->message = name + " started.";
         }
         else {
             response->success = false;
             response->message = "No such component '" + std::string(component) + "'";
-            RCLCPP_INFO(this->get_logger(), "No such component '%s'", std::string(component));
+            RCLCPP_INFO(this->get_logger(), "No such component '%s'", component.c_str());
         }
     }
 
@@ -388,7 +411,7 @@ public:
             VMXErrorCode vmxerr;
 // bool IOCXClient::get_io_watchdog_expired(bool& expired){}
             vmx_->io.GetWatchdogExpired(fed, &vmxerr);
-            RCLCPP_INFO(this->get_logger(), "Watchdog: %s", fed ? "EXPIRED" : "FED");
+            // RCLCPP_INFO(this->get_logger(), "Watchdog: %s", fed ? "EXPIRED" : "FED");
     }
 };
 
@@ -406,7 +429,8 @@ int main(int argc, char **argv)
 
     node_manager->set_hal(vmx);
     node_manager->set_executor(executor);
-    node_manager->initialize_watchdog();
+    // node_manager->initialize_watchdog();
+    // node_manager->start_feeding_watchdog();
     executor->add_node(node_manager);
     executor->spin();
 

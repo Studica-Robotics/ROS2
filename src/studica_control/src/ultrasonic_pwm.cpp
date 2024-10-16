@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
 
                         // Suggested measurement cycle period is 60ms
 
-                        uint32_t microseconds_per_inch = 148;
+                        // uint32_t microseconds_per_inch = 148;
 
                         VMXResourceHandle ping_output_res_handle;
                         VMXResourceHandle echo_inputcap_res_handle;

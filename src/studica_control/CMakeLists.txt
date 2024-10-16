@@ -49,6 +49,7 @@ set(studica_control_SRCS # <- source files
   src/sharp_sensor_node.cpp
   src/DIOPin.cpp
   src/cobra_sensor_node.cpp
+  src/servo.cpp
 )
 
 set(studica_control_HDRS
