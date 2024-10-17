@@ -1,4 +1,4 @@
-#include "studica_control/encoder.h"
+#include "encoder.h"
 using namespace studica_control;
 
 Encoder::Encoder(std::shared_ptr<VMXPi> vmx, VMXChannelIndex port_a, VMXChannelIndex port_b)

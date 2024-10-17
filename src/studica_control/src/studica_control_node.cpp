@@ -14,7 +14,7 @@
 #include "studica_control/cobra_sensor_node.h"
 #include "studica_control/servo.h"
 #include "studica_control/DIOPin.h"
-#include "studica_control/encoder.h"
+#include "drivers/encoder.h"
 
 // void log(string s) { RCLCPP_INFO(this->get_logger(), s); }
 
