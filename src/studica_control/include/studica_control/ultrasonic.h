@@ -12,8 +12,8 @@ public:
     UltrasonicDriver(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping, VMXChannelIndex echo);
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);
 
+    double read_distance();
 private:
-    void read_distance();
     void Spin();
     void start_reading();
     void stop_reading();

@@ -77,12 +77,12 @@ class StudicaControlServer : public rclcpp::Node {
 public:
     StudicaControlServer() : Node("studica_control_server") { // CONSTRUCTOR
         dynamic_publisher_service_ = this->create_service<studica_control::srv::SetData>(
-            "manage_dynamic_publisher2", 
+            "manage_dynamic_publisher", 
             std::bind(&StudicaControlServer::manage_service_callback, this, std::placeholders::_1, std::placeholders::_2));
         RCLCPP_INFO(this->get_logger(), "Dynamic publisher ready");
         // spin on feeding the watchdog
         timer_ = this->create_wall_timer(
-            std::chrono::milliseconds(250),
+            std::chrono::milliseconds(1000),
             std::bind(&StudicaControlServer::spin, this));
     }
 
@@ -183,7 +183,7 @@ private:
         }
         return true;
     }
-
+public:
     void handle_initialize(const std::shared_ptr<studica_control::srv::SetData::Request> request,
                            std::shared_ptr<studica_control::srv::SetData::Response> response) {
         std::string name = request->name.c_str();
@@ -315,8 +315,8 @@ private:
                 max = 100;
             } else if (servo_type_str == "linear") {
                 servo_type = ServoType::Linear;
-                min = 0.9;
-                max = 2.1;
+                min = 0;
+                max = 100;
             } else {
                 response->success = false;
                 response->message = "Invalid servo type.";
@@ -441,6 +441,14 @@ public:
 // bool IOCXClient::get_io_watchdog_expired(bool& expired){}
             vmx_->io.GetWatchdogExpired(fed, &vmxerr);
             // RCLCPP_INFO(this->get_logger(), "Watchdog: %s", fed ? "EXPIRED" : "FED");
+            // get component named "henry"
+            if (component_map.find("ultra") != component_map.end()) {
+                float distance = std::dynamic_pointer_cast<UltrasonicDriver>(component_map["ultra"].component)->read_distance();
+                if (component_map.find("henry") != component_map.end()) {
+                    // component_map["henry"].component->set(distance);
+                    std::dynamic_pointer_cast<Servo>(component_map["henry"].component)->SetAngle((int)distance*4 -150);
+                }
+            }
     }
 };
 
@@ -460,6 +468,7 @@ int main(int argc, char **argv)
     node_manager->set_executor(executor);
     // node_manager->initialize_watchdog();
     // node_manager->start_feeding_watchdog();
+
     executor->add_node(node_manager);
     executor->spin();
 

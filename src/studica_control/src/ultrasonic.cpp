@@ -86,7 +86,7 @@ UltrasonicDriver::UltrasonicDriver(std::shared_ptr<VMXPi> vmx, const std::string
 
 
 // Method to read distance and publish
-void UltrasonicDriver::read_distance() {
+double UltrasonicDriver::read_distance() {
     VMXErrorCode vmxerr;
 
     // loop
@@ -111,8 +111,8 @@ void UltrasonicDriver::read_distance() {
         distance_publisher_->publish(distance_msg);
 
         RCLCPP_INFO(this->get_logger(), "Distance (inches): %.2f", distance_inches);
+    return distance_inches;
     }
-
     // vmx_->time.DelayMilliseconds(55); // Delay for next measurement
 }
 

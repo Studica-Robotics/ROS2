@@ -44,7 +44,7 @@ void Servo::SetAngle(int angle) {
     
     if (prev_pwm_servo_value_ != angle) {
         VMXErrorCode vmxerr;
-        bool success = vmx_->io.PWMGenerator_SetDutyCycle(pwm_res_handle_, port_, (angle), &vmxerr);
+        bool success = vmx_->io.PWMGenerator_SetDutyCycle(pwm_res_handle_, port_, Map(angle), &vmxerr);
         // print the map value
         printf("Map value: %d\n", Map(angle));
         prev_pwm_servo_value_ = angle;
