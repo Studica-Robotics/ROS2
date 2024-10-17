@@ -9,3 +9,5 @@ float32 speed
 int32 can_id
 int32 motor_freq
 string servo_type
+int32 port_a
+int32 port_b

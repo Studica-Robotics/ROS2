@@ -45,6 +45,7 @@ set(studica_control_SRCS # <- source files
   src/studica_control_node.cpp
   src/imu_driver_node.cpp
   src/dynamic_publisher.cpp
+  src/encoder.cpp
   src/ultrasonic.cpp
   src/analog_input.cpp
   src/sharp_sensor_node.cpp
@@ -54,7 +55,7 @@ set(studica_control_SRCS # <- source files
   # src/titan.cpp
 )
 
-set(studica_control_HDRS
+set(studica_control_HDRS # i don't think this is necessary
   include/studica_control/device.h
   include/studica_control/studica_control_node.h
   include/studica_control/imu_driver_node.h
@@ -62,6 +63,7 @@ set(studica_control_HDRS
   include/studica_control/cobra_sensor_node.h
   include/studica_control/analog_input.h
   include/studica_control/sharp_sensor_node.h
+  include/studica_control/encoder.h
   # include/studica_control/titan.h
 )
 

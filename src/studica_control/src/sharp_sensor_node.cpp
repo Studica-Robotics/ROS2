@@ -42,6 +42,16 @@ void SharpSensor::publish_analog_data() {
     }
 }
 
+double SharpSensor::get_voltage() {
+    float analog_voltage;
+    if (analog_input_->get_average_voltage(analog_voltage)) {
+        return analog_voltage;
+    } else {
+        RCLCPP_ERROR(this->get_logger(), "Error getting average voltage for analog input.");
+        return -1;
+    }
+}
+
 // Main loop to manage publishing state
 void SharpSensor::Spin() {
     if (is_publishing_) {
