@@ -65,6 +65,8 @@
         "thread": "cpp",
         "cinttypes": "cpp",
         "typeindex": "cpp",
-        "typeinfo": "cpp"
-    }
+        "typeinfo": "cpp",
+        "*.txx": "cpp"
+    },
+    "cmake.sourceDirectory": "/home/vmx/ROS2/src/studica_control"
 }

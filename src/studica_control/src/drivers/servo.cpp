@@ -1,11 +1,11 @@
 #include "servo.h"
-using namespace studica_driver
+using namespace studica_driver;
 
 Servo::Servo(VMXChannelIndex port, ServoType type, int min, int max) 
     : Servo(port, type, min, max, std::make_shared<VMXPi>(true, 50)) {}
 
 Servo::Servo(VMXChannelIndex port, ServoType type, int min, int max, std::shared_ptr<VMXPi> vmx) 
-    : Device("servo_"), vmx_(vmx), port_(port), type_(type), min_(min), max_(max), prev_pwm_servo_value_(min - 1) {
+    : vmx_(vmx), port_(port), type_(type), min_(min), max_(max), prev_pwm_servo_value_(min - 1) {
     if (port >= 0 && port <= 21) {
         PWMGeneratorConfig pwmgen_cfg(50);  // 50Hz for servos
         pwmgen_cfg.SetMaxDutyCycleValue(5000);  // Set PWM precision for better accuracy
@@ -41,8 +41,7 @@ void Servo::SetBounds(double min, double center, double max) {
 }
 
 int Servo::Map(int value) {
-    cout << "Value: " << value << endl;
-    cout << "Min: " << min_ << " Max: " << max_ << " Min_us: " << min_us_ << " Max_us: " << max_us_ << endl;
+    printf("Min: %d Max: %d Min_us: %d Max_us: %d\n", min_, max_, min_us_, max_us_);
     if (value < min_) value = min_;
     if (value > max_) value = max_;
     return static_cast<int>((value - min_) * (max_us_ - min_us_) / (max_ - min_) + min_us_);
@@ -74,4 +73,10 @@ void Servo::SetSpeed(int speed) {
             printf("PWM Duty cycle set on port %d at %d\n", port_, speed);
         }
     }
+}
+
+void Servo::DisplayVMXError(VMXErrorCode vmxerr) 
+{
+    const char* p_err_description = GetVMXErrorString(vmxerr);
+    printf("VMXError %d: %s\n", vmxerr, p_err_description);
 }
