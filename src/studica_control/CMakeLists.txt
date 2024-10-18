@@ -53,6 +53,7 @@ set(studica_control_SRCS # <- source files
   src/cobra_sensor_node.cpp
   src/servo.cpp
   src/titan.cpp
+  src/i2c.cpp
 )
 
 set(studica_control_HDRS # i don't think this is necessary
@@ -60,6 +61,7 @@ set(studica_control_HDRS # i don't think this is necessary
   include/studica_control/studica_control_node.h
   include/studica_control/imu_driver_node.h
   include/studica_control/ultrasonic.h
+  include/studica_control/i2c.h
   include/studica_control/cobra_sensor_node.h
   include/studica_control/analog_input.h
   include/studica_control/sharp_sensor_node.h
@@ -67,6 +69,7 @@ set(studica_control_HDRS # i don't think this is necessary
 )
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
+
 
 add_executable(studica_control_node ${studica_control_SRCS} ${studica_control_HDRS})
 target_link_libraries(studica_control_node /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so)
@@ -76,11 +79,6 @@ target_link_libraries(studica_control_node "${cpp_typesupport_target}")
 add_executable(tester src/test.cpp)
 ament_target_dependencies(tester ${dependencies})
 target_link_libraries(tester "${cpp_typesupport_target}")
-
-
-# add_executable(dio src/dio.cpp)
-# ament_target_dependencies(dio ${dependencies})
-# target_link_libraries(dio "${cpp_typesupport_target}")
 
 
 install(TARGETS studica_control_node tester  # <- Executable targets

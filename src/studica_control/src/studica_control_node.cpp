@@ -14,6 +14,7 @@
 #include "studica_control/cobra_sensor_node.h"
 #include "studica_control/servo.h"
 #include "studica_control/DIOPin.h"
+#include "studica_control/i2c.h"
 #include "drivers/encoder.h"
 
 // void log(string s) { RCLCPP_INFO(this->get_logger(), s); }
@@ -270,10 +271,13 @@ public:
                 return;
             }
             RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
-            auto cobra_node = std::make_shared<CobraSensor>(vmx_, name, vref, mux_ch);
+
+            auto i2c_handler = std::make_shared<I2CHandler>(vmx_); // declare when vmx initialized
+            auto cobra_node = std::make_shared<CobraSensor>(vmx_, i2c_handler, name, vref, mux_ch);
             component_map[name] = {name, cobra_node, {}};
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(cobra_node));
-        } else if (component == "dio") {
+        }
+        else if (component == "dio") {
             RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
             uint8_t pin = request->initparams.pin;
             // Checks
