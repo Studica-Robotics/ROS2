@@ -15,10 +15,9 @@ find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
-include_directories(include /usr/local/include/vmxpi src/drivers) # <- #include <"">
+include_directories(include /usr/local/include/vmxpi src/drivers src/nodes) # <- #include <"">
 
-rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files
-  # "action/RotateAbsolute.action"
+rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files (srv, msg, action)
   "msg/InitializeParams.msg"
   "srv/ControlImu.srv"
   "srv/SetData.srv"
@@ -52,7 +51,10 @@ set(studica_control_SRCS # <- source files
   src/DIOPin.cpp
   src/cobra_sensor_node.cpp
   src/servo.cpp
-  # src/titan.cpp
+  # everything in nodes folder
+  src/drivers/
+  src/nodes/
+  src/nodes/encoder_node.cpp
 )
 
 set(studica_control_HDRS # i don't think this is necessary
@@ -63,8 +65,6 @@ set(studica_control_HDRS # i don't think this is necessary
   include/studica_control/cobra_sensor_node.h
   include/studica_control/analog_input.h
   include/studica_control/sharp_sensor_node.h
-  src/drivers/encoder.h
-  # include/studica_control/titan.h
 )
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")

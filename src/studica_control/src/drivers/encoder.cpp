@@ -1,13 +1,22 @@
 #include "encoder.h"
 using namespace studica_control;
 
-Encoder::Encoder(std::shared_ptr<VMXPi> vmx, VMXChannelIndex port_a, VMXChannelIndex port_b)
-    : Device("encoder_"), vmx_(vmx), port_a_(port_a), port_b_(port_b), encoder_res_handle_(CREATE_VMX_RESOURCE_HANDLE(VMXResourceType::Undefined, INVALID_VMX_RESOURCE_INDEX)) {
+Encoder::Encoder(VMXChannelIndex port_a, VMXChannelIndex port_b, std::shared_ptr<VMXPi> vmx)
+    : vmx_(vmx), port_a_(port_a), port_b_(port_b), encoder_res_handle_(CREATE_VMX_RESOURCE_HANDLE(VMXResourceType::Undefined, INVALID_VMX_RESOURCE_INDEX)) 
+{
+    if (!vmx_->IsOpen()) {
+        printf("Error:  Unable to open VMX Client.\n");
+        printf("\n");
+        printf("        - Is pigpio (or the system resources it requires) in use by another process?\n");
+        printf("        - Does this application have root privileges?\n");
+        return;
+    }
 
     VMXChannelInfo enc_channels[2] = {
         { VMXChannelInfo(port_a_, VMXChannelCapability::EncoderAInput) },
         { VMXChannelInfo(port_b_, VMXChannelCapability::EncoderBInput) }
     };
+    printf("Encoder channels: %d, %d\n", port_a_, port_b_);
     
     EncoderConfig encoder_cfg(EncoderConfig::EncoderEdge::x4);
     VMXErrorCode vmxerr;
@@ -21,19 +30,8 @@ Encoder::Encoder(std::shared_ptr<VMXPi> vmx, VMXChannelIndex port_a, VMXChannelI
     }
 }
 
-void Encoder::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response) {
-    if (params == "get_count") {
-        int count = GetCount();
-        response->message = "Encoder count: " + std::to_string(count);
-    } else if (params == "get_direction") {
-        std::string direction = GetDirection();
-        response->message = "Encoder direction: " + direction;
-    } else {
-        response->message = "Invalid command";
-    }
-}
-
-int Encoder::GetCount() {
+int Encoder::GetCount() 
+{
     int32_t counter = 0;
     VMXErrorCode vmxerr;
 
@@ -47,7 +45,8 @@ int Encoder::GetCount() {
     }
 }
 
-std::string Encoder::GetDirection() {
+std::string Encoder::GetDirection() 
+{
     VMXIO::EncoderDirection encoder_direction;
     VMXErrorCode vmxerr;
 
@@ -60,7 +59,8 @@ std::string Encoder::GetDirection() {
     }
 }
 
-void Encoder::DisplayVMXError(VMXErrorCode vmxerr) {
+void Encoder::DisplayVMXError(VMXErrorCode vmxerr) 
+{
     const char* p_err_description = GetVMXErrorString(vmxerr);
     printf("VMXError %d: %s\n", vmxerr, p_err_description);
 }
