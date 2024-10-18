@@ -10,7 +10,7 @@
 #include "studica_control/ultrasonic.h"
 #include "studica_control/sharp_sensor_node.h"
 #include "studica_control/analog_input.h"
-// #include "studica_control/titan.h"
+#include "studica_control/titan.h"
 #include "studica_control/cobra_sensor_node.h"
 #include "studica_control/servo.h"
 #include "studica_control/DIOPin.h"
@@ -348,19 +348,21 @@ public:
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(encoder_node));
             response->success = true;
             response->message = name + " started.";
-        }
-        // else if (component == "titan") {
-        //     RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
-        //     uint8_t nEncoder = request->initparams.n_encoder;
-        //     float distPerTick = request->initparams.dist_per_tick;
-        //     float speed = request->initparams.speed; // 
-        //     uint8_t canID = request->initparams.can_id; // (0,64)
-        //     uint16_t motorFreq = request->initparams.motor_freq; // [0,20000]
+        } else if (component == "titan") {
+            RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
+            uint8_t nEncoder = request->initparams.n_encoder; // 0, 1, 2, 3
+            float distPerTick = request->initparams.dist_per_tick; // 0.0006830601
+            float speed = request->initparams.speed; // (-1, 1) // 0.8
+            uint8_t canID = request->initparams.can_id; // (0,64) // 45
+            uint16_t motorFreq = request->initparams.motor_freq; // [0,20000] // 15600
 
-        //     auto titan_node = std::make_shared<Titan>(vmx_, name, canID, motorFreq, nEncoder, distPerTick, speed); // canID, motorFrequency
-        //     component_map[name] = {name, titan_node, {}};
-        // }
-        else {
+            auto titan_node = std::make_shared<Titan>(vmx_, name, canID, motorFreq, nEncoder, distPerTick, speed); // canID, motorFrequency
+            // std::this_thread::sleep_for(std::chrono::milliseconds((int64_t)(1.0 * 1000))); // req? why?
+            component_map[name] = {name, titan_node, {}};
+            executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(titan_node));
+            response->success = true;
+            response->message = name + " started.";
+        } else {
             response->success = false;
             response->message = "No such component '" + std::string(component) + "'";
             RCLCPP_INFO(this->get_logger(), "No such component '%s'", component.c_str());

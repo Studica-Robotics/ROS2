@@ -51,7 +51,7 @@ set(studica_control_SRCS # <- source files
   src/DIOPin.cpp
   src/cobra_sensor_node.cpp
   src/servo.cpp
-  # everything in nodes folder
+  everything in nodes folder
   src/drivers/
   src/nodes/
   src/nodes/encoder_node.cpp
@@ -65,6 +65,7 @@ set(studica_control_HDRS # i don't think this is necessary
   include/studica_control/cobra_sensor_node.h
   include/studica_control/analog_input.h
   include/studica_control/sharp_sensor_node.h
+  include/studica_control/titan.h
 )
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
