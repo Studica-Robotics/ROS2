@@ -12,7 +12,7 @@
 #include "studica_control/analog_input.h"
 #include "studica_control/titan.h"
 #include "studica_control/cobra_sensor_node.h"
-#include "studica_control/servo.h"
+#include "studica_control/servo!.h"
 #include "studica_control/DIOPin.h"
 #include "studica_control/encoder_component.h"
 

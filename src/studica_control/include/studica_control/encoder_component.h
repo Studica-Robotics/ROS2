@@ -5,6 +5,7 @@
 #include "VMXPi.h"
 #include "rclcpp/rclcpp.hpp"
 #include "encoder.h"
+#include "servo.h"
 // Messages
 #include <studica_control/srv/set_data.hpp>
 #include <std_msgs/msg/string.hpp>

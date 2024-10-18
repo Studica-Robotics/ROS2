@@ -36,7 +36,6 @@ set(studica_control_SRCS # <- source files
   src/studica_control_node.cpp
   src/imu_driver_node.cpp
   src/dynamic_publisher.cpp
-  src/drivers/encoder.cpp
   src/ultrasonic.cpp
   src/analog_input.cpp
   src/sharp_sensor_node.cpp
