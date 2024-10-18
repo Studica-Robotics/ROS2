@@ -2,6 +2,8 @@
 #define SERVO_H
 
 #include <stdio.h>
+#include <memory>
+#include "rclcpp/rclcpp.hpp"
 #include "VMXPi.h"
 
 namespace studica_driver {
@@ -16,7 +18,7 @@ class Servo {
 public:
     Servo(VMXChannelIndex port, ServoType type, int min = -150, int max = 150);
     Servo(VMXChannelIndex port, ServoType type, int min = -150, int max = 150, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
-
+    ~Servo();
     void SetBounds(double min, double center, double max);
     void SetAngle(int angle);
     void SetSpeed(int speed);

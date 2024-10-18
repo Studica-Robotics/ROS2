@@ -5,7 +5,6 @@
 #include "VMXPi.h"
 #include "rclcpp/rclcpp.hpp"
 #include "encoder.h"
-#include "servo.h"
 // Messages
 #include <studica_control/srv/set_data.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -25,6 +24,7 @@ public:
     Encoder(const std::string &name, VMXChannelIndex port_a, VMXChannelIndex port_b, std::shared_ptr<VMXPi> vmx);
     explicit Encoder(const rclcpp::NodeOptions &options);
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);
+    void DisplayVMXError(VMXErrorCode vmxerr);
 };
 
 } // namespace studica_control

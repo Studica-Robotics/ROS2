@@ -23,17 +23,27 @@ rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files (srv, msg, action)
   "srv/SetData.srv"
 )
 
-include_directories(
+include_directories( # <- #include <"">
   include 
   /usr/local/include/vmxpi src/drivers
   ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp
-) # <- #include <"">
+)
+ 
+set(studica_control_HDRS
+  include/studica_control/device.h
+  include/studica_control/studica_control_node.h
+  include/studica_control/imu_driver_node.h
+  include/studica_control/ultrasonic.h
+  include/studica_control/cobra_sensor_node.h
+  include/studica_control/analog_input.h
+  include/studica_control/sharp_sensor_node.h
+  include/studica_control/titan.h
+  include/studica_control/encoder_component.h
+  include/studica_control/servo_component.h
+)
 
-
-  
-# ----------------------------------------------------------------------------------
 set(studica_control_SRCS # <- source files
-  src/studica_control_node.cpp
+  # Components
   src/imu_driver_node.cpp
   src/dynamic_publisher.cpp
   src/ultrasonic.cpp
@@ -45,48 +55,49 @@ set(studica_control_SRCS # <- source files
   src/titan.cpp
   src/i2c.cpp
   
-  src/drivers/
-  
+  # DRIVERS
+  src/drivers/encoder.cpp
+  src/drivers/servo.cpp
 )
-  
-set(studica_control_HDRS # i don't think this is necessary
-  include/studica_control/device.h
-  include/studica_control/studica_control_node.h
-  include/studica_control/imu_driver_node.h
-  include/studica_control/ultrasonic.h
-  include/studica_control/i2c.h
-  include/studica_control/cobra_sensor_node.h
-  include/studica_control/analog_input.h
-  include/studica_control/sharp_sensor_node.h
-  include/studica_control/titan.h
-  include/studica_control/encoder_component.h
-)
+
 set(dependencies "ament_index_cpp" "sensor_msgs" "rclcpp_components" "rclcpp" "rclcpp_action" "std_msgs" "std_srvs")
-  # ----------------------------------------------------------------------------------
-  # COMPONENTS
+
+
+# COMPONENTS
 set(node_plugins "")
 
-add_library(encoder_component SHARED src/encoder_component.cpp)
-target_compile_definitions(encoder_component PRIVATE "COMPOSITION_BUILDING_DLL")
-# target_include_directories(encoder_component PRIVATE
-#   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp>
-#   $<INSTALL_INTERFACE:include>
-# )
-ament_target_dependencies(encoder_component ${dependencies})
-rclcpp_components_register_nodes(encoder_component "studica_control::Encoder")
-set(node_plugins "${node_plugins}studica_control::Encoder;$<TARGET_FILE:encoder_component>\n")
+function(COMPILE_COMPONENT component_name)
+  add_library(${component_name} SHARED src/${component_name}.cpp)
+  target_compile_definitions(${component_name} PRIVATE "COMPOSITION_BUILDING_DLL")
+  ament_target_dependencies(${component_name} ${dependencies})
+  rclcpp_components_register_nodes(${component_name} "studica_control::${component_name}")
+  set(node_plugins "${node_plugins}studica_control::${component_name};$<TARGET_FILE:${component_name}>\n")
+endfunction()
+
+COMPILE_COMPONENT(encoder_component)
+COMPILE_COMPONENT(servo_component)
 
 if(NOT WIN32)
   ament_environment_hooks(
     "${ament_cmake_package_templates_ENVIRONMENT_HOOK_LIBRARY_PATH}")
 endif()
 
+install(TARGETS # <- Install Components
+  encoder_component
+  servo_component
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin)
+
+
+# EXECUTABLES
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 
 
-add_executable(studica_control_node ${studica_control_SRCS} ${studica_control_HDRS})
+add_executable(studica_control_node src/studica_control_node.cpp ${studica_control_SRCS} ${studica_control_HDRS}) 
 target_link_libraries(studica_control_node 
   encoder_component
+  servo_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so)
 ament_target_dependencies(studica_control_node ${dependencies})
 target_link_libraries(studica_control_node "${cpp_typesupport_target}")
@@ -94,12 +105,6 @@ target_link_libraries(studica_control_node "${cpp_typesupport_target}")
 add_executable(tester src/test.cpp)
 ament_target_dependencies(tester ${dependencies})
 target_link_libraries(tester "${cpp_typesupport_target}")
-
-install(TARGETS # <- Install Components
-  encoder_component
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin)
 
 install(TARGETS # <- Executable targets
   studica_control_node 
