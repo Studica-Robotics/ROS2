@@ -5,16 +5,12 @@
 #include <memory>
 #include "VMXPi.h"
 #include <rclcpp/rclcpp.hpp>
-#include <studica_control/srv/set_data.hpp>
-#include <std_msgs/msg/string.hpp>
-#include "studica_control/device.h"
 
-namespace studica_control {
+namespace studica_driver {
 
-class Encoder : public Device {
+class Encoder {
 public:
-    Encoder(std::shared_ptr<VMXPi> vmx, VMXChannelIndex port_a, VMXChannelIndex port_b);
-    void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response) override;
+    Encoder(VMXChannelIndex port_a, VMXChannelIndex port_b, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
 
     int GetCount();
     std::string GetDirection();

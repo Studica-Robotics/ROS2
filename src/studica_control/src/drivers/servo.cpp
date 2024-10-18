@@ -1,7 +1,10 @@
-#include "studica_control/servo!.h"
-#include <stdio.h>
+#include "servo.h"
+using namespace studica_driver
 
-Servo::Servo(std::shared_ptr<VMXPi> vmx, VMXChannelIndex port, ServoType type, int min, int max) 
+Servo::Servo(VMXChannelIndex port, ServoType type, int min, int max) 
+    : Servo(port, type, min, max, std::make_shared<VMXPi>(true, 50)) {}
+
+Servo::Servo(VMXChannelIndex port, ServoType type, int min, int max, std::shared_ptr<VMXPi> vmx) 
     : Device("servo_"), vmx_(vmx), port_(port), type_(type), min_(min), max_(max), prev_pwm_servo_value_(min - 1) {
     if (port >= 0 && port <= 21) {
         PWMGeneratorConfig pwmgen_cfg(50);  // 50Hz for servos
@@ -10,7 +13,6 @@ Servo::Servo(std::shared_ptr<VMXPi> vmx, VMXChannelIndex port, ServoType type, i
         bool success = vmx_->io.ActivateSinglechannelResource(VMXChannelInfo(port_, VMXChannelCapability::PWMGeneratorOutput), 
                                                               &pwmgen_cfg, pwm_res_handle_, &vmxerr);
         SetBounds(0.5, 1.5, 2.5);
-
         if (!success) {
             printf("Failed to initialize servo for port %d\n", port_);
             DisplayVMXError(vmxerr);
@@ -19,6 +21,16 @@ Servo::Servo(std::shared_ptr<VMXPi> vmx, VMXChannelIndex port, ServoType type, i
         }
     } else {
         printf("Port %d is not a valid servo port!\n", port_);
+    }
+}
+
+Servo::~Servo() {
+    VMXErrorCode vmxerr;
+    if (!vmx_->io.DeallocateResource(pwm_res_handle_, &vmxerr)) {
+        printf("Failed to deallocate PWMGenerator Resource %d\n", port_);
+        DisplayVMXError(vmxerr);
+    } else {
+        printf("Deallocated PWMGenerator Resource %d\n", port_);
     }
 }
 
@@ -37,16 +49,9 @@ int Servo::Map(int value) {
 }
 
 void Servo::SetAngle(int angle) {
-    // if (type_ != ServoType::Standard) {
-    //     printf("Cannot 'SetAngle'. Servo on port %d is not a standard servo\n", port_);
-    //     return;
-    // }
-    
     if (prev_pwm_servo_value_ != angle) {
         VMXErrorCode vmxerr;
         bool success = vmx_->io.PWMGenerator_SetDutyCycle(pwm_res_handle_, port_, Map(angle), &vmxerr);
-        // print the map value
-        printf("Map value: %d\n", Map(angle));
         prev_pwm_servo_value_ = angle;
         if (!success) { 
             printf("Failed to set duty cycle for servo on port %d\n", port_);
@@ -58,47 +63,15 @@ void Servo::SetAngle(int angle) {
 }
 
 void Servo::SetSpeed(int speed) {
-    if (type_ != ServoType::Continuous) {
-        printf("Cannot 'SetSpeed()'. Servo on port %d is not a continuous servo\n", port_);
-        return;
-    }
     if (prev_pwm_servo_value_ != speed) {
         VMXErrorCode vmxerr;
-        bool success = vmx_->io.PWMGenerator_SetDutyCycle(pwm_res_handle_, 0, Map(speed), &vmxerr);
+        bool success = vmx_->io.PWMGenerator_SetDutyCycle(pwm_res_handle_, port_, Map(speed), &vmxerr);
         prev_pwm_servo_value_ = speed;
-        if (!success) {
+        if (!success) { 
             printf("Failed to set duty cycle for servo on port %d\n", port_);
             DisplayVMXError(vmxerr);
         } else {
             printf("PWM Duty cycle set on port %d at %d\n", port_, speed);
         }
     }
-}
-
-void Servo::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response)
-{
-    int param_angle = (int)strtol(params.c_str(), NULL, 10);
-    SetAngle(param_angle);
-    // if (params == "set_angle")
-    // {
-    //     SetAngle(angle);
-    //     response->success = true;
-    //     response->message = "Servo set to 90 degrees";
-    // }
-    // else if (params == "set_speed")
-    // {
-    //     SetSpeed(50);
-    //     response->success = true;
-    //     response->message = "Servo set to 50 speed";
-    // }
-    // else
-    // {
-    //     response->success = false;
-    //     response->message = "Invalid command";
-    // }
-}
-
-void Servo::DisplayVMXError(VMXErrorCode vmxerr) {
-    const char* err_str = GetVMXErrorString(vmxerr);
-    printf("VMX Error %d: %s\n", vmxerr, err_str);
 }
