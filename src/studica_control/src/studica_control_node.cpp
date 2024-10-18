@@ -5,6 +5,7 @@
 // #include <studica_control/srv/control_imu.hpp>
 // #include <studica_control/srv/control_motor.hpp>
 
+#include "studica_control/device.h"
 #include "studica_control/imu_driver_node.h" 
 #include "studica_control/ultrasonic.h"
 #include "studica_control/sharp_sensor_node.h"
@@ -12,6 +13,8 @@
 #include "studica_control/titan.h"
 #include "studica_control/cobra_sensor_node.h"
 #include "studica_control/servo.h"
+#include "studica_control/DIOPin.h"
+#include "drivers/encoder.h"
 
 // void log(string s) { RCLCPP_INFO(this->get_logger(), s); }
 
@@ -23,8 +26,6 @@
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <studica_control/msg/initialize_params.hpp>
-#include "studica_control/device.h"
-#include "studica_control/DIOPin.h"
 
 class DynamicPublisher : public Device
 // tell servo to change stuff 
@@ -328,8 +329,20 @@ public:
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(servo_node));
             response->success = true;
             response->message = name + " started.";
-        } 
-        else if (component == "titan") {
+        } else if (component == "encoder") {
+            RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
+            VMXChannelIndex pin_a = request->initparams.port_a;
+            VMXChannelIndex pin_b = request->initparams.port_b;
+            // Checks
+            if (!check_pin_is_available(pin_a, response)) return;
+            if (!check_pin_is_available(pin_b, response)) return;
+            // Initialize
+            auto encoder_node = std::make_shared<studica_control::Encoder>(vmx_, pin_a, pin_b);
+            component_map[name] = {name, encoder_node, {pin_a, pin_b}};
+            executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(encoder_node));
+            response->success = true;
+            response->message = name + " started.";
+        } else if (component == "titan") {
             RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
             uint8_t nEncoder = request->initparams.n_encoder; // 0, 1, 2, 3
             float distPerTick = request->initparams.dist_per_tick; // 0.0006830601
@@ -343,8 +356,7 @@ public:
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(titan_node));
             response->success = true;
             response->message = name + " started.";
-        }
-        else {
+        } else {
             response->success = false;
             response->message = "No such component '" + std::string(component) + "'";
             RCLCPP_INFO(this->get_logger(), "No such component '%s'", component.c_str());
@@ -446,11 +458,12 @@ public:
             vmx_->io.GetWatchdogExpired(fed, &vmxerr);
             // RCLCPP_INFO(this->get_logger(), "Watchdog: %s", fed ? "EXPIRED" : "FED");
             // get component named "henry"
-            if (component_map.find("ultra") != component_map.end()) {
-                float distance = std::dynamic_pointer_cast<UltrasonicDriver>(component_map["ultra"].component)->read_distance();
+            if (component_map.find("sharp") != component_map.end()) {
+                float distance = std::dynamic_pointer_cast<SharpSensor>(component_map["sharp"].component)->get_voltage();
+                printf("Distance: %f\n", distance);
                 if (component_map.find("henry") != component_map.end()) {
                     // component_map["henry"].component->set(distance);
-                    std::dynamic_pointer_cast<Servo>(component_map["henry"].component)->SetAngle((int)distance*4 -150);
+                    std::dynamic_pointer_cast<Servo>(component_map["henry"].component)->SetAngle((int)distance*60 -150);
                 }
             }
     }

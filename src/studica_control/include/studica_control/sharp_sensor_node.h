@@ -17,7 +17,7 @@ public:
     void start_publishing();
     void stop_publishing();
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);
-
+    double get_voltage();
 private:
     void publish_analog_data();
     void Spin();

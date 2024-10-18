@@ -15,7 +15,7 @@ find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
-include_directories(include /usr/local/include/vmxpi) # <- #include <"">
+include_directories(include /usr/local/include/vmxpi src/drivers) # <- #include <"">
 
 rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files
   # "action/RotateAbsolute.action"
@@ -45,6 +45,7 @@ set(studica_control_SRCS # <- source files
   src/studica_control_node.cpp
   src/imu_driver_node.cpp
   src/dynamic_publisher.cpp
+  src/drivers/encoder.cpp
   src/ultrasonic.cpp
   src/analog_input.cpp
   src/sharp_sensor_node.cpp
@@ -54,7 +55,7 @@ set(studica_control_SRCS # <- source files
   src/titan.cpp
 )
 
-set(studica_control_HDRS
+set(studica_control_HDRS # i don't think this is necessary
   include/studica_control/device.h
   include/studica_control/studica_control_node.h
   include/studica_control/imu_driver_node.h
