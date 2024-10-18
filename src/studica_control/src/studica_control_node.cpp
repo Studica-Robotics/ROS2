@@ -14,9 +14,8 @@
 #include "studica_control/cobra_sensor_node.h"
 #include "studica_control/servo.h"
 #include "studica_control/DIOPin.h"
-#include "nodes/encoder_node.h"
+#include "studica_control/encoder_component.h"
 
-// void log(string s) { RCLCPP_INFO(this->get_logger(), s); }
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -335,20 +334,26 @@ public:
             executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(servo_node));
             response->success = true;
             response->message = name + " started.";
-        } else if (component == "encoder") {
-            RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
-            VMXChannelIndex pin_a = request->initparams.port_a;
-            VMXChannelIndex pin_b = request->initparams.port_b;
-            // Checks
-            if (!check_pin_is_available(pin_a, response)) return;
-            if (!check_pin_is_available(pin_b, response)) return;
-            // Initialize
-            auto encoder_node = std::make_shared<studica_control::EncoderNode>("name", pin_a, pin_b, vmx_);
-            component_map[name] = {name, encoder_node, {pin_a, pin_b}};
-            executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(encoder_node));
-            response->success = true;
-            response->message = name + " started.";
-        } else if (component == "titan") {
+        } 
+        // else if (component == "encoder") {
+        //     RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
+        //     VMXChannelIndex pin_a = request->initparams.port_a;
+        //     VMXChannelIndex pin_b = request->initparams.port_b;
+        //     // Checks
+        //     if (!check_pin_is_available(pin_a, response)) return;
+        //     if (!check_pin_is_available(pin_b, response)) return;
+        //     // Initialize
+        //     auto encoder_node = std::make_shared<studica_control::EncoderNode>("name", pin_a, pin_b, vmx_);
+        //     component_map[name] = {name, encoder_node, {pin_a, pin_b}};
+        //     executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(encoder_node));
+        //     response->success = true;
+        //     response->message = name + " started.";
+        // } 
+        else if (component == "encoder") {
+            auto encoder_component = std::make_shared<studica_control::Encoder>("enc", 0, 1, vmx_);
+            executor_->add_node(encoder_component);
+        }
+        else if (component == "titan") {
             RCLCPP_INFO(this->get_logger(), "Initializing component: %s, name %s.", component.c_str(), name.c_str());
             uint8_t nEncoder = request->initparams.n_encoder; // 0, 1, 2, 3
             float distPerTick = request->initparams.dist_per_tick; // 0.0006830601

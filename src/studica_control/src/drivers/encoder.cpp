@@ -1,5 +1,5 @@
 #include "encoder.h"
-using namespace studica_control;
+using namespace studica_driver;
 
 Encoder::Encoder(VMXChannelIndex port_a, VMXChannelIndex port_b, std::shared_ptr<VMXPi> vmx)
     : vmx_(vmx), port_a_(port_a), port_b_(port_b), encoder_res_handle_(CREATE_VMX_RESOURCE_HANDLE(VMXResourceType::Undefined, INVALID_VMX_RESOURCE_INDEX)) 

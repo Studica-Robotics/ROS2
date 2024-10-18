@@ -6,7 +6,7 @@
 #include "VMXPi.h"
 #include <rclcpp/rclcpp.hpp>
 
-namespace studica_control {
+namespace studica_driver {
 
 class Encoder {
 public:
