@@ -3,9 +3,9 @@
 
 #include <memory>
 #include <string>
-
 #include "rclcpp/rclcpp.hpp"
 #include "cobra.h"
+#include "VMXManager.h"
 #include "studica_control/srv/set_data.hpp" 
 #include "VMXPi.h"  
 
@@ -14,8 +14,9 @@ namespace studica_control
 
 class Cobra : public rclcpp::Node {
 public:
-    Cobra(const std::string &name, const float& vref, const int& muxch, std::shared_ptr<VMXPi> vmx);
+    Cobra(const std::string &name, const float& vref, const int& muxch);
     explicit Cobra(const rclcpp::NodeOptions & options);
+    ~Cobra();
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);
 
 private:

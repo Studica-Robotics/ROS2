@@ -4,12 +4,15 @@ namespace studica_control
 {
 
 Cobra::Cobra(const rclcpp::NodeOptions & options) : Node("cobra", options) {
-    Cobra("cobra", 5.0, 0, std::make_shared<VMXPi>(true, 50));
+    // Cobra("cobra", 5.0, 0, std::make_shared<VMXPi>(true, 50));
 }
-Cobra::Cobra(const std::string &name, const float& vref, const int& muxch, std::shared_ptr<VMXPi> vmx)
-    : rclcpp::Node(name), vmx_(vmx), name_(name), vref_(vref), muxch_(muxch) {
+Cobra::Cobra(const std::string &name, const float& vref, const int& muxch)
+    : rclcpp::Node(name), name_(name), vref_(vref), muxch_(muxch) {
+    auto& vmx_manager = studica_driver::VMXManager::getInstance();
+    vmx_ = vmx_manager.getVMX();
     cobra_ = std::make_shared<studica_driver::Cobra>(vref_, vmx_);
 }
+Cobra::~Cobra() {}
 
 
 void Cobra::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response) {
