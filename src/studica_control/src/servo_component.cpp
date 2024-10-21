@@ -2,6 +2,10 @@
 
 namespace studica_control
 {
+
+Servo::Servo(const rclcpp::NodeOptions &options) : Node("servo_", options) {
+    // servo_ = std::make_shared<studica_driver::Servo>(0, type_, 0, 180, std::make_shared<VMXPi>(true, 50));
+}
     
 Servo::Servo(std::shared_ptr<VMXPi> vmx, VMXChannelIndex port, studica_driver::ServoType type, int min, int max) 
     : rclcpp::Node("servo_"), vmx_(vmx), port_(port), type_(type) {

@@ -2,6 +2,7 @@
 #define ULTRASONIC_H
 
 #include <stdio.h>
+#include <memory>
 #include "VMXPi.h"
 
 namespace studica_driver
