@@ -11,11 +11,10 @@ namespace studica_driver
 class Ultrasonic
 {
 public:
-    Ultrasonic(VMXChannelIndex ping, VMXChannelIndex echo);
     Ultrasonic(VMXChannelIndex ping, VMXChannelIndex echo, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
     ~Ultrasonic();
 
-    float Ping();
+    void Ping();
     float GetDistanceIN();
     float GetDistanceMM();
 
@@ -26,6 +25,7 @@ private:
     VMXResourceHandle ping_output_res_handle;
     VMXResourceHandle echo_inputcap_res_handle;
     void DisplayVMXError(VMXErrorCode vmxerr);
+    float get_count();
 };
 
 }
