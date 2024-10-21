@@ -67,7 +67,7 @@ set(node_plugins "")
 find_library(STUDICA_DRIVER_LIB studica_drivers PATHS /usr/local/lib/studica_drivers)
 
 function(COMPILE_COMPONENT component_name)
-  add_library(${component_name} SHARED src/${component_name}.cpp)
+  add_library(${component_name} SHARED src/components/${component_name}.cpp)
   target_compile_definitions(${component_name} PRIVATE "COMPOSITION_BUILDING_DLL")
   ament_target_dependencies(${component_name} ${dependencies})
   rclcpp_components_register_nodes(${component_name} "studica_control::${component_name}")
@@ -115,14 +115,9 @@ target_link_libraries(manual_composition
 )
 ament_target_dependencies(manual_composition "rclcpp")
 
-add_executable(tester src/test.cpp)
-ament_target_dependencies(tester ${dependencies})
-target_link_libraries(tester "${cpp_typesupport_target}")
-
 install(TARGETS # <- Executable targets
   # studica_control_node 
   manual_composition
-  tester  
   DESTINATION lib/${PROJECT_NAME}
 )
 
