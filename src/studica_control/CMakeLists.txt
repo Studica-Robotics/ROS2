@@ -25,41 +25,37 @@ rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files (srv, msg, action)
 
 include_directories( # <- #include <"">
   include 
-  /usr/local/include/vmxpi src/drivers
+  /usr/local/include/vmxpi 
+  /usr/local/include/studica_drivers
   ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp
 )
  
 set(studica_control_HDRS
   include/studica_control/device.h
-  include/studica_control/studica_control_node.h
-  include/studica_control/imu_driver_node.h
-  include/studica_control/ultrasonic.h
-  include/studica_control/cobra_sensor_node.h
   include/studica_control/analog_input.h
   include/studica_control/sharp_sensor_node.h
-  include/studica_control/titan.h
+  # components
   include/studica_control/encoder_component.h
   include/studica_control/servo_component.h
+  include/studica_control/sharp_component.h
 )
 
 set(studica_control_SRCS # <- source files
-  # Components
-  src/imu_driver_node.cpp
-  src/dynamic_publisher.cpp
-  src/ultrasonic.cpp
-  src/analog_input.cpp
-  src/sharp_sensor_node.cpp
-  src/DIOPin.cpp
-  src/cobra_sensor_node.cpp
-  src/servo.cpp
-  src/titan.cpp
-  src/i2c.cpp
+  
+
+  # src/dynamic_publisher.cpp
+
+  # src/analog_input.cpp
+  # src/sharp_sensor_node.cpp
+
+
+
+
+
   
   # DRIVERS
-  src/drivers/encoder.cpp
-  src/drivers/servo.cpp
-  src/drivers/analog_input.cpp
-  src/drivers/sharp.cpp
+  # src/drivers/encoder.cpp
+  # src/drivers/servo.cpp
 )
 
 set(dependencies "ament_index_cpp" "sensor_msgs" "rclcpp_components" "rclcpp" "rclcpp_action" "std_msgs" "std_srvs")
@@ -68,12 +64,16 @@ set(dependencies "ament_index_cpp" "sensor_msgs" "rclcpp_components" "rclcpp" "r
 # COMPONENTS
 set(node_plugins "")
 
+# FIND DRIVER LIBRARY, if not found make sure to install drivers
+find_library(STUDICA_DRIVER_LIB studica_drivers PATHS /usr/local/lib/studica_drivers)
+
 function(COMPILE_COMPONENT component_name)
-  add_library(${component_name} SHARED src/${component_name}.cpp)
+  add_library(${component_name} SHARED src/components/${component_name}.cpp)
   target_compile_definitions(${component_name} PRIVATE "COMPOSITION_BUILDING_DLL")
   ament_target_dependencies(${component_name} ${dependencies})
   rclcpp_components_register_nodes(${component_name} "studica_control::${component_name}")
   set(node_plugins "${node_plugins}studica_control::${component_name};$<TARGET_FILE:${component_name}>\n")
+  target_link_libraries(${component_name} ${STUDICA_DRIVER_LIB})
 endfunction()
 
 COMPILE_COMPONENT(encoder_component)
@@ -98,23 +98,32 @@ install(TARGETS # <- Install Components
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 
 
-add_executable(studica_control_node src/studica_control_node.cpp ${studica_control_SRCS} ${studica_control_HDRS}) 
-target_link_libraries(studica_control_node 
+# add_executable(studica_control_node src/studica_control_node.cpp ${studica_control_SRCS} ${studica_control_HDRS}) 
+# target_link_libraries(studica_control_node 
+#   encoder_component
+#   servo_component
+#   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
+#   )
+# ament_target_dependencies(studica_control_node ${dependencies})
+# target_link_libraries(studica_control_node "${cpp_typesupport_target}")
+
+add_executable(manual_composition 
+  src/manual_composition.cpp)
+target_link_libraries(manual_composition 
   encoder_component
   servo_component
   sharp_component
-  /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so)
-ament_target_dependencies(studica_control_node ${dependencies})
-target_link_libraries(studica_control_node "${cpp_typesupport_target}")
-
-add_executable(tester src/test.cpp)
-ament_target_dependencies(tester ${dependencies})
-target_link_libraries(tester "${cpp_typesupport_target}")
+  /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
+  /usr/local/lib/studica_drivers/libstudica_drivers.so
+  # ${STUDICA_DRIVER_LIB}
+)
+ament_target_dependencies(manual_composition "rclcpp")
 
 install(TARGETS # <- Executable targets
-  studica_control_node 
-  tester  
+  # studica_control_node 
+  manual_composition
   DESTINATION lib/${PROJECT_NAME}
 )
 
 ament_package()
+set(CMAKE_INSTALL_RPATH "/usr/local/lib/studica_drivers")

@@ -2,6 +2,7 @@
 #define IMU_H
 
 #include <stdio.h>
+#include <memory>
 #include "VMXPi.h"
 
 namespace studica_driver
@@ -60,13 +61,14 @@ public:
     float GetRawMagZ();
     float GetPressure();
     float GetTempC();
-    int GetBoardYawAxis();
-    int GetFirmwareVersion();
-    void RegisterCallback(void* callback, void* callback_context);
-    void DeregisterCallback(void* callback);
-    void BlockOnNewCurrentRegisterData(int timeout_ms, int first_reg_addr_out, void* p_data_out, int requested_len, int p_len_out);
-    bool ReadConfigurationData(int first_reg_addr, void* p_data_out, int requested_len);
+    BoardYawAxis GetBoardYawAxis();
+    std::string GetFirmwareVersion();
+    bool RegisterCallback(IVMXTimestampedAHRSDataSubscriber* callback, void* callback_context);
+    bool DeregisterCallback(IVMXTimestampedAHRSDataSubscriber* callback);
+    bool BlockOnNewCurrentRegisterData(uint32_t timeout_ms, uint8_t *first_reg_addr_out, uint8_t *p_data_out, uint8_t requested_len, uint8_t *p_len_out);
+    bool ReadConfigurationData(uint8_t first_reg_addr, uint8_t *p_data_out, uint8_t requested_len);
     int GetActualUpdateRate();
+    int GetRequestedUpdateRate();
     void Stop();
 private:
     std::shared_ptr<VMXPi> vmx_;

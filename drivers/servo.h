@@ -5,11 +5,7 @@
 #include <memory>
 #include "VMXPi.h"
 
-
-#include <rclcpp/rclcpp.hpp>
-#include <studica_control/srv/set_data.hpp>
-#include <std_msgs/msg/string.hpp>
-#include "studica_control/device.h"
+namespace studica_driver {
 
 enum class ServoType {
     Standard,
@@ -17,11 +13,11 @@ enum class ServoType {
     Linear
 };
 
-class Servo : public Device {
+class Servo {
 public:
-    Servo(std::shared_ptr<VMXPi> vmx, VMXChannelIndex port, ServoType type, int min = -150, int max = 150);
-    void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response) override;
-    
+    Servo(VMXChannelIndex port, ServoType type, int min = -150, int max = 150);
+    Servo(VMXChannelIndex port, ServoType type, int min = -150, int max = 150, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
+    ~Servo();
     void SetBounds(double min, double center, double max);
     void SetAngle(int angle);
     void SetSpeed(int speed);
@@ -42,6 +38,6 @@ private:
     void DisplayVMXError(VMXErrorCode vmxerr);
 };
 
+}
+
 #endif // SERVO_H
-
-

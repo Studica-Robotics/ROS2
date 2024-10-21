@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <memory>
 #include "VMXPi.h"
-#include <rclcpp/rclcpp.hpp>
 
 namespace studica_driver {
 

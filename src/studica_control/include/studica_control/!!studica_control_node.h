@@ -12,6 +12,8 @@
 # include <studica_control/srv/control_imu.hpp>
 #endif
 
+#include <rclcpp/rclcpp.hpp>
+#include "VMXPi.h"
 namespace studica_control
 {
 
@@ -19,6 +21,8 @@ class StudicaControlServer : public rclcpp::Node {
 public:
     // Constructor
     StudicaControlServer();
+    void set_executor(const std::shared_ptr<rclcpp::executors::MultiThreadedExecutor>& exec);
+    void set_hal(const std::shared_ptr<VMXPi>& vmx);
 
 private:
     // Service callbacks
