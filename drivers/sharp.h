@@ -1,5 +1,5 @@
-#ifndef SHAPE_H
-#define SHAPE_H
+#ifndef SHARP_H
+#define SHARP_H
 
 #include <stdio.h>
 #include <cmath>
@@ -27,4 +27,4 @@ private:
 
 }
 
-#endif // SHAPE_H
+#endif // SHARP_H

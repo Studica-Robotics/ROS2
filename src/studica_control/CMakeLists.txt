@@ -38,6 +38,7 @@ set(studica_control_HDRS
   include/studica_control/encoder_component.h
   include/studica_control/servo_component.h
   include/studica_control/sharp_component.h
+  include/studica_control/cobra_component.h
 )
 
 set(studica_control_SRCS # <- source files
@@ -79,6 +80,7 @@ endfunction()
 COMPILE_COMPONENT(encoder_component)
 COMPILE_COMPONENT(servo_component)
 COMPILE_COMPONENT(sharp_component)
+COMPILE_COMPONENT(cobra_component)
 
 if(NOT WIN32)
   ament_environment_hooks(
@@ -89,6 +91,7 @@ install(TARGETS # <- Install Components
   encoder_component
   servo_component
   sharp_component
+  cobra_component
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin)
@@ -113,6 +116,7 @@ target_link_libraries(manual_composition
   encoder_component
   servo_component
   sharp_component
+  cobra_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
   /usr/local/lib/studica_drivers/libstudica_drivers.so
   # ${STUDICA_DRIVER_LIB}
@@ -122,6 +126,26 @@ ament_target_dependencies(manual_composition "rclcpp")
 install(TARGETS # <- Executable targets
   # studica_control_node 
   manual_composition
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# tester for drivers
+add_executable(comp_test 
+  src/comp_test.cpp)
+target_link_libraries(comp_test 
+  encoder_component
+  servo_component
+  sharp_component
+  cobra_component
+  /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
+  /usr/local/lib/studica_drivers/libstudica_drivers.so
+  # ${STUDICA_DRIVER_LIB}
+)
+ament_target_dependencies(comp_test "rclcpp")
+
+install(TARGETS # <- Executable targets
+  # studica_control_node 
+  comp_test
   DESTINATION lib/${PROJECT_NAME}
 )
 
