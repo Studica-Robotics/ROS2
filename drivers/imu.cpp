@@ -7,15 +7,15 @@ Imu::Imu(std::shared_ptr<VMXPi> vmx) : vmx_(vmx) {}
 
 Imu::~Imu() {} // todo
 
-float Imu::GetPitch() return vmx_->ahrs.GetPitch();
+float Imu::GetPitch() { return vmx_->ahrs.GetPitch(); }
 
-float Imu::GetYaw() return vmx_->ahrs.GetYaw();
+float Imu::GetYaw() { return vmx_->ahrs.GetYaw(); }
 
-float Imu::GetRoll() return vmx_->ahrs.GetRoll();
+float Imu::GetRoll() { return vmx_->ahrs.GetRoll(); }
 
 float Imu::GetCompassHeading() { return vmx_->ahrs.GetCompassHeading(); }
 
-float Imu::ZeroYaw() { return vmx_->ahrs.ZeroYaw(); }
+void Imu::ZeroYaw() { vmx_->ahrs.ZeroYaw(); }
 
 bool Imu::IsCalibrating() { return vmx_->ahrs.IsCalibrating(); }
 
@@ -101,19 +101,21 @@ float Imu::GetPressure() { return vmx_->ahrs.GetPressure(); }
 
 float Imu::GetTempC() { return vmx_->ahrs.GetTempC(); }
 
-int Imu::GetBoardYawAxis() { return vmx_->ahrs.GetBoardYawAxis(); }
+BoardYawAxis Imu::GetBoardYawAxis() { return vmx_->ahrs.GetBoardYawAxis(); }
 
-int Imu::GetFirmwareVersion() { return vmx_->ahrs.GetFirmwareVersion(); }
+std::string Imu::GetFirmwareVersion() { return vmx_->ahrs.GetFirmwareVersion(); }
 
-void Imu::RegisterCallback(void* callback, void* callback_context) { vmx_->ahrs.RegisterCallback(callback, callback_context); }
+bool Imu::RegisterCallback(IVMXTimestampedAHRSDataSubscriber* callback, void* callback_context) { return vmx_->ahrs.RegisterCallback(callback, callback_context); }
 
-void Imu::DeregisterCallback(void* callback) { vmx_->ahrs.DeregisterCallback(callback); }
+bool Imu::DeregisterCallback(IVMXTimestampedAHRSDataSubscriber* callback) { return vmx_->ahrs.DeregisterCallback(callback); }
 
-void Imu::BlockOnNewCurrentRegisterData(int timeout_ms, int first_reg_addr_out, void* p_data_out, int requested_len, int p_len_out) { vmx_->ahrs.BlockOnNewCurrentRegisterData(timeout_ms, first_reg_addr_out, p_data_out, requested_len, p_len_out); }
+bool Imu::BlockOnNewCurrentRegisterData(uint32_t timeout_ms, uint8_t *first_reg_addr_out, uint8_t *p_data_out, uint8_t requested_len, uint8_t *p_len_out) { return vmx_->ahrs.BlockOnNewCurrentRegisterData(timeout_ms, first_reg_addr_out, p_data_out, requested_len, p_len_out); }
 
-bool Imu::ReadConfigurationData(int first_reg_addr, void* p_data_out, int requested_len) { return vmx_->ahrs.ReadConfigurationData(first_reg_addr, p_data_out, requested_len); }
+bool Imu::ReadConfigurationData(uint8_t first_reg_addr, uint8_t *p_data_out, uint8_t requested_len) { return vmx_->ahrs.ReadConfigurationData(first_reg_addr, p_data_out, requested_len); }
 
 int Imu::GetActualUpdateRate() { return vmx_->ahrs.GetActualUpdateRate(); }
+
+int Imu::GetRequestedUpdateRate() { return vmx_->ahrs.GetRequestedUpdateRate(); }
 
 void Imu::Stop() { vmx_->ahrs.Stop(); }
 

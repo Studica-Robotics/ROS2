@@ -25,7 +25,8 @@ rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files (srv, msg, action)
 
 include_directories( # <- #include <"">
   include 
-  /usr/local/include/vmxpi src/drivers
+  /usr/local/include/vmxpi 
+  /usr/local/include/studica_drivers
   ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp
 )
  
@@ -56,8 +57,8 @@ set(studica_control_SRCS # <- source files
   src/i2c.cpp
   
   # DRIVERS
-  src/drivers/encoder.cpp
-  src/drivers/servo.cpp
+  # src/drivers/encoder.cpp
+  # src/drivers/servo.cpp
 )
 
 set(dependencies "ament_index_cpp" "sensor_msgs" "rclcpp_components" "rclcpp" "rclcpp_action" "std_msgs" "std_srvs")
@@ -98,7 +99,8 @@ add_executable(studica_control_node src/studica_control_node.cpp ${studica_contr
 target_link_libraries(studica_control_node 
   encoder_component
   servo_component
-  /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so)
+  # /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
+  )
 ament_target_dependencies(studica_control_node ${dependencies})
 target_link_libraries(studica_control_node "${cpp_typesupport_target}")
 
