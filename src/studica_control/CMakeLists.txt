@@ -37,6 +37,7 @@ set(studica_control_HDRS
   # components
   include/studica_control/encoder_component.h
   include/studica_control/servo_component.h
+  include/studica_control/ultrasonic_component.h
 )
 
 set(studica_control_SRCS # <- source files
@@ -77,6 +78,7 @@ endfunction()
 
 COMPILE_COMPONENT(encoder_component)
 COMPILE_COMPONENT(servo_component)
+COMPILE_COMPONENT(ultrasonic_component)
 
 if(NOT WIN32)
   ament_environment_hooks(
@@ -86,6 +88,7 @@ endif()
 install(TARGETS # <- Install Components
   encoder_component
   servo_component
+  ultrasonic_component
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin)
@@ -109,6 +112,7 @@ add_executable(manual_composition
 target_link_libraries(manual_composition 
   encoder_component
   servo_component
+  ultrasonic_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
   /usr/local/lib/studica_drivers/libstudica_drivers.so
   # ${STUDICA_DRIVER_LIB}
