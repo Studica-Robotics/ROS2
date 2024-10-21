@@ -12,7 +12,8 @@ CobraSensor::CobraSensor(std::shared_ptr<VMXPi> vmx, std::shared_ptr<I2CHandler>
     cobra_publisher_ = this->create_publisher<std_msgs::msg::String>("cobra/sensor_" + name, 10);
 
     // activate I2C resource
-    if (!i2c_handler_->activateI2CResource(cobra_res_handle)) {
+    // if (!i2c_handler_->activateI2CResource(cobra_res_handle)) { // MODIFIED
+    if (!i2c_handler_->activateI2CResource()) {
         RCLCPP_ERROR(this->get_logger(), "Failed to activate I2C resource.");
         return;
     }

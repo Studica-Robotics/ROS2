@@ -26,10 +26,10 @@ uint8_t I2CHandler::scanI2CBus() {
         uint8_t partID = 0;
         if (i2cTransaction(address, nullptr, 0, &partID, 1)) {
             RCLCPP_INFO(rclcpp::get_logger("I2CHandler"), "Found I2CHandler device at address 0x%02X", address);
-            return address;  // Return the first found device address
+            return address;  // return first found device address
         }
     }
-    return 0;  // No device found
+    return 0;  // no i2c device found
 }
 
 bool I2CHandler::i2cTransaction(uint8_t device_address, uint8_t* tx_data, size_t tx_size, uint8_t* rx_data, size_t rx_size) {
