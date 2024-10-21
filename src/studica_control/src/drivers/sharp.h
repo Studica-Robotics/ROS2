@@ -2,7 +2,9 @@
 #define SHAPE_H
 
 #include <stdio.h>
+#include <cmath>
 #include "VMXPi.h"
+#include "analog_input.h"
 
 namespace studica_driver
 {
@@ -18,9 +20,9 @@ public:
 
 private:
     std::shared_ptr<VMXPi> vmx_;
+    std::shared_ptr<AnalogInput> analog_input_;
     VMXChannelIndex port_;
-    VMXResourceHandle accumulator_res_handle;
-    void DisplayVMXError(VMXErrorCode vmxerr);
+    // void DisplayVMXError(VMXErrorCode vmxerr);
 };
 
 }

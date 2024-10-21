@@ -16,6 +16,7 @@
 #include "studica_control/DIOPin.h"
 #include "studica_control/i2c.h"
 #include "studica_control/encoder_component.h"
+#include "studica_control/sharp_component.h"
 
 
 #include <rclcpp/rclcpp.hpp>
@@ -100,7 +101,13 @@ private:
         std::shared_ptr<Device> component;
         std::vector<int> pins;
     };
+    // struct Component2 { tester Component
+    //     std::string name;
+    //     std::shared_ptr<studica_control::Sharp> component;
+    //     std::vector<int> pins;
+    // };
     std::map<std::string, Component> component_map; // Store publisher objects
+    // std::map<std::string, Component2> component_map2;
 #define IMU_PIN 600
 
     void manage_service_callback(const std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
@@ -119,7 +126,7 @@ private:
             response->message = "Watchdog stopped.";
         }
 
-        if (component_map.find(name) == component_map.end() && action != "initialize")
+        // if (component_map2.find(name) == component_map2.end() && action != "initialize")
         {
             response->success = false;
             response->message = name + " is not initialized.";
@@ -149,7 +156,7 @@ private:
         }
         else if (action == "cmd")
         {
-            if (component_map.find(name) == component_map.end())
+            // if (component_map2.find(name) == component_map2.end())
             {
                 response->success = false;
                 response->message = name + " is not initialized.";
@@ -157,7 +164,7 @@ private:
                 return;
             }
             RCLCPP_INFO(this->get_logger(), "Running cmd %s %s", name.c_str(), params.c_str());
-            component_map[name].component->cmd(params, response);
+            // component_map2[name].component->cmd(params, response);
         }
         else
         {
@@ -266,7 +273,16 @@ public:
             response->success = true;
             response->message = "Sharp sensor initialized successfully.";
             RCLCPP_INFO(this->get_logger(), "Sharp sensor initialized successfully for ping: %d", ping);
-        } else if (component == "cobra") {
+        }
+        // else if (component == "sharp2") { // sharp component beta
+        //     auto sharp2_component = std::make_shared<studica_control::Sharp>("shp", 22, vmx_);
+        //     executor_->add_node(sharp2_component);
+        //     component_map2[name] = {name, sharp2_component, {22}}; // modify
+        //     response->success = true;
+        //     response->message = "Sharp2 sensor initialized successfully.";
+        // }
+        
+        else if (component == "cobra") {
             float vref = request->initparams.vref;
             uint8_t mux_ch = request->initparams.mux_ch;
             if (mux_ch > 3) {
@@ -398,6 +414,7 @@ public:
                     std::shared_ptr<studica_control::srv::SetData::Response> response) {
         std::string name = request->name.c_str();
         component_map[name].component->cmd(request->params.c_str(), response);
+        // component_map2[name].component->cmd(request->params.c_str(), response);
     }
 
 

@@ -58,6 +58,8 @@ set(studica_control_SRCS # <- source files
   # DRIVERS
   src/drivers/encoder.cpp
   src/drivers/servo.cpp
+  src/drivers/analog_input.cpp
+  src/drivers/sharp.cpp
 )
 
 set(dependencies "ament_index_cpp" "sensor_msgs" "rclcpp_components" "rclcpp" "rclcpp_action" "std_msgs" "std_srvs")
@@ -76,6 +78,7 @@ endfunction()
 
 COMPILE_COMPONENT(encoder_component)
 COMPILE_COMPONENT(servo_component)
+COMPILE_COMPONENT(sharp_component)
 
 if(NOT WIN32)
   ament_environment_hooks(
@@ -85,6 +88,7 @@ endif()
 install(TARGETS # <- Install Components
   encoder_component
   servo_component
+  sharp_component
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin)
@@ -98,6 +102,7 @@ add_executable(studica_control_node src/studica_control_node.cpp ${studica_contr
 target_link_libraries(studica_control_node 
   encoder_component
   servo_component
+  sharp_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so)
 ament_target_dependencies(studica_control_node ${dependencies})
 target_link_libraries(studica_control_node "${cpp_typesupport_target}")
