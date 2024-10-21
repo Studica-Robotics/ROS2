@@ -4,37 +4,69 @@
 #include "studica_control/servo_component.h"
 #include "rclcpp/rclcpp.hpp"
 #include "VMXPi.h"
+#include <studica_control/msg/initialize_params.hpp>
+
+class ControlServer : public rclcpp::Node {
+private:
+    rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
+    std::shared_ptr<rclcpp::executors::MultiThreadedExecutor> executor_;
+    // map of names to nodes
+    std::map<std::string, std::shared_ptr<rclcpp::Node>> component_map;
+
+    void service_callback(const std::shared_ptr<studica_control::srv::SetData::Request> request,
+                          std::shared_ptr<studica_control::srv::SetData::Response> response) {
+        std::string name = request->name.c_str();
+        std::string component = request->component.c_str();
+        if (component == "servo") {
+            uint8_t pin = request->initparams.pin;
+            string servo_type_str = request->initparams.servo_type;
+            std::shared_ptr<studica_control::Servo> servo_node = nullptr;
+            if (servo_type_str == "standard") {
+                servo_node = std::make_shared<studica_control::Servo>(pin, studica_driver::ServoType::Standard, -150, 150);
+            } else if (servo_type_str == "continuous") {
+                servo_node = std::make_shared<studica_control::Servo>(pin, studica_driver::ServoType::Continuous, -100, 100);
+            } else if (servo_type_str == "linear") {
+                servo_node = std::make_shared<studica_control::Servo>(pin, studica_driver::ServoType::Linear, 0, 100);
+            } else {
+                RCLCPP_INFO(this->get_logger(), "Invalid servo type. Allowed values are 'standard' or 'continuous'.");
+                return;
+            }
+            executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(servo_node));
+            component_map[name] = servo_node;
+        }
+        if (component == "get_node") {
+            std::dynamic_pointer_cast<studica_control::Servo>(component_map[name])->cmd(request->params.c_str(), response);
+        }
+    }
+
+public:
+    ControlServer() : Node("control_server") {
+        service_ = this->create_service<studica_control::srv::SetData>(
+            "control_server", 
+            std::bind(&ControlServer::service_callback, this, std::placeholders::_1, std::placeholders::_2));
+    }
+    void set_executor(const std::shared_ptr<rclcpp::executors::MultiThreadedExecutor>& exec) {
+        executor_ = exec;
+    }
+
+
+};
 
 int main(int argc, char *argv[])
 {
-    // Force flush of the stdout buffer.
     setvbuf(stdout, NULL, _IONBF, BUFSIZ);
-
-    // Initialize any global resources needed by the middleware and the client library.
-    // This will also parse command line arguments one day (as of Beta 1 they are not used).
-    // You must call this before using any other part of the ROS system.
-    // This should be called once per process.
     rclcpp::init(argc, argv);
 
-    // Create an executor that will be responsible for execution of callbacks for a set of nodes.
-    // With this version, all callbacks will be called from within this thread (the main one).
-    rclcpp::executors::SingleThreadedExecutor exec;
-    rclcpp::NodeOptions options;
+    auto executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
 
-    // Add some nodes to the executor which provide work for the executor during its "spin" function.
-    // An example of available work is executing a subscription callback, or a timer callback.
-    // auto encoder = std::make_shared<studica_control::Encoder>(options);
-    // exec.add_node(encoder);
+    auto control_server = std::make_shared<ControlServer>();
+    control_server->set_executor(executor);
+    executor->add_node(control_server);
 
-    auto servo = std::make_shared<studica_control::Servo>(13, studica_driver::ServoType::Standard);
-    // wait 2 seconds
-    exec.add_node(servo);
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    servo->cmd("0", std::make_shared<studica_control::srv::SetData::Response>());
-
-    // spin will block until work comes in, execute work as it becomes available, and keep blocking.
-    // It will only be interrupted by Ctrl-C.
-    exec.spin();
+    // auto servo = std::make_shared<studica_control::Servo>(13, studica_driver::ServoType::Standard);
+    // auto servo2 = std::make_shared<studica_control::Servo>(14, studica_driver::ServoType::Continuous);
+    
+    executor->spin();
 
     rclcpp::shutdown();
 

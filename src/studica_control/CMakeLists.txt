@@ -113,7 +113,8 @@ target_link_libraries(manual_composition
   /usr/local/lib/studica_drivers/libstudica_drivers.so
   # ${STUDICA_DRIVER_LIB}
 )
-ament_target_dependencies(manual_composition "rclcpp")
+ament_target_dependencies(manual_composition ${dependencies})
+target_link_libraries(manual_composition "${cpp_typesupport_target}")
 
 install(TARGETS # <- Executable targets
   # studica_control_node 
