@@ -37,6 +37,7 @@ set(studica_control_HDRS
   # components
   include/studica_control/encoder_component.h
   include/studica_control/servo_component.h
+  include/studica_control/ultrasonic_component.h
   include/studica_control/sharp_component.h
   include/studica_control/cobra_component.h
 )
@@ -79,6 +80,7 @@ endfunction()
 
 COMPILE_COMPONENT(encoder_component)
 COMPILE_COMPONENT(servo_component)
+COMPILE_COMPONENT(ultrasonic_component)
 COMPILE_COMPONENT(sharp_component)
 COMPILE_COMPONENT(cobra_component)
 
@@ -90,6 +92,7 @@ endif()
 install(TARGETS # <- Install Components
   encoder_component
   servo_component
+  ultrasonic_component
   sharp_component
   cobra_component
   ARCHIVE DESTINATION lib
@@ -115,6 +118,7 @@ add_executable(manual_composition
 target_link_libraries(manual_composition 
   encoder_component
   servo_component
+  ultrasonic_component
   sharp_component
   cobra_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
