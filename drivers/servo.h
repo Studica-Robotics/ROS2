@@ -15,7 +15,6 @@ enum class ServoType {
 
 class Servo {
 public:
-    Servo(VMXChannelIndex port, ServoType type, int min = -150, int max = 150);
     Servo(VMXChannelIndex port, ServoType type, int min = -150, int max = 150, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
     ~Servo();
     void SetBounds(double min, double center, double max);
