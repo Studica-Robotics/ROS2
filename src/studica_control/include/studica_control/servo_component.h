@@ -5,6 +5,7 @@
 #include "VMXPi.h"
 #include "rclcpp/rclcpp.hpp"
 #include "servo.h"
+#include "VMXManager.h"
 // Messages
 #include <studica_control/srv/set_data.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -14,8 +15,11 @@ namespace studica_control
     
 class Servo : public rclcpp::Node {
 public:
-    Servo(std::shared_ptr<VMXPi> vmx, VMXChannelIndex port, studica_driver::ServoType type, int min = -150, int max = 150);
+    // Servo(std::shared_ptr<VMXPi> vmx, VMXChannelIndex port, studica_driver::ServoType type, int min = -150, int max = 150);
+    Servo(VMXChannelIndex port, studica_driver::ServoType type, int min = -150, int max = 150);
     explicit Servo(const rclcpp::NodeOptions &options);
+    ~Servo() override;
+    void initialize(VMXChannelIndex port, studica_driver::ServoType type, int min, int max);
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);
     int Map(int value);
     void SetAngle(int angle);
@@ -24,6 +28,7 @@ public:
 
 private:
     std::shared_ptr<studica_driver::Servo> servo_;
+    // vmxmanager_
     std::shared_ptr<VMXPi> vmx_;
     std::string name_;
     VMXChannelIndex port_;
