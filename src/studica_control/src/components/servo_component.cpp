@@ -10,6 +10,22 @@ Servo::Servo(const rclcpp::NodeOptions &options) : Node("servo_", options) {
 Servo::Servo(VMXChannelIndex port, studica_driver::ServoType type, int min, int max) : Node("servo_") {
     auto& vmx_manager = studica_driver::VMXManager::getInstance();
     vmx_ = vmx_manager.getVMX();
+    if (vmx_manager.isPinUsed(port)) {
+        printf("Port %d is already in use\n", port);
+        return;
+    }
+    vmx_manager.setPinUsed(port);
+    servo_ = std::make_shared<studica_driver::Servo>(port, type, min, max, vmx_);
+}
+
+void Servo::initialize(VMXChannelIndex port, studica_driver::ServoType type, int min, int max) {
+    auto& vmx_manager = studica_driver::VMXManager::getInstance();
+    vmx_ = vmx_manager.getVMX();
+    if (vmx_manager.isPinUsed(port)) {
+        printf("Port %d is already in use\n", port);
+        return;
+    }
+    vmx_manager.setPinUsed(port);
     servo_ = std::make_shared<studica_driver::Servo>(port, type, min, max, vmx_);
 }
     

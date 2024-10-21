@@ -19,6 +19,7 @@ public:
     Servo(VMXChannelIndex port, studica_driver::ServoType type, int min = -150, int max = 150);
     explicit Servo(const rclcpp::NodeOptions &options);
     ~Servo() override;
+    void initialize(VMXChannelIndex port, studica_driver::ServoType type, int min, int max);
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);
     int Map(int value);
     void SetAngle(int angle);

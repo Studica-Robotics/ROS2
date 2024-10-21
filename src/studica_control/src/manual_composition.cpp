@@ -20,13 +20,14 @@ private:
         if (component == "servo") {
             uint8_t pin = request->initparams.pin;
             string servo_type_str = request->initparams.servo_type;
-            std::shared_ptr<studica_control::Servo> servo_node = nullptr;
+            rclcpp::NodeOptions options;
+            auto servo_node = std::make_shared<studica_control::Servo>(options);
             if (servo_type_str == "standard") {
-                servo_node = std::make_shared<studica_control::Servo>(pin, studica_driver::ServoType::Standard, -150, 150);
+                servo_node->initialize(pin, studica_driver::ServoType::Standard, -150, 150);
             } else if (servo_type_str == "continuous") {
-                servo_node = std::make_shared<studica_control::Servo>(pin, studica_driver::ServoType::Continuous, -100, 100);
+                servo_node->initialize(pin, studica_driver::ServoType::Continuous, -100, 100);
             } else if (servo_type_str == "linear") {
-                servo_node = std::make_shared<studica_control::Servo>(pin, studica_driver::ServoType::Linear, 0, 100);
+                servo_node->initialize(pin, studica_driver::ServoType::Linear, 0, 100);
             } else {
                 RCLCPP_INFO(this->get_logger(), "Invalid servo type. Allowed values are 'standard' or 'continuous'.");
                 return;
