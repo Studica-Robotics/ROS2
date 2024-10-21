@@ -26,10 +26,10 @@ int main(int argc, char *argv[])
     // auto encoder = std::make_shared<studica_control::Encoder>(options);
     // exec.add_node(encoder);
 
-    // create a VMXPi object
-    auto vmx = std::make_shared<VMXPi>(true, 50);
-    auto servo = std::make_shared<studica_control::Servo>(vmx, 13, studica_driver::ServoType::Standard);
+    auto servo = std::make_shared<studica_control::Servo>(13, studica_driver::ServoType::Standard);
+    // wait 2 seconds
     exec.add_node(servo);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
     servo->cmd("0", std::make_shared<studica_control::srv::SetData::Response>());
 
     // spin will block until work comes in, execute work as it becomes available, and keep blocking.
