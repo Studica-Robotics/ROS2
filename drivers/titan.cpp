@@ -78,7 +78,7 @@ Titan::Titan(uint8_t canID, uint16_t motorFreq)
  
     if (canID > 0 && canID < 64)
     {
-        if (motorFreq >= 0 && motorFreq <= 20000)
+        if (motorFreq <= 20000)
         {
             //ID = canID;
             uint8_t data[8] = {0, static_cast<uint8_t>((motorFreq & 0xFF)), static_cast<uint8_t>((motorFreq >> 8)), 0, 0, 0, 0, 0};

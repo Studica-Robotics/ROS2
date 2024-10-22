@@ -1,0 +1,63 @@
+#include "dio.h"
+
+using namespace studica_driver;
+
+DIO::DIO(VMXChannelIndex channel, PinMode mode) : channel_(channel), mode_(mode) {
+    VMXErrorCode vmxerr;
+    if (mode == PinMode::OUTPUT) {
+        DIOConfig dio_config;
+        if (!vmx_->io.ActivateSinglechannelResource(VMXChannelInfo(channel, VMXChannelCapability::DigitalOutput), &dio_config, dio_res_handle_, &vmxerr)) {
+            printf("Failed to open DIO resource on port %d", channel);
+            DisplayVMXError(vmxerr);
+        } else {
+            printf("DIO Channel %d activated on Resource type %d, index %d\n", channel,
+                EXTRACT_VMX_RESOURCE_TYPE(dio_res_handle_),
+                EXTRACT_VMX_RESOURCE_INDEX(dio_res_handle_));
+        }
+    } else if (mode == PinMode::INPUT) {
+        DIOConfig dio_config; 
+        if (!vmx_->io.ActivateSinglechannelResource(VMXChannelInfo(channel, VMXChannelCapability::DigitalInput), &dio_config, dio_res_handle_, &vmxerr)) {
+            printf("Failed to open DIO resource on port %d", channel_);
+            DisplayVMXError(vmxerr);
+        } else {
+            printf("DIO Channel %d activated on Resource type %d, index %d\n", channel,
+                EXTRACT_VMX_RESOURCE_TYPE(dio_res_handle_),
+                EXTRACT_VMX_RESOURCE_INDEX(dio_res_handle_));
+        }
+    }
+}
+DIO::~DIO() {
+    VMXErrorCode vmxerr;
+    if (!vmx_->io.DeactivateResource(dio_res_handle_, &vmxerr)) {
+        printf("Failed to deactivate DIO resource on port %d", channel_);
+        DisplayVMXError(vmxerr);
+    }
+}
+
+void DIO::Set(bool value) {
+    VMXErrorCode vmxerr;
+    if (!vmx_->io.DIO_Set(dio_res_handle_, value, &vmxerr)) {
+        printf("Error setting DIO on port %d", channel_);
+        DisplayVMXError(vmxerr);
+    }
+}
+
+bool DIO::Get() {
+    VMXErrorCode vmxerr;
+    bool value = false;
+    if (!vmx_->io.DIO_Get(dio_res_handle_, value, &vmxerr)) {
+        printf("Error getting DIO on port %d", channel_);
+        DisplayVMXError(vmxerr);
+    }
+    return value;
+}
+
+void DIO::Toggle() {
+    // TODO: Implement
+}
+
+void DIO::DisplayVMXError(VMXErrorCode vmxerr) {
+    const char *p_err_description = GetVMXErrorString(vmxerr);
+    printf("VMXError %d: %s\n", vmxerr, p_err_description);
+}
+

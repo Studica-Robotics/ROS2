@@ -19,9 +19,9 @@ public:
     float GetDistanceMM();
 
 private:
-    std::shared_ptr<VMXPi> vmx_;
     VMXChannelIndex ping_;
     VMXChannelIndex echo_;
+    std::shared_ptr<VMXPi> vmx_;
     VMXResourceHandle ping_output_res_handle;
     VMXResourceHandle echo_inputcap_res_handle;
     void DisplayVMXError(VMXErrorCode vmxerr);

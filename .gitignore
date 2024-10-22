@@ -55,3 +55,8 @@ qtcreator-*
 CATKIN_IGNORE
 
 libstudica_drivers.so
+*.o
+*.d
+# ignore executables in drivers folder
+drivers/examples/*[^.]*
+!Makefile

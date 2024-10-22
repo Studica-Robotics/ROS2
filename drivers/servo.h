@@ -22,16 +22,16 @@ public:
     void SetSpeed(int speed);
 
 private:
-    std::shared_ptr<VMXPi> vmx_;
     VMXChannelIndex port_;
-    VMXResourceHandle pwm_res_handle_;
+    ServoType type_;
     int min_;
     int max_;
+    std::shared_ptr<VMXPi> vmx_;
+    VMXResourceHandle pwm_res_handle_;
     int min_us_;
     int max_us_;
     int center_us_;
     int prev_pwm_servo_value_;
-    ServoType type_;
 
     int Map(int value);
     void DisplayVMXError(VMXErrorCode vmxerr);
