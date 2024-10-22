@@ -1,5 +1,5 @@
 CXX=g++
-CXXFLAGS=-I/usr/local/include/vmxpi -L/usr/local/lib/vmxpi -lvmxpi_hal_cpp -lrt -lpthread
+CXXFLAGS=-I/usr/local/include/vmxpi -L/usr/local/lib/vmxpi -lvmxpi_hal_cpp -I/usr/local/include/studica_drivers -L/usr/local/lib/studica_drivers -lrt -lpthread -lstudica_drivers
 SOURCES=$(wildcard *.cpp)
 DEPS=$(SOURCES:.cpp=.d)
 BINS=$(SOURCES:.cpp=)
@@ -12,15 +12,15 @@ endif
 all: $(patsubst %.cpp, %.out, $(SOURCES))
 
 %.out:  %.cpp Makefile
-        $(info GCC Version $(GCCVERSION))
-        $(CXX) $< -o $(@:.out=) $(CXXFLAGS)
+	$(info GCC Version $(GCCVERSION))
+	$(CXX) $< -o $(@:.out=) $(CXXFLAGS)
 
 clean: $(patsubst %.cpp, %.clean, $(SOURCES))
 
 %.clean:
-        rm -f $(@:.clean=)
+	rm -f $(@:.clean=)
 
 run:
-        sudo ./$(BINS)
+	sudo ./$(BINS)
 
 -include $(DEPS)

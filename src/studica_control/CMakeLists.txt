@@ -32,8 +32,6 @@ include_directories( # <- #include <"">
  
 set(studica_control_HDRS
   include/studica_control/device.h
-  include/studica_control/analog_input.h
-  include/studica_control/sharp_sensor_node.h
   # components
   include/studica_control/encoder_component.h
   include/studica_control/servo_component.h

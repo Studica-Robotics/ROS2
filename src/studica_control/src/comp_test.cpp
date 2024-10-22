@@ -93,16 +93,25 @@ int main(int argc, char *argv[])
     rclcpp::executors::SingleThreadedExecutor exec;
     rclcpp::NodeOptions options;
 
+        // // sharp
+    // auto sharp = std::make_shared<studica_control::Sharp>("shp", 22, vmx);
+    // exec.add_node(sharp);
+    // sharp->cmd("get_distance", response);
+    // std::cout << "response->message: " << response->message << std::endl;
+
+    // // cobra
+    // auto cobra = std::make_shared<studica_control::Cobra>("cbr", 5.0, 1, vmx);
+    // exec.add_node(cobra);
+    // cobra->cmd("get_volt", response);
+    // std::cout << "response->message: " << response->message << std::endl;
+
+
     auto titan = std::make_shared<studica_control::Titan>("ttn", 45, 15600, 0.0006830601, 0.8);
     exec.add_node(titan);
 
     // Start threads for each Titan instance
     std::thread titanThread1(runTitanCommands, titan, "Titan 0");
 
-    // Wait for both threads to finish
-    titanThread1.join();
-
-    // Now let the executor run and process callbacks (if any)
     exec.spin();
     rclcpp::shutdown();
     return 0;
