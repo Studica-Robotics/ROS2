@@ -58,5 +58,5 @@ libstudica_drivers.so
 *.o
 *.d
 # ignore executables in drivers folder
-drivers/examples/*[^.]*
+# drivers/examples/*[^.]*
 !Makefile

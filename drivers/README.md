@@ -9,10 +9,18 @@ make clean
 ## Dependencies
 * VMX Hal library
 
-## Run Examples
+## Compile and run examples
 ``` bash
+# build all examples
 cd examples
-cd example
 make
-./example
+# clean
+make clean
+```
+``` bash
+cd example_example
+# build single example
+make
+# run example
+./example_example
 ```
