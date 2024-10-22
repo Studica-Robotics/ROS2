@@ -14,7 +14,6 @@ int main(int argc, char *argv[])
     rclcpp::executors::SingleThreadedExecutor exec;
     rclcpp::NodeOptions options;
     auto response = std::make_shared<studica_control::srv::SetData::Response>();
-    auto vmx = std::make_shared<VMXPi>(true, 50);
 
     // // sharp
     // auto sharp = std::make_shared<studica_control::Sharp>("shp", 22, vmx);
@@ -23,7 +22,7 @@ int main(int argc, char *argv[])
     // std::cout << "response->message: " << response->message << std::endl;
 
     // cobra
-    auto cobra = std::make_shared<studica_control::Cobra>("cbr", 5.0, 1, vmx);
+    auto cobra = std::make_shared<studica_control::Cobra>("cbr", 5.0, 1);
     exec.add_node(cobra);
     cobra->cmd("get_volt", response);
     std::cout << "response->message: " << response->message << std::endl;
