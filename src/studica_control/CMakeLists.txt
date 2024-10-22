@@ -64,30 +64,30 @@ set(dependencies "ament_index_cpp" "sensor_msgs" "rclcpp_components" "rclcpp" "r
 
 
 # COMPONENTS
-set(node_plugins "")
+add_library(encoder_component SHARED src/components/encoder_component.cpp)
+ament_target_dependencies(encoder_component ${dependencies})
+rclcpp_components_register_nodes(encoder_component "studica_control::encoder")
 
-# FIND DRIVER LIBRARY, if not found make sure to install drivers
-find_library(STUDICA_DRIVER_LIB studica_drivers PATHS /usr/local/lib/studica_drivers)
+add_library(servo_component SHARED src/components/servo_component.cpp)
+ament_target_dependencies(servo_component ${dependencies})
+rclcpp_components_register_nodes(servo_component "studica_control::servo")
 
-function(COMPILE_COMPONENT component_name)
-  add_library(${component_name} SHARED src/components/${component_name}.cpp)
-  target_compile_definitions(${component_name} PRIVATE "COMPOSITION_BUILDING_DLL")
-  ament_target_dependencies(${component_name} ${dependencies})
-  rclcpp_components_register_nodes(${component_name} "studica_control::${component_name}")
-  set(node_plugins "${node_plugins}studica_control::${component_name};$<TARGET_FILE:${component_name}>\n")
-  target_link_libraries(${component_name} ${STUDICA_DRIVER_LIB})
-endfunction()
+add_library(ultrasonic_component SHARED src/components/ultrasonic_component.cpp)
+ament_target_dependencies(ultrasonic_component ${dependencies})
+rclcpp_components_register_nodes(ultrasonic_component "studica_control::ultrasonic")
 
-COMPILE_COMPONENT(encoder_component)
-COMPILE_COMPONENT(servo_component)
-COMPILE_COMPONENT(ultrasonic_component)
-COMPILE_COMPONENT(sharp_component)
-COMPILE_COMPONENT(cobra_component)
+add_library(sharp_component SHARED src/components/sharp_component.cpp)
+ament_target_dependencies(sharp_component ${dependencies})
+rclcpp_components_register_nodes(sharp_component "studica_control::sharp")
 
-if(NOT WIN32)
-  ament_environment_hooks(
-    "${ament_cmake_package_templates_ENVIRONMENT_HOOK_LIBRARY_PATH}")
-endif()
+add_library(cobra_component SHARED src/components/cobra_component.cpp)
+ament_target_dependencies(cobra_component ${dependencies})
+rclcpp_components_register_nodes(cobra_component "studica_control::cobra")
+
+add_library(titan_component SHARED src/components/titan_component.cpp)
+ament_target_dependencies(titan_component ${dependencies})
+rclcpp_components_register_nodes(titan_component "studica_control::titan")
+
 
 install(TARGETS # <- Install Components
   encoder_component
@@ -95,9 +95,11 @@ install(TARGETS # <- Install Components
   ultrasonic_component
   sharp_component
   cobra_component
+  titan_component
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin)
+  RUNTIME DESTINATION bin
+)
 
 
 # EXECUTABLES
@@ -121,6 +123,7 @@ target_link_libraries(manual_composition
   ultrasonic_component
   sharp_component
   cobra_component
+  titan_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
   /usr/local/lib/studica_drivers/libstudica_drivers.so
   # ${STUDICA_DRIVER_LIB}
@@ -142,6 +145,7 @@ target_link_libraries(comp_test
   servo_component
   sharp_component
   cobra_component
+  titan_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
   /usr/local/lib/studica_drivers/libstudica_drivers.so
   # ${STUDICA_DRIVER_LIB}
