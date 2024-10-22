@@ -2,8 +2,8 @@
 using namespace studica_driver;
 
 Servo::Servo(VMXChannelIndex port, ServoType type, int min, int max, std::shared_ptr<VMXPi> vmx) 
-    : vmx_(vmx), port_(port), type_(type), min_(min), max_(max), prev_pwm_servo_value_(min - 1) {
-    if (port >= 0 && port <= 21) {
+    : port_(port), type_(type), min_(min), max_(max), vmx_(vmx), prev_pwm_servo_value_(min - 1) {
+    if (port <= 21) {
         PWMGeneratorConfig pwmgen_cfg(50);  // 50Hz for servos
         pwmgen_cfg.SetMaxDutyCycleValue(5000);  // Set PWM precision for better accuracy
         VMXErrorCode vmxerr;

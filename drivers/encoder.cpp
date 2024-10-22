@@ -30,6 +30,18 @@ Encoder::Encoder(VMXChannelIndex port_a, VMXChannelIndex port_b, std::shared_ptr
     }
 }
 
+Encoder::~Encoder() 
+{
+    VMXErrorCode vmxerr;
+    if (!vmx_->io.DeallocateResource(encoder_res_handle_, &vmxerr)) {
+        printf("Failed to deallocate Encoder Resource\n");
+        DisplayVMXError(vmxerr);
+    } else {
+        printf("Successfully deallocated Encoder Resource\n");
+    }
+    VMXManager::getInstance().setPinUnused(port_a_);
+}
+
 int Encoder::GetCount() 
 {
     int32_t counter = 0;

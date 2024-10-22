@@ -4,13 +4,14 @@
 #include <stdio.h>
 #include <memory>
 #include "VMXPi.h"
+#include "VMXManager.h"
 
 namespace studica_driver {
 
 class Encoder {
 public:
     Encoder(VMXChannelIndex port_a, VMXChannelIndex port_b, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
-
+    ~Encoder();
     int GetCount();
     std::string GetDirection();
 
