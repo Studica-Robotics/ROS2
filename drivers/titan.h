@@ -6,6 +6,7 @@
 #include <inttypes.h>
 #include <sstream>
 #include <iomanip>
+#include <memory>
 #include "VMXPi.h"
  
 namespace studica_driver
@@ -50,12 +51,14 @@ namespace studica_driver
 #define LIMIT_SWITCH               BASE + (OFFSET * 45)
 #define CURRENT_VALUE              BASE + (OFFSET * 46)
 #define MCU_TEMP                   BASE + (OFFSET * 47)
- 
+
 class Titan
 {
     public:
-        Titan(uint8_t canID, uint16_t motorFreq);
+        Titan(const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, const float &speed, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
+        ~Titan();
         void Enable(bool enable);
+        void SetupEncoder(uint8_t encoder);
         uint8_t GetID();
         uint16_t GetFrequency();
         std::string GetFirmwareVersion();
@@ -66,16 +69,22 @@ class Titan
         std::string GetSerialNumber();
         double GetEncoderDistance(uint8_t motor);
         int32_t GetEncoderCount(uint8_t motor);
-        void ConfigureEncoder(uint8_t motor, double distPerTick);
+        void ConfigureEncoder(uint8_t motor, double cfg);
         void ResetEncoder(uint8_t motor);
         double GetCypherAngle(uint8_t port);
-        void SetSpeed(uint8_t motor, double speed);
+        void SetSpeed(uint8_t motor, double speedCfg);
         void InvertMotorDirection(uint8_t motor);
         void InvertMotorRPM(uint8_t motor);
         void InvertEncoderDirection(uint8_t motor);
  
     private:
-        VMXPi vmx{true, (uint8_t) 50};
+        std::shared_ptr<VMXPi> vmx_;
+        uint8_t canID_;
+        uint16_t motorFreq_;
+        uint8_t nEncoder_;
+        float distPerTick_;
+        float speed_;
+
         VMXCANReceiveStreamHandle canrxhandle = 0;
         VMXErrorCode vmxerr;
         bool Write(uint32_t address, const uint8_t* data, int32_t periodMS);
@@ -100,7 +109,6 @@ class Titan
         double distPerTick_1 = 0;
         double distPerTick_2 = 0;
         double distPerTick_3 = 0;
- 
  
 };
 

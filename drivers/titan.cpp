@@ -8,13 +8,14 @@ void Titan::DisplayVMXError()
     //printf("VMXError &d: %s\n", vmxerr, p_err_description);
 }
  
-Titan::Titan(uint8_t canID, uint16_t motorFreq)
+Titan::Titan(const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, const float &speed, std::shared_ptr<VMXPi> vmx)
+    : vmx_(vmx), canID_(canID), motorFreq_(motorFreq), distPerTick_(distPerTick), speed_(speed)
 {
     try
     {
-        if (vmx.IsOpen())
+        if (vmx_->IsOpen())
         {
-            if(!vmx.can.OpenReceiveStream(canrxhandle, 0x0, 0x0, 100, &vmxerr))
+            if(!vmx_->can.OpenReceiveStream(canrxhandle, 0x0, 0x0, 100, &vmxerr))
             {
                 printf("Error opening CAN RX Stream 0.\n");
                 DisplayVMXError();
@@ -22,7 +23,7 @@ Titan::Titan(uint8_t canID, uint16_t motorFreq)
             else
             {
                 printf("Opened CAN Receive Stream 0, handle:  %d\n", canrxhandle);
-                if (vmx.can.EnableReceiveStreamBlackboard(canrxhandle, true, &vmxerr))
+                if (vmx_->can.EnableReceiveStreamBlackboard(canrxhandle, true, &vmxerr))
                 {
                     printf("Enabled Blackboard on Stream 0.\n");
                 }
@@ -32,7 +33,7 @@ Titan::Titan(uint8_t canID, uint16_t motorFreq)
                     DisplayVMXError();
                 }
             }
-            if (!vmx.can.FlushRxFIFO(&vmxerr))
+            if (!vmx_->can.FlushRxFIFO(&vmxerr))
             {
                 printf("Error Flushing CAN RX FIFO.\n");
                 DisplayVMXError();
@@ -42,7 +43,7 @@ Titan::Titan(uint8_t canID, uint16_t motorFreq)
                 printf("Flushed CAN RX FIFO\n");
             }
  
-            if (!vmx.can.FlushTxFIFO(&vmxerr))
+            if (!vmx_->can.FlushTxFIFO(&vmxerr))
             {
                 printf("Error Flushing CAN TX FIFO.\n");
                 DisplayVMXError();
@@ -52,7 +53,7 @@ Titan::Titan(uint8_t canID, uint16_t motorFreq)
                 printf("Flushed CAN TX FIFO\n");
             }
  
-            if (!vmx.can.SetMode(VMXCAN::VMXCAN_NORMAL, &vmxerr))
+            if (!vmx_->can.SetMode(VMXCAN::VMXCAN_NORMAL, &vmxerr))
             {
                 printf("Error setting CAN Mode to Normal\n");
                 DisplayVMXError();
@@ -61,7 +62,7 @@ Titan::Titan(uint8_t canID, uint16_t motorFreq)
             {
                 printf("Set CAN Mode to Normal.\n");
             }
-            vmx.time.DelayMilliseconds(20);
+            vmx_->time.DelayMilliseconds(20);
         }
         else
         {
@@ -99,14 +100,20 @@ Titan::Titan(uint8_t canID, uint16_t motorFreq)
         printf("Titan CAN ID %i is out of range. (1 - 63)", canID);
     }
 }
- 
+Titan::~Titan() {}
+
+void Titan::SetupEncoder(uint8_t encoder) {
+    ConfigureEncoder(encoder, distPerTick_);
+    ResetEncoder(encoder);
+}
+
 bool Titan::Write(uint32_t address, const uint8_t* data, int32_t periodMS)
 {
     VMXCANMessage msg;
     msg.dataSize = 8;
     msg.setData(data, 8);
     msg.messageID = address;
-    if (!vmx.can.SendMessage(msg, periodMS, &vmxerr))
+    if (!vmx_->can.SendMessage(msg, periodMS, &vmxerr))
     {
         DisplayVMXError();
         return false;
@@ -119,7 +126,7 @@ bool Titan::Read(uint32_t address, uint8_t* data)
     VMXCANTimestampedMessage blackboard_msg;
     bool already_retrieved;
     uint64_t sys_timestamp; // We could allow the user to read the timestamp to in future
-    if (!vmx.can.GetBlackboardEntry(canrxhandle, address, blackboard_msg, sys_timestamp, already_retrieved, &vmxerr))
+    if (!vmx_->can.GetBlackboardEntry(canrxhandle, address, blackboard_msg, sys_timestamp, already_retrieved, &vmxerr))
     {
         DisplayVMXError();
         return false;
@@ -357,24 +364,24 @@ int32_t Titan::GetEncoderCount(uint8_t motor)
     }
     return ticks;
 }
- 
-void Titan::ConfigureEncoder(uint8_t motor, double distPerTick)
+
+void Titan::ConfigureEncoder(uint8_t motor, double cfg)
 {
     if (motor == 0)
     {
-        distPerTick_0 = distPerTick;
+        distPerTick_0 = cfg;
     }
     if (motor == 1)
     {
-        distPerTick_1 = distPerTick;
+        distPerTick_1 = cfg;
     }
     if (motor == 2)
     {
-        distPerTick_2 = distPerTick;
+        distPerTick_2 = cfg;
     }
     if (motor == 3)
     {
-        distPerTick_3 = distPerTick;
+        distPerTick_3 = cfg;
     }
 }
  
@@ -392,40 +399,40 @@ double Titan::GetCypherAngle(uint8_t port)
     return ((static_cast<double>(data[index]) + (static_cast<double>(data[index+1] << 8))) / 100.0);
 }
  
-void Titan::SetSpeed(uint8_t motor, double speed)
+void Titan::SetSpeed(uint8_t motor, double speedCfg)
 {
     uint8_t inA = 0;
     uint8_t inB = 0;
     if (motor == 0 && invertMotor0)
     {
-        speed *= -1;
+        speedCfg *= -1;
     }
     else if (motor == 1 && invertMotor1)
     {
-        speed *= -1;
+        speedCfg *= -1;
     }
     else if (motor == 2 && invertMotor2)
     {
-        speed *= -1;
+        speedCfg *= -1;
     }
     else if (motor == 3 && invertMotor3)
     {
-        speed *= -1;
+        speedCfg *= -1;
     }
-    if (speed <= 1.0 && speed >= -1.0)
+    if (speedCfg <= 1.0 && speedCfg >= -1.0)
     {
-        speed = speed * 100;
-        if (speed == 0)
+        speedCfg = speedCfg * 100;
+        if (speedCfg == 0)
         {
             inA = 1;
             inB = 1;
         }
-        else if (speed > 0)
+        else if (speedCfg > 0)
         {
             inA = 1;
             inB = 0;
         }
-        else if (speed < 0)
+        else if (speedCfg < 0)
         {
             inA = 0;
             inB = 1;
@@ -436,7 +443,7 @@ void Titan::SetSpeed(uint8_t motor, double speed)
             inB = 0;
         }
     }
-    uint8_t data[8] = {motor, static_cast<uint8_t>(abs(speed)), inA, inB, 0, 0, 0, 0};
+    uint8_t data[8] = {motor, static_cast<uint8_t>(abs(speedCfg)), inA, inB, 0, 0, 0, 0};
     Titan::Write(SET_MOTOR_SPEED, data, 0);
 }
  
