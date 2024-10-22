@@ -20,3 +20,12 @@ float Sharp::GetDistance() {
     std::cerr << "Failed to retreive Average Voltage from AnalogInput." << std::endl;
     return -1;
 }
+
+float Sharp::GetVoltage() {
+    float averageVoltage;
+    if (analog_input_->GetAverageVoltage(averageVoltage)) {
+        return averageVoltage;
+    }
+    std::cerr << "Failed to retreive Average Voltage from AnalogInput." << std::endl;
+    return -1;
+}

@@ -12,11 +12,11 @@ namespace studica_driver
 class Sharp
 {
 public:
-    Sharp(VMXChannelIndex port);
     Sharp(VMXChannelIndex port, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
     ~Sharp();
 
     float GetDistance();
+    float GetVoltage();
 
 private:
     std::shared_ptr<VMXPi> vmx_;
