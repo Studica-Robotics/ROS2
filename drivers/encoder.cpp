@@ -39,7 +39,6 @@ Encoder::~Encoder()
     } else {
         printf("Successfully deallocated Encoder Resource\n");
     }
-    VMXManager::getInstance().setPinUnused(port_a_);
 }
 
 int Encoder::GetCount() 

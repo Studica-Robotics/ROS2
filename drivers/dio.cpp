@@ -3,13 +3,6 @@
 using namespace studica_driver;
 
 DIO::DIO(VMXChannelIndex channel, PinMode mode) : channel_(channel), mode_(mode) {
-    auto& vmx_manager = VMXManager::getInstance();
-    vmx_ = vmx_manager.getVMX();
-    if (vmx_manager.isPinUsed(channel)) {
-        printf("Port %d is already in use\n", channel);
-        return;
-    }
-    vmx_manager.setPinUsed(channel);
     VMXErrorCode vmxerr;
     if (mode == PinMode::OUTPUT) {
         DIOConfig dio_config;
@@ -39,7 +32,6 @@ DIO::~DIO() {
         printf("Failed to deactivate DIO resource on port %d", channel_);
         DisplayVMXError(vmxerr);
     }
-    VMXManager::getInstance().setPinUnused(channel_);
 }
 
 void DIO::Set(bool value) {

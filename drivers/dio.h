@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <memory>
 #include "VMXPi.h"
-#include "VMXManager.h"
 
 namespace studica_driver
 {
