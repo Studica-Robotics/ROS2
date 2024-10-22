@@ -12,17 +12,17 @@ namespace studica_driver
 enum class PinMode { INPUT, OUTPUT };
 class DIO {
 public:
-    DIO(VMXChannelIndex channel, PinMode mode);
+    DIO(VMXChannelIndex channel, PinMode mode, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
     ~DIO();
 
     void Set(bool value);
     bool Get();
     void Toggle();
 private:
-    std::shared_ptr<VMXPi> vmx_;
     VMXChannelIndex channel_;
-    VMXResourceHandle dio_res_handle_;
     PinMode mode_;
+    std::shared_ptr<VMXPi> vmx_;
+    VMXResourceHandle dio_res_handle_;
     void DisplayVMXError(VMXErrorCode vmxerr);
 };
 

@@ -2,7 +2,8 @@
 
 using namespace studica_driver;
 
-DIO::DIO(VMXChannelIndex channel, PinMode mode) : channel_(channel), mode_(mode) {
+DIO::DIO(VMXChannelIndex channel, PinMode mode, std::shared_ptr<VMXPi> vmx) 
+    : channel_(channel), mode_(mode), vmx_(vmx) {
     VMXErrorCode vmxerr;
     if (mode == PinMode::OUTPUT) {
         DIOConfig dio_config;
