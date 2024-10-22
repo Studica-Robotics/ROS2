@@ -56,11 +56,11 @@ namespace studica_driver
 {
 class Cobra {
 public:
-    Cobra(const float &vref, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
+    Cobra(const float &vref, const uint8_t &muxch, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
     ~Cobra();
 
-    float GetVoltage(uint8_t ch);
-    int GetRawValue(uint8_t ch);
+    float GetVoltage();
+    int GetRawValue();
     VMXResourceHandle cobra_res_handle;
     
 private:
@@ -68,9 +68,10 @@ private:
     std::shared_ptr<studica_driver::I2C> i2c_;
 
     float vref_;
+    uint8_t muxch_;
     uint8_t deviceAddress;
 
-    int GetSingle(uint8_t ch);
+    int GetSingle();
 
     int port;
     int mode;

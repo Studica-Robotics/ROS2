@@ -10,7 +10,7 @@ Cobra::Cobra(const std::string &name, const float& vref, const int& muxch)
     : rclcpp::Node(name), name_(name), vref_(vref), muxch_(muxch) {
     auto& vmx_manager = studica_driver::VMXManager::getInstance();
     vmx_ = vmx_manager.getVMX();
-    cobra_ = std::make_shared<studica_driver::Cobra>(vref_, vmx_);
+    cobra_ = std::make_shared<studica_driver::Cobra>(vref_, muxch_, vmx_);
 }
 Cobra::~Cobra() {}
 
@@ -18,10 +18,10 @@ Cobra::~Cobra() {}
 void Cobra::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response) {
     if (params == "get_raw") {
         response->success = true;
-        response->message = std::to_string(cobra_->GetRawValue(muxch_));
+        response->message = std::to_string(cobra_->GetRawValue());
     } else if (params == "get_volt") {
         response->success = true;
-        response->message = std::to_string(cobra_->GetVoltage(muxch_));
+        response->message = std::to_string(cobra_->GetVoltage());
     } else {
         response->success = false;
         response->message = "No such command '" + params + "'";

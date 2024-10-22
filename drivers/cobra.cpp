@@ -1,8 +1,8 @@
 #include "cobra.h"
 using namespace studica_driver;
 
-Cobra::Cobra(const float &vref, std::shared_ptr<VMXPi> vmx)
-    : vmx_(vmx), vref_(vref) {
+Cobra::Cobra(const float &vref, const uint8_t &muxch, std::shared_ptr<VMXPi> vmx)
+    : vmx_(vmx), vref_(vref), muxch_(muxch) {
     
     // init cobra variables
     port = 1;
@@ -24,9 +24,9 @@ Cobra::Cobra(const float &vref, std::shared_ptr<VMXPi> vmx)
 Cobra::~Cobra() {}
 
 
-int Cobra::GetSingle(uint8_t ch) {
-    if (ch > 3) {
-        std::cout << "Invalid multiplexer ch: " << ch << std::endl;
+int Cobra::GetSingle() {
+    if (muxch_ > 3) {
+        std::cout << "Invalid multiplexer ch: " << muxch_ << std::endl;
         return 0;
     }
 
@@ -34,8 +34,8 @@ int Cobra::GetSingle(uint8_t ch) {
     int config = CONFIG_OS_SINGLE | mode | sampleRate;
     config |= gain;
 
-    // set the correct multiplexer setting for the selected ch
-    switch (ch) {
+    // set the correct multiplexer setting for the selected muxch_
+    switch (muxch_) {
         case 0:
             config |= CONFIG_MUX_SINGLE_0;
             break;
@@ -49,7 +49,7 @@ int Cobra::GetSingle(uint8_t ch) {
             config |= CONFIG_MUX_SINGLE_3;
             break;
         default:
-            std::cout << "Invalid multiplexer ch: " << ch << std::endl;
+            std::cout << "Invalid multiplexer muxch_: " << muxch_ << std::endl;
             return 0;
     }
 
@@ -80,12 +80,12 @@ int Cobra::GetSingle(uint8_t ch) {
     return (rx_data[0] << 8) | rx_data[1]; // Combine the received bytes into an integer
 }
 
-int Cobra::GetRawValue(uint8_t ch) {
-    return GetSingle(ch);
+int Cobra::GetRawValue() {
+    return GetSingle();
 }
 
-float Cobra::GetVoltage(uint8_t channel) {
-    float raw = GetSingle(channel); 
+float Cobra::GetVoltage() {
+    float raw = GetSingle(); 
     float mV = vref_ / 0x800;  //  <vRef_>V reference and 12-bit ADC
     return raw * mV;
 }
