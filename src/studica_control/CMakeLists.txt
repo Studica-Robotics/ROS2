@@ -68,7 +68,7 @@ rclcpp_components_register_nodes(encoder_component "studica_control::encoder")
 
 add_library(servo_component SHARED src/components/servo_component.cpp)
 ament_target_dependencies(servo_component ${dependencies})
-rclcpp_components_register_nodes(servo_component "studica_control::servo")
+rclcpp_components_register_nodes(servo_component "studica_control::Servo")
 
 add_library(ultrasonic_component SHARED src/components/ultrasonic_component.cpp)
 ament_target_dependencies(ultrasonic_component ${dependencies})

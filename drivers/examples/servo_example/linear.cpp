@@ -2,9 +2,10 @@
 #include <thread>
 #include <chrono>
 
+#define SERVO_PIN 12
 int main(int argc, char *argv[])
 {
-    VMXChannelIndex port = 12; // servo output on pin 14
+    VMXChannelIndex port = SERVO_PIN;
     studica_driver::Servo servo(port, studica_driver::ServoType::Linear, 0, 100);
     std::this_thread::sleep_for(std::chrono::seconds(1));
     servo.SetBounds(1, 1.5, 2);
