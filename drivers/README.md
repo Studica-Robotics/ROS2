@@ -7,7 +7,7 @@ make clean
 ```
 
 ## Dependencies
-* VMX Hal library
+* [VMX Hal CPP Library](https://github.com/Studica-Robotics/ubuntu/tree/main/hal/hal_cpp)
 
 ## Compile and run examples
 ``` bash
