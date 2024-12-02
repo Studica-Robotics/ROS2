@@ -13,43 +13,80 @@ private:
     // map of names to nodes
     std::map<std::string, std::shared_ptr<rclcpp::Node>> component_map;
 
-    void service_callback(const std::shared_ptr<studica_control::srv::SetData::Request> request,
-                          std::shared_ptr<studica_control::srv::SetData::Response> response) {
-        std::string name = request->name.c_str();
-        std::string component = request->component.c_str();
+    void service_callback(
+        const std::shared_ptr<studica_control::srv::SetData::Request> request,
+        std::shared_ptr<studica_control::srv::SetData::Response> response) 
+    {
+        std::string name = request->name;
+        std::string component = request->component;
+
         if (component == "servo") {
+            // Extract initialization parameters
             uint8_t pin = request->initparams.pin;
-            string servo_type_str = request->initparams.servo_type;
-            rclcpp::NodeOptions options;
-            auto servo_node = std::make_shared<studica_control::Servo>(options);
+            std::string servo_type_str = request->initparams.servo_type;
+
+            // Determine the servo type
+            studica_driver::ServoType servo_type;
+            int min_angle = 0, max_angle = 0;
+            
             if (servo_type_str == "standard") {
-                servo_node->initialize(pin, studica_driver::ServoType::Standard, -150, 150);
+                servo_type = studica_driver::ServoType::Standard;
+                min_angle = -150;
+                max_angle = 150;
             } else if (servo_type_str == "continuous") {
-                servo_node->initialize(pin, studica_driver::ServoType::Continuous, -100, 100);
+                servo_type = studica_driver::ServoType::Continuous;
+                min_angle = -100;
+                max_angle = 100;
             } else if (servo_type_str == "linear") {
-                servo_node->initialize(pin, studica_driver::ServoType::Linear, 0, 100);
+                servo_type = studica_driver::ServoType::Linear;
+                min_angle = 0;
+                max_angle = 100;
             } else {
-                RCLCPP_INFO(this->get_logger(), "Invalid servo type. Allowed values are 'standard' or 'continuous'.");
+                RCLCPP_WARN(this->get_logger(), "Invalid servo type. Allowed values are 'standard', 'continuous', or 'linear'.");
+                response->success = false;
+                response->message = "Invalid servo type.";
                 return;
             }
-            executor_->add_node(std::dynamic_pointer_cast<rclcpp::Node>(servo_node));
-            component_map[name] = servo_node;
-        }
-        if (component == "get_node") {
-            std::dynamic_pointer_cast<studica_control::Servo>(component_map[name])->cmd(request->params.c_str(), response);
+
+            try {
+                auto servo_node = std::make_shared<studica_control::Servo>(vmx_, pin, servo_type, min_angle, max_angle);
+            
+                // auto node_options = rclcpp::NodeOptions();
+                // auto servo_node = std::make_shared<studica_control::Servo>(node_options);
+
+                // Add to executor and component map
+                executor_->add_node(servo_node);
+                component_map[name] = servo_node;
+
+                response->success = true;
+                response->message = "Servo component '" + name + "' created successfully.";
+                RCLCPP_INFO(this->get_logger(), "Created servo component '%s' of type '%s' on pin %d.",
+                            name.c_str(), servo_type_str.c_str(), pin);
+            } catch (const std::exception &e) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to create servo component: %s", e.what());
+                response->success = false;
+                response->message = "Failed to create servo component: " + std::string(e.what());
+            }
+        } else {
+            RCLCPP_WARN(this->get_logger(), "Invalid component type '%s'.", component.c_str());
+            response->success = false;
+            response->message = "Invalid component type. Allowed type is 'servo'.";
         }
     }
 
+
 public:
+    std::shared_ptr<VMXPi> vmx_;
     ControlServer() : Node("control_server") {
+        // vmx_ = std::make_shared<VMXPi>(true, 50);
+
         service_ = this->create_service<studica_control::srv::SetData>(
-            "control_server", 
+            "create_component", 
             std::bind(&ControlServer::service_callback, this, std::placeholders::_1, std::placeholders::_2));
     }
     void set_executor(const std::shared_ptr<rclcpp::executors::MultiThreadedExecutor>& exec) {
         executor_ = exec;
     }
-
 
 };
 
