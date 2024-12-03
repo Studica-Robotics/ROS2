@@ -105,8 +105,8 @@ int main(int argc, char *argv[])
     // cobra->cmd("get_volt", response);
     // std::cout << "response->message: " << response->message << std::endl;
 
-
-    auto titan = std::make_shared<studica_control::Titan>("ttn", 45, 15600, 0.0006830601, 0.8);
+    std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50);
+    auto titan = std::make_shared<studica_control::Titan>(vmx, "ttn", 45, 15600, 0.0006830601, 0.8);
     exec.add_node(titan);
 
     // Start threads for each Titan instance

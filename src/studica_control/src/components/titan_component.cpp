@@ -7,16 +7,22 @@ Titan::Titan(const rclcpp::NodeOptions & options) : Node("titan_", options) {
     // Titan("titan", 5.0, 0, std::make_shared<VMXPi>(true, 50));
 }
 
-Titan::Titan(const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, const float &speed)
-    : Node("titan_"), canID_(canID), motorFreq_(motorFreq), distPerTick_(distPerTick), speed_(speed)  {
-    auto& vmx_manager = studica_driver::VMXManager::getInstance();
-    vmx_ = vmx_manager.getVMX();
+Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, const float &speed)
+    : Node("titan_"), vmx_(vmx), name_(name), canID_(canID), motorFreq_(motorFreq), distPerTick_(distPerTick), speed_(speed)  {
     titan_ = std::make_shared<studica_driver::Titan>(name, canID_, motorFreq_, distPerTick_, speed_, vmx_);
+    service_ = this->create_service<studica_control::srv::SetData>(
+        "titan_cmd",
+        std::bind(&Titan::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
 }
 Titan::~Titan() {}
 
+void Titan::cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
+    std::string params = request->params;
+    cmd(params, request, response);
+}
 
 void Titan::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
+
     if (params == "start") {
         titan_->Enable(true);
         response->success = true;
@@ -25,6 +31,10 @@ void Titan::cmd(std::string params, std::shared_ptr<studica_control::srv::SetDat
         titan_->SetupEncoder(request->initparams.n_encoder);
         response->success = true;
         response->message = "Titan encoder setup complete";
+    } else if (params == "configure_encoder") {
+        titan_->ConfigureEncoder(request->initparams.n_encoder, request->initparams.dist_per_tick);
+        response->success = true;
+        response->message = "Titan encoder configured";
     } else if (params == "stop") {
         titan_->SetSpeed(request->initparams.n_encoder, 0.0);
         response->success = true;
@@ -35,25 +45,27 @@ void Titan::cmd(std::string params, std::shared_ptr<studica_control::srv::SetDat
         response->message = "Titan reset";
     } else if (params == "set_speed") {
         response->success = true;
-        speed_ = request->initparams.speed;
-        titan_->SetSpeed(request->initparams.n_encoder, speed_);
-        response->message = "Encoder " + std::to_string(request->initparams.n_encoder) + " speed set to " + std::to_string(speed_);
-    } else if (params == "inv_enc_dir") {
-        titan_->InvertEncoderDirection(request->initparams.n_encoder);
-        titan_->SetSpeed(request->initparams.n_encoder, speed_);
-        response->success = true;
-        response->message = "Encoder " + std::to_string(request->initparams.n_encoder) + " direction has been inverted";
-    } else if (params == "inv_motor_dir") {
-        titan_->InvertMotorDirection(request->initparams.n_encoder);
-        titan_->SetSpeed(request->initparams.n_encoder, speed_);
-        response->success = true;
-        response->message = "Motor " + std::to_string(request->initparams.n_encoder) + " direction has been inverted";
-    } else if (params == "inv_motor_rpm") {
-        titan_->InvertMotorRPM(request->initparams.n_encoder);
-        titan_->SetSpeed(request->initparams.n_encoder, speed_);
-        response->success = true;
-        response->message = "Motor " + std::to_string(request->initparams.n_encoder) + " RPM has been inverted";
-    } else if (params == "get_enc_dist") {
+        int speed = request->initparams.speed;
+        titan_->SetSpeed(request->initparams.n_encoder, speed);
+        response->message = "Encoder " + std::to_string(request->initparams.n_encoder) + " speed set to " + std::to_string(speed);
+    }
+    //  else if (params == "inv_enc_dir") {
+    //     titan_->InvertEncoderDirection(request->initparams.n_encoder);
+    //     titan_->SetSpeed(request->initparams.n_encoder, speed_);
+    //     response->success = true;
+    //     response->message = "Encoder " + std::to_string(request->initparams.n_encoder) + " direction has been inverted";
+    // } else if (params == "inv_motor_dir") {
+    //     titan_->InvertMotorDirection(request->initparams.n_encoder);
+    //     titan_->SetSpeed(request->initparams.n_encoder, speed_);
+    //     response->success = true;
+    //     response->message = "Motor " + std::to_string(request->initparams.n_encoder) + " direction has been inverted";
+    // } else if (params == "inv_motor_rpm") {
+    //     titan_->InvertMotorRPM(request->initparams.n_encoder);
+    //     titan_->SetSpeed(request->initparams.n_encoder, speed_);
+    //     response->success = true;
+    //     response->message = "Motor " + std::to_string(request->initparams.n_encoder) + " RPM has been inverted";
+    // } 
+    else if (params == "get_enc_dist") {
         response->success = true;
         response->message = std::to_string(titan_->GetEncoderDistance(request->initparams.n_encoder));
     } else if (params == "get_rpm") {
