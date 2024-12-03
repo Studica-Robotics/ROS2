@@ -5,7 +5,7 @@ Imu::Imu() : vmx_(std::make_shared<VMXPi>(true, 50)) {}
 
 Imu::Imu(std::shared_ptr<VMXPi> vmx) : vmx_(vmx) {}
 
-Imu::~Imu() {} // todo
+Imu::~Imu() { vmx_->ahrs.Stop(); } // todo
 
 float Imu::GetPitch() { return vmx_->ahrs.GetPitch(); }
 

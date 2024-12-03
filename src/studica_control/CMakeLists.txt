@@ -38,6 +38,7 @@ set(studica_control_HDRS
   include/studica_control/ultrasonic_component.h
   include/studica_control/sharp_component.h
   include/studica_control/cobra_component.h
+  include/studica_control/imu_component.h
 )
 
 set(studica_control_SRCS # <- source files
@@ -86,6 +87,10 @@ add_library(titan_component SHARED src/components/titan_component.cpp)
 ament_target_dependencies(titan_component ${dependencies})
 rclcpp_components_register_nodes(titan_component "studica_control::titan")
 
+add_library(imu_component SHARED src/components/imu_component.cpp)
+ament_target_dependencies(imu_component ${dependencies})
+rclcpp_components_register_nodes(imu_component "studica_control::imu")
+
 
 install(TARGETS # <- Install Components
   encoder_component
@@ -94,6 +99,7 @@ install(TARGETS # <- Install Components
   sharp_component
   cobra_component
   titan_component
+  imu_component
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -122,6 +128,7 @@ target_link_libraries(manual_composition
   sharp_component
   cobra_component
   titan_component
+  imu_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
   /usr/local/lib/studica_drivers/libstudica_drivers.so
   # ${STUDICA_DRIVER_LIB}

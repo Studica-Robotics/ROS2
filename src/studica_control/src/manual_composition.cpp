@@ -2,6 +2,7 @@
 
 #include "studica_control/encoder_component.h"
 #include "studica_control/servo_component.h"
+#include "studica_control/imu_component.h"
 #include "rclcpp/rclcpp.hpp"
 #include "VMXPi.h"
 #include <studica_control/msg/initialize_params.hpp>
@@ -67,6 +68,20 @@ private:
                 response->success = false;
                 response->message = "Failed to create servo component: " + std::string(e.what());
             }
+        } else if (component == "imu") {
+            try {
+                auto imu_node = std::make_shared<studica_control::Imu>(vmx_);
+                executor_->add_node(imu_node);
+                component_map[name] = imu_node;
+
+                response->success = true;
+                response->message = "IMU component '" + name + "' created successfully.";
+                RCLCPP_INFO(this->get_logger(), "Created IMU component '%s'.", name.c_str());
+            } catch (const std::exception &e) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to create IMU component: %s", e.what());
+                response->success = false;
+                response->message = "Failed to create IMU component: " + std::string(e.what());
+            }
         } else {
             RCLCPP_WARN(this->get_logger(), "Invalid component type '%s'.", component.c_str());
             response->success = false;
@@ -78,8 +93,7 @@ private:
 public:
     std::shared_ptr<VMXPi> vmx_;
     ControlServer() : Node("control_server") {
-        // vmx_ = std::make_shared<VMXPi>(true, 50);
-
+        vmx_ = std::make_shared<VMXPi>(true, 50);
         service_ = this->create_service<studica_control::srv::SetData>(
             "create_component", 
             std::bind(&ControlServer::service_callback, this, std::placeholders::_1, std::placeholders::_2));

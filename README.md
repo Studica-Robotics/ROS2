@@ -12,7 +12,7 @@ make install
 ``` bash
 cd src/studica_control
 sudo su
-. install/setup.bash
+. /opt/ros/humble/setup.bash
 colcon build
 ```
 
@@ -35,18 +35,60 @@ fix: `export LD_LIBRARY_PATH=/usr/local/lib/studica_drivers:$LD_LIBRARY_PATH`
 
 
 ### How to run nodes
-building
-```
+**Building**
+```bash
 # source your ROS e.g. 
-# . /opt/ros/humble/setup.bash
+. /opt/ros/humble/setup.bash
 cd src/studica_control
 colcon build
 ```
 (requires drivers to be installed first, run make and make install in ../drivers folder)
 
-Running nodes
-```
-. instal/setup.bash
+**Running nodes**
+
+Terminal 1:
+```bash
+. /opt/ros/humble/setup.bash
+. install/setup.bash
 ros2 run studica_control manual_composition
-ros2 run studica_control studica_control_node
+#ros2 run studica_control studica_control_node
+```
+Terminal 2:
+```bash
+. /opt/ros/humble/setup.bash
+. install/setup.bash
+ros2 service call /create_component studica_control/srv/SetData '{<...SetData service request params...>}' # init component
+ros2 service call /<service name> studica_control/srv/SetData '{<...SetData service request params...>}' # make subsequent service calls to component
+```
+
+---
+### Parameters
+
+**Service Parameters** (`srv/SetData.srv`)
+```
+string command
+string name
+string component
+string params
+InitializeParams initparams
+---
+bool success
+string message
+```
+
+**Component Parameters** (`msg/InitializeParams.msg`)
+```
+int32 ping
+int32 echo
+float32 vref
+int32 mux_ch
+int32 pin
+int32 n_encoder
+float32 dist_per_tick
+float32 speed
+int32 can_id
+int32 motor_freq
+string servo_type
+int32 port_a
+int32 port_b
 ```
