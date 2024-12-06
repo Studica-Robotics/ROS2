@@ -45,9 +45,10 @@ void Titan::cmd(std::string params, std::shared_ptr<studica_control::srv::SetDat
         response->message = "Titan reset";
     } else if (params == "set_speed") {
         response->success = true;
-        int speed = request->initparams.speed;
+        float speed = request->initparams.speed;
+        RCLCPP_INFO(this->get_logger(), "Setting speed to %f", speed);
         titan_->SetSpeed(request->initparams.n_encoder, speed);
-        response->message = "Encoder " + std::to_string(request->initparams.n_encoder) + " speed set to " + std::to_string(speed);
+        response->message = "Encoder " + std::to_string(request->initparams.n_encoder) + " speed set to " + std::to_string(request->initparams.speed);
     }
     //  else if (params == "inv_enc_dir") {
     //     titan_->InvertEncoderDirection(request->initparams.n_encoder);
