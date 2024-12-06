@@ -13,8 +13,8 @@ Servo::Servo(const rclcpp::NodeOptions &options) : Node("servo_", options) {
     RCLCPP_INFO(this->get_logger(), "Servo component is ready.");
 }
 
-Servo::Servo(std::shared_ptr<VMXPi> vmx, VMXChannelIndex port, studica_driver::ServoType type, int min, int max)
-    : rclcpp::Node("servo_component"), vmx_(vmx), port_(port), type_(type)
+Servo::Servo(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex port, studica_driver::ServoType type, int min, int max)
+    : rclcpp::Node("servo_component"), vmx_(vmx), name_(name), port_(port), type_(type)
 {
     // Initialize the servo object
     servo_ = std::make_shared<studica_driver::Servo>(port, type_, min, max, vmx_);
@@ -32,6 +32,7 @@ Servo::~Servo() {}
 void Servo::cmd_callback(const std::shared_ptr<studica_control::srv::SetData::Request> request,
                          std::shared_ptr<studica_control::srv::SetData::Response> response)
 {
+    if (request->name != name_) return;
     try
     {
         // Parse the angle parameter from the request

@@ -103,7 +103,7 @@ target_link_libraries(manual_composition
   cobra_component
   titan_component
   imu_component
-  /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
+  #/usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
   /usr/local/lib/studica_drivers/libstudica_drivers.so
 )
 ament_target_dependencies(manual_composition ${dependencies})
@@ -123,7 +123,7 @@ target_link_libraries(comp_test
   sharp_component
   cobra_component
   titan_component
-  /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
+  #/usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
   /usr/local/lib/studica_drivers/libstudica_drivers.so
 )
 ament_target_dependencies(comp_test ${dependencies})
