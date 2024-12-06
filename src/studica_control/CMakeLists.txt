@@ -82,13 +82,13 @@ install(TARGETS
   cobra_component
   titan_component
   imu_component
-#  ARCHIVE DESTINATION lib
-#  LIBRARY DESTINATION lib
-#  RUNTIME DESTINATION bin
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
 
-  ARCHIVE DESTINATION /usr/local/lib/studica_control
-  LIBRARY DESTINATION /usr/local/lib/studica_control
-  RUNTIME DESTINATION /usr/local/bin/studica_control
+#  ARCHIVE DESTINATION /usr/local/lib/studica_control
+#  LIBRARY DESTINATION /usr/local/lib/studica_control
+#  RUNTIME DESTINATION /usr/local/bin/studica_control
 )
 
 # Executables
@@ -147,11 +147,6 @@ install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp/
 install(
   DIRECTORY include/
   DESTINATION /usr/local/include/studica_control
-)
-
-install(
-  DIRECTORY ${PROJECT_BINARY_DIR}/install/${PROJECT_NAME}/include/${PROJECT_NAME}/srv
-  DESTINATION /usr/local/include/studica_control/srv
 )
 
 # Export package information
