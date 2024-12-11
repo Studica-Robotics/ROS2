@@ -19,7 +19,7 @@ class Servo : public rclcpp::Node {
 public:
     explicit Servo(const rclcpp::NodeOptions &options); // Required but not used
 
-    Servo(std::shared_ptr<VMXPi> vmx, VMXChannelIndex port, studica_driver::ServoType type, int min = -150, int max = 150);
+    Servo(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex port, studica_driver::ServoType type, int min = -150, int max = 150);
     ~Servo();
 
 private:
@@ -29,9 +29,9 @@ private:
     std::shared_ptr<VMXPi> vmx_;
     std::shared_ptr<studica_driver::Servo> servo_;
 
+    std::string name_;
     VMXChannelIndex port_;
     studica_driver::ServoType type_;
-    std::string name_;
 
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
 

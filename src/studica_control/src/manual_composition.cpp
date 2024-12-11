@@ -27,6 +27,7 @@ private:
             // Extract initialization parameters
             uint8_t pin = request->initparams.pin;
             std::string servo_type_str = request->initparams.servo_type;
+            std::string name = request->name;
 
             // Determine the servo type
             studica_driver::ServoType servo_type;
@@ -52,7 +53,7 @@ private:
             }
 
             try {
-                auto servo_node = std::make_shared<studica_control::Servo>(vmx_, pin, servo_type, min_angle, max_angle);
+                auto servo_node = std::make_shared<studica_control::Servo>(vmx_, name, pin, servo_type, min_angle, max_angle);
             
                 // auto node_options = rclcpp::NodeOptions();
                 // auto servo_node = std::make_shared<studica_control::Servo>(node_options);

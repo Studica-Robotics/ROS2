@@ -92,9 +92,9 @@ install(TARGETS
   # LIBRARY DESTINATION lib
   # RUNTIME DESTINATION bin
 
-  ARCHIVE DESTINATION /usr/local/lib/studica_control
-  LIBRARY DESTINATION /usr/local/lib/studica_control
-  RUNTIME DESTINATION /usr/local/bin/studica_control
+ ARCHIVE DESTINATION /usr/local/lib/studica_control
+ LIBRARY DESTINATION /usr/local/lib/studica_control
+ RUNTIME DESTINATION /usr/local/bin/studica_control
 )
 
 # Executables
