@@ -67,7 +67,8 @@
         "typeindex": "cpp",
         "typeinfo": "cpp",
         "*.txx": "cpp",
-        "future": "cpp"
+        "future": "cpp",
+        "csignal": "cpp"
     },
     "cmake.sourceDirectory": "/home/vmx/ROS2/src/studica_control"
 }

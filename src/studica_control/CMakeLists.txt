@@ -16,6 +16,7 @@ find_package(rcutils REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(rosidl_typesupport_c REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files (srv, msg, action)
   "msg/InitializeParams.msg"
@@ -39,6 +40,7 @@ set(studica_control_HDRS
   include/studica_control/sharp_component.h
   include/studica_control/cobra_component.h
   include/studica_control/imu_component.h
+  include/studica_control/dio_component.h
 )
 
 set(dependencies "ament_index_cpp" "sensor_msgs" "rclcpp_components" "rclcpp" "rclcpp_action" "std_msgs" "std_srvs")
@@ -68,10 +70,13 @@ add_library(cobra_component SHARED src/components/cobra_component.cpp)
 ament_target_dependencies(cobra_component ${dependencies})
 rclcpp_components_register_nodes(cobra_component "studica_control::cobra")
 
-
 add_library(imu_component SHARED src/components/imu_component.cpp)
 ament_target_dependencies(imu_component ${dependencies})
 rclcpp_components_register_nodes(imu_component "studica_control::imu")
+
+add_library(dio_component SHARED src/components/dio_component.cpp)
+ament_target_dependencies(dio_component ${dependencies})
+rclcpp_components_register_nodes(dio_component "studica_control::DIO")
 
 # Install components
 install(TARGETS 
@@ -82,9 +87,10 @@ install(TARGETS
   cobra_component
   titan_component
   imu_component
-#  ARCHIVE DESTINATION lib
-#  LIBRARY DESTINATION lib
-#  RUNTIME DESTINATION bin
+  dio_component
+  # ARCHIVE DESTINATION lib
+  # LIBRARY DESTINATION lib
+  # RUNTIME DESTINATION bin
 
   ARCHIVE DESTINATION /usr/local/lib/studica_control
   LIBRARY DESTINATION /usr/local/lib/studica_control
@@ -103,6 +109,7 @@ target_link_libraries(manual_composition
   cobra_component
   titan_component
   imu_component
+  dio_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
   /usr/local/lib/studica_drivers/libstudica_drivers.so
 )
@@ -115,25 +122,48 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# Component test executable
-add_executable(comp_test src/comp_test.cpp)
-target_link_libraries(comp_test 
+add_executable(manual_composition2 src/manual_composition2.cpp)
+target_link_libraries(manual_composition2 
   encoder_component
   servo_component
+  ultrasonic_component
   sharp_component
   cobra_component
   titan_component
+  imu_component
+  dio_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
   /usr/local/lib/studica_drivers/libstudica_drivers.so
 )
-ament_target_dependencies(comp_test ${dependencies})
-target_link_libraries(comp_test "${cpp_typesupport_target}")
+ament_target_dependencies(manual_composition2 ${dependencies})
+target_link_libraries(manual_composition2 "${cpp_typesupport_target}")
 
-
+# Install executable
 install(TARGETS
-  comp_test
+  manual_composition2
   DESTINATION lib/${PROJECT_NAME}
 )
+
+# # Component test executable
+# add_executable(comp_test src/comp_test.cpp)
+# target_link_libraries(comp_test 
+#   encoder_component
+#   servo_component
+#   sharp_component
+#   cobra_component
+#   titan_component
+#   dio_component
+#   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
+#   /usr/local/lib/studica_drivers/libstudica_drivers.so
+# )
+# ament_target_dependencies(comp_test ${dependencies})
+# target_link_libraries(comp_test "${cpp_typesupport_target}")
+
+
+# install(TARGETS
+#   comp_test
+#   DESTINATION lib/${PROJECT_NAME}
+# )
 
 # Install include files and generated headers
 install(DIRECTORY include/${PROJECT_NAME}/
@@ -149,14 +179,18 @@ install(
   DESTINATION /usr/local/include/studica_control
 )
 
-install(
-  DIRECTORY ${PROJECT_BINARY_DIR}/install/${PROJECT_NAME}/include/${PROJECT_NAME}/srv
-  DESTINATION /usr/local/include/studica_control/srv
-)
 
 # Export package information
 ament_export_include_directories(include)
-ament_export_libraries(encoder_component servo_component ultrasonic_component sharp_component cobra_component titan_component)
+ament_export_libraries(
+  encoder_component 
+  servo_component 
+  ultrasonic_component 
+  sharp_component 
+  cobra_component 
+  titan_component
+  dio_component
+)
 ament_export_dependencies(${dependencies})
 
 # Set RPATH

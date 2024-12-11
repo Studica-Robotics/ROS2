@@ -40,13 +40,13 @@ int main(int argc, char *argv[])
 
     titan.Enable(true);
     
-    for(int i = 0; i < 10; i++)
+    for(int i = 0; i < 5; i++)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds((int64_t)(2.0 * 1000)));
-        titan.SetSpeed(0, -0.8);
-        titan.SetSpeed(1, 0.8);
-        titan.SetSpeed(2, -0.8);
-        titan.SetSpeed(3, 0.8);
+        titan.SetSpeed(0, -0.2);
+        titan.SetSpeed(1, 0.2);
+        titan.SetSpeed(2, -0.2);
+        titan.SetSpeed(3, 0.2);
         printf("Encoder 0 Distance: %f, RPM: %d, Raw: %i\n", titan.GetEncoderDistance(0), titan.GetRPM(0), titan.GetEncoderCount(0));
         printf("Encoder 1 Distance: %f, RPM: %d, Raw: %i\n", titan.GetEncoderDistance(1), titan.GetRPM(1), titan.GetEncoderCount(1));
         printf("Encoder 2 Distance: %f, RPM: %d, Raw: %i\n", titan.GetEncoderDistance(2), titan.GetRPM(2), titan.GetEncoderCount(2));

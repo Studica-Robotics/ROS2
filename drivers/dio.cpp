@@ -54,11 +54,31 @@ bool DIO::Get() {
 }
 
 void DIO::Toggle() {
-    // TODO: Implement
+    if (mode_ != PinMode::OUTPUT) {
+        printf("Toggle operation is only supported for OUTPUT mode on port %d\n", channel_);
+        return;
+    }
+
+    VMXErrorCode vmxerr;
+    bool current_value = false;
+
+    if (!vmx_->io.DIO_Get(dio_res_handle_, current_value, &vmxerr)) {
+        printf("Error getting current DIO state on port %d\n", channel_);
+        DisplayVMXError(vmxerr);
+        return;
+    }
+
+    bool new_value = !current_value;
+
+    if (!vmx_->io.DIO_Set(dio_res_handle_, new_value, &vmxerr)) {
+        printf("Error toggling DIO state on port %d\n", channel_);
+        DisplayVMXError(vmxerr);
+    } else {
+        printf("DIO port %d toggled to %s\n", channel_, new_value ? "HIGH" : "LOW");
+    }
 }
 
 void DIO::DisplayVMXError(VMXErrorCode vmxerr) {
     const char *p_err_description = GetVMXErrorString(vmxerr);
     printf("VMXError %d: %s\n", vmxerr, p_err_description);
 }
-

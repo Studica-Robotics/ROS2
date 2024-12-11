@@ -124,11 +124,11 @@ private:
 
 public:
     std::shared_ptr<VMXPi> vmx_;
-    ControlServer() : Node("control_server") {
+    ControlServer() : Node("control_server2") {
         vmx_ = std::make_shared<VMXPi>(true, 50);
 
         service_ = this->create_service<studica_control::srv::SetData>(
-            "create_component", 
+            "create_component2", 
             std::bind(&ControlServer::service_callback, this, std::placeholders::_1, std::placeholders::_2));
     }
     void set_executor(const std::shared_ptr<rclcpp::executors::MultiThreadedExecutor>& exec) {
@@ -144,12 +144,9 @@ int main(int argc, char *argv[]) {
 
     auto executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
 
-    auto control_server = std::make_shared<ControlServer>();
-    control_server->set_executor(executor);
-    executor->add_node(control_server);
-
-    // auto servo = std::make_shared<studica_control::Servo>(13, studica_driver::ServoType::Standard);
-    // auto servo2 = std::make_shared<studica_control::Servo>(14, studica_driver::ServoType::Continuous);
+    auto control_server2 = std::make_shared<ControlServer>();
+    control_server2->set_executor(executor);
+    executor->add_node(control_server2);
     
     executor->spin();
 
