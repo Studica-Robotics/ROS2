@@ -52,7 +52,7 @@ private:
             }
 
             try {
-                auto servo_node = std::make_shared<studica_control::Servo>(vmx_, pin, servo_type, min_angle, max_angle);
+                auto servo_node = std::make_shared<studica_control::Servo>(vmx_, name, pin, servo_type, min_angle, max_angle);
             
                 // auto node_options = rclcpp::NodeOptions();
                 // auto servo_node = std::make_shared<studica_control::Servo>(node_options);

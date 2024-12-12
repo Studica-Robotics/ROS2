@@ -22,8 +22,15 @@ void Titan::cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request>
 }
 
 void Titan::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
-
-    if (params == "start") {
+    if (params == "enable") {
+        titan_->Enable(true);
+        response->success = true;
+        response->message = "Titan enabled";
+    } else if (params == "disable") {
+        titan_->Enable(false);
+        response->success = true;
+        response->message = "Titan disabled";
+    } else if (params == "start") {
         titan_->Enable(true);
         response->success = true;
         response->message = "Titan started";
