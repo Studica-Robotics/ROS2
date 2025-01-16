@@ -1,6 +1,7 @@
 # ROS2
 This repository provides the essential driver library and dependency sources required. (Requires [VMXPI Library](https://example.com) installed)
 
+
 ## Driver library
 Code that directly controls the robot's components, such as servo motors, ultrasonic sensors, and other hardware. This driver library can be used in a ROS2 node, or in plain C++ code.
 
@@ -37,9 +38,10 @@ target_link_libraries(example_program
 )
 ```
 #### Add library path for the linker to search:
-You should also add this line to your .bashrc file to avoid running it every time
+You should also add these lines to your .bashrc file to avoid running it every time
 ```bash
 export LD_LIBRARY_PATH=/usr/local/lib/studica_drivers:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/studica_control
 ```
 
 ## ROS2 Components
@@ -47,6 +49,8 @@ Components can be loaded in a ROS2 node. This project contains a collection of c
 
 **Building**
 ```bash
+# use sudo su mode since HAL requires root permissions
+sudo su
 # source your ROS e.g. 
 . /opt/ros/humble/setup.bash
 cd src/studica_control
@@ -58,10 +62,11 @@ colcon build
 
 Terminal 1:
 ```bash
+sudo su
 . /opt/ros/humble/setup.bash
+cd src/studica_control
 . install/setup.bash
 ros2 run studica_control manual_composition
-#ros2 run studica_control studica_control_node
 ```
 Terminal 2:
 ```bash
@@ -118,9 +123,12 @@ Values for each parameters can be declared at service requests and responses.
 * The src/CMakeLists.txt file is very important for everything to compile. Edit this file to set up include files, libraries, deps, components, executables, install, linking etc..
 * error while loading shared libraries: libstudica_drivers.so: cannot open shared object file: No such file or directory
 
-fix: `export LD_LIBRARY_PATH=/usr/local/lib/studica_drivers:$LD_LIBRARY_PATH`
+fix: 
+```bash
+export LD_LIBRARY_PATH=/usr/local/lib/studica_drivers:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/studica_control
+```
 * old implementation: studica_control_node
-
 
 
 ## Development Status
