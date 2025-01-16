@@ -98,6 +98,7 @@ sudo dpkg -i ros-humble-orbbec-camera-msgs_jammy_arm64.deb
 ```
 
 #### Running
+Ensure rosbridge is running to see camera feed in the camera tab.
 ```bash
 ros2 launch orbbec_camera gemini_e.launch.py
 ```
@@ -155,10 +156,10 @@ ros2 service call /create_component studica_control/srv/SetData "{name: 'servo2'
 ros2 service call /create_component studica_control/srv/SetData "{name: 'servo3', component: 'servo', initparams: {pin: 14, servo_type: 'standard'}}" && \
 ros2 service call /create_component studica_control/srv/SetData "{name: 'servo4', component: 'servo', initparams: {pin: 15, servo_type: 'standard'}}"
 ```
-``
 
 
-## Example workflow
+
+## Example workflow 1
 Launch a robot that you can drive around with the controller and watch the video feed.
 
 /--
