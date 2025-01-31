@@ -28,8 +28,8 @@ bool Odometry::update(double left_pos, double right_pos, const rclcpp::Time &tim
     const double dt = time.seconds() - timestamp_.seconds();
     if (dt < 0.0001) return false;
 
-    const double left_wheel_cur_pos = left_pos * wheel_radius_;
-    const double right_wheel_cur_pos = right_pos * wheel_radius_;
+    const double left_wheel_cur_pos = left_pos;
+    const double right_wheel_cur_pos = right_pos;
 
     const double left_wheel_est_vel = left_wheel_cur_pos - left_wheel_prev_pos_;
     const double right_wheel_est_vel = right_wheel_cur_pos - right_wheel_prev_pos_;

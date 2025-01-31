@@ -112,19 +112,6 @@ void Titan::publish_odometry() {
 
     odom_->update(left_encoder, right_encoder, current_time);
 
-    // double delta_left = left_encoder - last_left_encoder_;
-    // double delta_right = right_encoder - last_right_encoder_;
-
-    // last_left_encoder_ = left_encoder;
-    // last_right_encoder_ = right_encoder;
-
-    // double delta_distance = (delta_left + delta_right) / 2.0;
-    // double delta_theta = (delta_right - delta_left) / wheel_seperation_;
-
-    // theta_ += delta_theta;
-    // x_ += delta_distance * cos(theta_);
-    // y_ += delta_distance * sin(theta_);
-
     auto odom_msg = nav_msgs::msg::Odometry();
     odom_msg.header.stamp = current_time;
     odom_msg.header.frame_id = "odom";

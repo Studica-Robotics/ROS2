@@ -12,9 +12,7 @@ def generate_launch_description():
         name='manual_composition',
         output='screen'
     )
-
-    # Only two static transforms needed:
-    # 1. base_footprint to base_link (robot's center point)
+    
     base_tf = ExecuteProcess(
         cmd=[[
             'ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 base_footprint base_link'
@@ -22,7 +20,6 @@ def generate_launch_description():
         shell=True
     )
     
-    # 2. base_link to laser_frame (where your laser is mounted)
     laser_tf = ExecuteProcess(
         cmd=[[
             'ros2 run tf2_ros static_transform_publisher 0 0 0 3.14159 0 0 base_link laser_frame'

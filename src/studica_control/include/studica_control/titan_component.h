@@ -53,7 +53,7 @@ private:
     double right_command_ = 0.0;
 
     double wheel_radius_ = 0.05;
-    double wheel_separation_ = 0.25;
+    double wheel_separation_ = 0.28;
 
     std::string name_;
     uint8_t canID_;
