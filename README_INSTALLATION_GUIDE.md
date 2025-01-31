@@ -156,7 +156,24 @@ ros2 service call /create_component studica_control/srv/SetData "{name: 'servo2'
 ros2 service call /create_component studica_control/srv/SetData "{name: 'servo3', component: 'servo', initparams: {pin: 14, servo_type: 'standard'}}" && \
 ros2 service call /create_component studica_control/srv/SetData "{name: 'servo4', component: 'servo', initparams: {pin: 15, servo_type: 'standard'}}"
 ```
+If you are receiving inaccurate odometry, this will ruin SLAM mappings.
+Solution: Change the distance per tick when initializing the titan via the service call.
+For example, the maverick motors have ~1470 ticks per rotation.
+If you don’t know how many ticks, in src/components/titan_component.cpp, either
+* Cout GetEncoderCount(motor) and then mark the wheel and spin one full rotation
+* Set distpertick to 1 and cout GetEncoderDistance(motor)
+  
+Using the radius of your wheel (ex. 0.05m), calculate the distance per tick using circumference formula: `2pi * radius / ticks`
 
+Ex. `2pi * 0.05 / 1470 = 0.00021371378`
+
+So after running manual composition, run `ros2 service call /create_component studica_control/srv/SetData "{component: 'titan', initparams: {can_id: 42, motor_freq: 15600, dist_per_tick: 0.00021371378, speed: 0.8}}"`
+
+To test odometry is working well, run rviz2, add odometry to your display, and turn the robot to see that the displayed odometry is the same in real life.
+Run manual composition and create a service call for the titan using your calculated dist per tick (use sudo su).
+Add odometry to rviz display.
+Run `ros2 run teleop_twist_keyboard teleop_twist_keyboard` in a separate terminal (use sudo su).
+Press j or l to turn left or right, respectively and check that each turn matches what is published to /odom.
 
 
 ## Example workflow 1
@@ -213,7 +230,7 @@ Launch an autonomous mapping robot using discovery.
 /--
 
 ```
-run drive controller
+run nodes launch file
 run lidar driver
 run SLAM
 run nav2
@@ -221,19 +238,66 @@ run nav2
 run exploration
 ```
 
-/--
+/-- TODO: Combine nodes into a single custom launch file.
 
 ```bash
 # Terminal 1:
-ros2 launch studica_drive_control diffdrive.launch.py
-( this launch file launches lidar and slam)
+ros2 launch studica_control nodes.launch.py
+(this launch file launches manual_composition and creates necessary transforms for mapping with SLAM)
 
-# Terminal 2
-ros2 launch nav2_bringup navigation_launch.py
+# Terminal 2:
+ros2 service call /create_component studica_control/srv/SetData "{component: 'titan', initparams: {can_id: 42, motor_freq: 15600, dist_per_tick: 0.00021371378, speed: 0.8}}"
+(this initializes the titan component which will begin publishing to /odom)
 
 # Terminal 3:
-ros2 launch explore_lite explore.launch.py
+ros2 launch ydlidar_ros2_driver ydlidar_launch.py
+(publishes to /scan)
 
 # Terminal 4:
-ros2 run rviz2 rviz2
+ros2 launch slam_toolbox online_sync_launch.py slam_params_file:=/home/vmx/Winter2025/ROS2/src/studica_control/config/mapper_params_online_async.yaml
+(publishes to /map)
+
+# Terminal 5:
+ros2 launch nav2_bringup navigation_launch.py
+
+# Terminal 6:
+ros2 launch explore_lite explore.launch.py
+
+```
+
+## Example workflow 3
+Launch a manual mapping robot.
+
+/--
+
+```
+run nodes launch file
+run lidar driver
+run SLAM
+run keyboard controller
+```
+
+/-- TODO: Combine nodes into a single custom launch file.
+
+```bash
+# Terminal 1:
+ros2 launch studica_control nodes.launch.py
+(this launch file launches manual_composition and creates necessary transforms for mapping with SLAM)
+
+# Terminal 2:
+ros2 service call /create_component studica_control/srv/SetData "{component: 'titan', initparams: {can_id: 42, motor_freq: 15600, dist_per_tick: 0.00021371378, speed: 0.8}}"
+(this initializes the titan component which will begin publishing to /odom)
+
+# Terminal 3:
+ros2 launch ydlidar_ros2_driver ydlidar_launch.py
+(publishes to /scan)
+
+# Terminal 4:
+ros2 launch slam_toolbox online_sync_launch.py slam_params_file:=/home/vmx/Winter2025/ROS2/src/studica_control/config/mapper_params_online_async.yaml
+(publishes to /map)
+
+# Terminal 5:
+ros2 run teleop_twist_keyboard teleop_twist_keyboard
+(this allows you to control the robot using your keyboard)
+
 ```
