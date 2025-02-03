@@ -88,7 +88,7 @@ private:
         } else if (component == "titan") {
             try {
                 auto ip = request->initparams;
-                auto titan_node = std::make_shared<studica_control::Titan>(vmx_, "Titan", ip.can_id, ip.motor_freq, ip.dist_per_tick, ip.speed);
+                auto titan_node = std::make_shared<studica_control::Titan>(vmx_, "Titan", ip.can_id, ip.motor_freq, ip.ticks_per_rotation, ip.wheel_radius, ip.wheel_separation);
                 executor_->add_node(titan_node);
                 component_map[name] = titan_node;
 

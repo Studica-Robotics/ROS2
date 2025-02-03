@@ -55,7 +55,7 @@ namespace studica_driver
 class Titan
 {
     public:
-        Titan(const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, const float &speed, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
+        Titan(const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
         ~Titan();
         void Enable(bool enable);
         void SetupEncoder(uint8_t encoder);
@@ -83,7 +83,6 @@ class Titan
         uint16_t motorFreq_;
         uint8_t nEncoder_;
         float distPerTick_;
-        float speed_;
 
         VMXCANReceiveStreamHandle canrxhandle = 0;
         VMXErrorCode vmxerr;
