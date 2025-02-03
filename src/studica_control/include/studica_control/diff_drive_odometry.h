@@ -54,7 +54,7 @@ public:
     double getLinear() const { return linear_; }
     double getAngular() const { return angular_; }
 
-    void setWheelParams(double wheel_separation, double wheel_radius);
+    void setWheelParams(float wheel_separation);
     void setVelocityRollingWindowSize(size_t velocity_rolling_window_size);
 
 private:
@@ -65,7 +65,7 @@ private:
     rclcpp::Time timestamp_;
     double x_, y_, heading_;
     double linear_, angular_;
-    double wheel_separation_, wheel_radius_;
+    double wheel_separation_;
     double left_wheel_prev_pos_, right_wheel_prev_pos_;
     size_t velocity_rolling_window_size_;
     RollingMeanAccumulator linear_accumulator_;

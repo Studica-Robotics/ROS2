@@ -1,8 +1,9 @@
 #ifndef TITAN_COMPONENT_H
 #define TITAN_COMPONENT_H
 
-#include <string>
+#include <cmath>
 #include <memory>
+#include <string>
 
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
@@ -22,7 +23,7 @@ namespace studica_control {
 
 class Titan : public rclcpp::Node {
 public:
-    Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, const float &speed);
+    Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &ticksPerRotation, const float &wheel_radius, const float &wheel_separation);
     explicit Titan(const rclcpp::NodeOptions & options);
     ~Titan();
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
@@ -52,16 +53,17 @@ private:
     double left_command_ = 0.0;
     double right_command_ = 0.0;
 
-    double wheel_radius_ = 0.05;
-    double wheel_separation_ = 0.28;
-
     std::string name_;
     uint8_t canID_;
     uint16_t motorFreq_;
+    float ticksPerRotation_;
     float distPerTick_;
-    float speed_;
+    float wheel_radius_;
+    float wheel_separation_;
+   
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
 };
+
 }  // namespace studica_control
 
 #endif  // TITAN_COMPONENT_H

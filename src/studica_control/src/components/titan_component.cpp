@@ -4,9 +4,10 @@ namespace studica_control {
 
 Titan::Titan(const rclcpp::NodeOptions & options) : Node("titan_", options) {}
 
-Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, const float &speed)
-    : Node("titan_"), vmx_(vmx), name_(name), canID_(canID), motorFreq_(motorFreq), distPerTick_(distPerTick), speed_(speed)  {
-    titan_ = std::make_shared<studica_driver::Titan>(name, canID_, motorFreq_, distPerTick_, speed_, vmx_);
+Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &ticksPerRotation, const float &wheel_radius, const float &wheel_separation)
+    : Node("titan_"), vmx_(vmx), name_(name), canID_(canID), motorFreq_(motorFreq), ticksPerRotation_(ticksPerRotation), wheel_radius_(wheel_radius), wheel_separation_(wheel_separation) {
+    distPerTick_ = 2 * M_PI * wheel_radius_ / ticksPerRotation_;
+    titan_ = std::make_shared<studica_driver::Titan>(name, canID_, motorFreq_, distPerTick_, vmx_);
     service_ = this->create_service<studica_control::srv::SetData>(
         "titan_cmd",
         std::bind(&Titan::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
@@ -20,7 +21,7 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
     titan_->Enable(true);
 
     odom_ = std::make_unique<Odometry>();
-    odom_->setWheelParams(wheel_separation_, wheel_radius_);
+    odom_->setWheelParams(wheel_separation_);
     odom_->init(this->now());
     
     odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);

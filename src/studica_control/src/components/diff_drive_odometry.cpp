@@ -11,7 +11,6 @@ heading_(0.0),
 linear_(0.0), 
 angular_(0.0), 
 wheel_separation_(0.0), 
-wheel_radius_(0.0),
 left_wheel_prev_pos_(0.0),
 right_wheel_prev_pos_(0.0),
 velocity_rolling_window_size_(velocity_rolling_window_size),
@@ -77,9 +76,8 @@ void Odometry::resetOdometry() {
     heading_ = 0.0;
 }
 
-void Odometry::setWheelParams(double wheel_separation, double wheel_radius) {
+void Odometry::setWheelParams(float wheel_separation) {
     wheel_separation_ = wheel_separation;
-    wheel_radius_ = wheel_radius;
 }
 
 void Odometry::setVelocityRollingWindowSize(size_t velocity_rolling_window_size) {
