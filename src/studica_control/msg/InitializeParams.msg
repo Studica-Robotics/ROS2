@@ -6,6 +6,9 @@ int32 pin
 int32 n_encoder
 float32 dist_per_tick
 float32 speed
+float32 ticks_per_rotation
+float32 wheel_radius
+float32 wheel_separation
 int32 can_id
 int32 motor_freq
 string servo_type
