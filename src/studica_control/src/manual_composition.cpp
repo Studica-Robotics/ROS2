@@ -5,6 +5,7 @@
 #include "studica_control/imu_component.h"
 #include "studica_control/titan_component.h"
 #include "studica_control/dio_component.h"
+#include "studica_control/mecanum_drive_component.h"
 #include "rclcpp/rclcpp.hpp"
 #include "VMXPi.h"
 #include <studica_control/msg/initialize_params.hpp>
@@ -88,7 +89,13 @@ private:
         } else if (component == "titan") {
             try {
                 auto ip = request->initparams;
-                auto titan_node = std::make_shared<studica_control::Titan>(vmx_, "Titan", ip.can_id, ip.motor_freq, ip.ticks_per_rotation, ip.wheel_radius, ip.wheel_separation);
+                auto titan_node = std::make_shared<studica_control::Titan>(
+                    vmx_, "Titan", 
+                    ip.can_id, 
+                    ip.motor_freq, 
+                    ip.ticks_per_rotation, 
+                    ip.wheel_radius, 
+                    ip.wheel_separation);
                 executor_->add_node(titan_node);
                 component_map[name] = titan_node;
 
@@ -115,6 +122,28 @@ private:
                 response->success = false;
                 response->message = "Failed to create DIO component: " + std::string(e.what());
             }
+        } else if (component == "mecanum") {
+            try {
+                auto ip = request->initparams;
+                auto titan_node = std::make_shared<studica_control::MecanumDrive>(
+                    vmx_, "MecanumDrive", 
+                    ip.can_id, 
+                    ip.motor_freq, 
+                    ip.ticks_per_rotation, 
+                    ip.wheel_radius, 
+                    ip.wheelbase, 
+                    ip.width);
+                executor_->add_node(titan_node);
+                component_map[name] = titan_node;
+
+                response->success = true;
+                response->message = "Mecanum Drive Controller '" + name + "' created successfully.";
+                RCLCPP_INFO(this->get_logger(), "Created MecanumDrive component '%s'.", name.c_str());
+            } catch (const std::exception &e) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to create mecanum drive component: %s", e.what());
+                response->success = false;
+                response->message = "Failed to create mecanum drive component: " + std::string(e.what());
+        }
         } else {
             RCLCPP_WARN(this->get_logger(), "Invalid component type '%s'.", component.c_str());
             response->success = false;
