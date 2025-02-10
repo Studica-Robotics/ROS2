@@ -76,6 +76,7 @@ class Titan
         void InvertMotorDirection(uint8_t motor);
         void InvertMotorRPM(uint8_t motor);
         void InvertEncoderDirection(uint8_t motor);
+        void InvertMotor(uint8_t motor);
  
     private:
         std::shared_ptr<VMXPi> vmx_;
@@ -88,7 +89,6 @@ class Titan
         VMXErrorCode vmxerr;
         bool Write(uint32_t address, const uint8_t* data, int32_t periodMS);
         bool Read(uint32_t address, uint8_t* data);
-        void DisplayVMXError();
         // Motor Flags
         bool invertMotor0 = false;
         bool invertRPM0 = false;
