@@ -4,28 +4,62 @@ namespace studica_control {
 
 MecanumDrive::MecanumDrive(const rclcpp::NodeOptions & options) : Node("mecanum_drive_", options) {}
 
-MecanumDrive::MecanumDrive(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &ticksPerRotation, const float &wheel_radius, const float &wheelbase, const float &width)
-    : Node("titan_"), vmx_(vmx), name_(name), canID_(canID), motorFreq_(motorFreq), ticksPerRotation_(ticksPerRotation), wheel_radius_(wheel_radius), wheelbase_(wheelbase), width_(width) {
+MecanumDrive::MecanumDrive(
+    std::shared_ptr<VMXPi> vmx, 
+    const std::string &name, 
+    const uint8_t &canID, 
+    const uint16_t &motorFreq, 
+    const float &ticksPerRotation, 
+    const float &wheel_radius, 
+    const float &wheelbase, 
+    const float &width,
+    const uint8_t &front_left,
+    const uint8_t &front_right,
+    const uint8_t &rear_left,
+    const uint8_t &rear_right,
+    const bool &invert_front_left,
+    const bool &invert_front_right,
+    const bool &invert_rear_left,
+    const bool &invert_rear_right)
+    : Node("titan_"), 
+      vmx_(vmx), 
+      name_(name), 
+      canID_(canID), 
+      motorFreq_(motorFreq), 
+      ticksPerRotation_(ticksPerRotation), 
+      wheel_radius_(wheel_radius), 
+      wheelbase_(wheelbase), 
+      width_(width),
+      fl_(front_left),
+      fr_(front_right),
+      rl_(rear_left),
+      rr_(rear_right) {
+
     distPerTick_ = 2 * M_PI * wheel_radius_ / ticksPerRotation_;
     titan_ = std::make_shared<studica_driver::Titan>(name, canID_, motorFreq_, distPerTick_, vmx_);
     service_ = this->create_service<studica_control::srv::SetData>(
         "titan_cmd",
         std::bind(&MecanumDrive::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
     
-    titan_->ConfigureEncoder(0, distPerTick_);
-    titan_->ConfigureEncoder(1, distPerTick_);
-    titan_->ConfigureEncoder(2, distPerTick_);
-    titan_->ConfigureEncoder(3, distPerTick_);
+    titan_->ConfigureEncoder(fl_, distPerTick_);
+    titan_->ConfigureEncoder(fr_, distPerTick_);
+    titan_->ConfigureEncoder(rl_, distPerTick_);
+    titan_->ConfigureEncoder(rr_, distPerTick_);
 
-    titan_->ResetEncoder(0);
-    titan_->ResetEncoder(1);
-    titan_->ResetEncoder(2);
-    titan_->ResetEncoder(3);
+    titan_->ResetEncoder(fl_);
+    titan_->ResetEncoder(fr_);
+    titan_->ResetEncoder(rl_);
+    titan_->ResetEncoder(rr_);
+
+    if (invert_front_left) titan_->InvertMotor(fl_);
+    if (invert_front_right) titan_->InvertMotor(fr_);
+    if (invert_rear_left) titan_->InvertMotor(rl_);
+    if (invert_rear_right) titan_->InvertMotor(rr_);
 
     titan_->Enable(true);
 
     odom_ = std::make_unique<MecanumOdometry>();
-    odom_->setWheelParams(20, 10);
+    odom_->setWheelParams(wheelbase_, width_);
     
     odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
     tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
@@ -56,10 +90,10 @@ void MecanumDrive::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr m
     double rear_left = x_vel + y_vel - angular * (wheelbase_ + width_);
     double rear_right = x_vel - y_vel + angular * (wheelbase_ + width_);
 
-    titan_->SetSpeed(0, front_left);
-    titan_->SetSpeed(1, -1.0 * front_right);
-    titan_->SetSpeed(2, rear_left);
-    titan_->SetSpeed(3, -1.0 * rear_right);
+    titan_->SetSpeed(fl_, front_left);
+    titan_->SetSpeed(fr_, front_right);
+    titan_->SetSpeed(rl_, rear_left);
+    titan_->SetSpeed(rr_, rear_right);
 }
 
 void MecanumDrive::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
@@ -114,10 +148,10 @@ void MecanumDrive::cmd(std::string params, std::shared_ptr<studica_control::srv:
 }
 
 void MecanumDrive::publish_odometry() {
-    double front_left = titan_->GetEncoderDistance(0);
-    double front_right = -1.0 * titan_->GetEncoderDistance(1);
-    double rear_left = titan_->GetEncoderDistance(2);
-    double rear_right = -1.0 * titan_->GetEncoderDistance(3);
+    double front_left = titan_->GetEncoderDistance(fl_);
+    double front_right = titan_->GetEncoderDistance(fr_);
+    double rear_left = titan_->GetEncoderDistance(rl_);
+    double rear_right = titan_->GetEncoderDistance(rr_);
 
     auto current_time = this->now();
 

@@ -125,16 +125,24 @@ private:
         } else if (component == "mecanum") {
             try {
                 auto ip = request->initparams;
-                auto titan_node = std::make_shared<studica_control::MecanumDrive>(
+                auto mecanum_node = std::make_shared<studica_control::MecanumDrive>(
                     vmx_, "MecanumDrive", 
                     ip.can_id, 
                     ip.motor_freq, 
                     ip.ticks_per_rotation, 
                     ip.wheel_radius, 
                     ip.wheelbase, 
-                    ip.width);
-                executor_->add_node(titan_node);
-                component_map[name] = titan_node;
+                    ip.width,
+                    ip.front_left,
+                    ip.front_right,
+                    ip.rear_left,
+                    ip.rear_right,
+                    ip.invert_front_left,
+                    ip.invert_front_right,
+                    ip.invert_rear_left,
+                    ip.invert_rear_right);
+                executor_->add_node(mecanum_node);
+                component_map[name] = mecanum_node;
 
                 response->success = true;
                 response->message = "Mecanum Drive Controller '" + name + "' created successfully.";

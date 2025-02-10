@@ -115,6 +115,8 @@ target_link_libraries(mecanum_drive_component
 )
 
 install(TARGETS 
+  diff_drive_odometry
+  mecanum_drive_odometry
   encoder_component
   servo_component
   ultrasonic_component
@@ -124,9 +126,9 @@ install(TARGETS
   imu_component
   dio_component
   mecanum_drive_component
-  ARCHIVE DESTINATION /usr/local/lib/studica_control
-  LIBRARY DESTINATION /usr/local/lib/studica_control
-  RUNTIME DESTINATION /usr/local/bin/studica_control
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
@@ -164,6 +166,11 @@ install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp/
 install(
   DIRECTORY include/
   DESTINATION /usr/local/include/studica_control
+)
+
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}
 )
 
 ament_export_include_directories(include)

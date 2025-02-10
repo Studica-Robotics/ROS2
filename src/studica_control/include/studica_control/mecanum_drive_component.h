@@ -16,14 +16,31 @@
 #include "studica_control/srv/set_data.hpp"
 #include "titan.h"
 #include "VMXManager.h"
-#include "VMXPi.h"  
+#include "VMXPi.h"
 
 
 namespace studica_control {
 
 class MecanumDrive : public rclcpp::Node {
 public:
-    MecanumDrive(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &ticksPerRotation, const float &wheel_radius, const float &wheelbase, const float &width);
+    MecanumDrive(
+        std::shared_ptr<VMXPi> vmx,
+        const std::string &name,
+        const uint8_t &canID,
+        const uint16_t &motorFreq,
+        const float &ticksPerRotation,
+        const float &wheel_radius,
+        const float &wheelbase,
+        const float &width,
+        const uint8_t &front_left,
+        const uint8_t &front_right,
+        const uint8_t &rear_left,
+        const uint8_t &rear_right,
+        const bool &invert_front_left,
+        const bool &invert_front_right,
+        const bool &invert_rear_left,
+        const bool &invert_rear_right
+    );
     explicit MecanumDrive(const rclcpp::NodeOptions & options);
     ~MecanumDrive();
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
@@ -58,6 +75,10 @@ private:
     float wheel_radius_;
     float wheelbase_;
     float width_;
+    uint8_t fl_;
+    uint8_t fr_;
+    uint8_t rl_;
+    uint8_t rr_;
    
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
 };

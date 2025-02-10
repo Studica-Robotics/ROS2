@@ -16,3 +16,11 @@ int32 motor_freq
 string servo_type
 int32 port_a
 int32 port_b
+int32 front_left
+int32 front_right
+int32 rear_left
+int32 rear_right
+bool invert_front_left
+bool invert_front_right
+bool invert_rear_left
+bool invert_rear_right

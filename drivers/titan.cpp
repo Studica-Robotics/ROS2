@@ -2,11 +2,6 @@
 
 using namespace studica_driver;
 
-void Titan::DisplayVMXError()
-{
-    //const char *p_err_description = GetVMXErrorString(vmxerr);
-    //printf("VMXError &d: %s\n", vmxerr, p_err_description);
-}
  
 Titan::Titan(const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, std::shared_ptr<VMXPi> vmx)
     : vmx_(vmx), canID_(canID), motorFreq_(motorFreq), distPerTick_(distPerTick)
@@ -18,7 +13,6 @@ Titan::Titan(const std::string &name, const uint8_t &canID, const uint16_t &moto
             if(!vmx_->can.OpenReceiveStream(canrxhandle, 0x0, 0x0, 100, &vmxerr))
             {
                 printf("Error opening CAN RX Stream 0.\n");
-                DisplayVMXError();
             }
             else
             {
@@ -30,13 +24,11 @@ Titan::Titan(const std::string &name, const uint8_t &canID, const uint16_t &moto
                 else
                 {
                     printf("Error Enabling Blackboard on Stream 0.\n");
-                    DisplayVMXError();
                 }
             }
             if (!vmx_->can.FlushRxFIFO(&vmxerr))
             {
                 printf("Error Flushing CAN RX FIFO.\n");
-                DisplayVMXError();
             }
             else
             {
@@ -46,7 +38,6 @@ Titan::Titan(const std::string &name, const uint8_t &canID, const uint16_t &moto
             if (!vmx_->can.FlushTxFIFO(&vmxerr))
             {
                 printf("Error Flushing CAN TX FIFO.\n");
-                DisplayVMXError();
             }
             else
             {
@@ -56,7 +47,6 @@ Titan::Titan(const std::string &name, const uint8_t &canID, const uint16_t &moto
             if (!vmx_->can.SetMode(VMXCAN::VMXCAN_NORMAL, &vmxerr))
             {
                 printf("Error setting CAN Mode to Normal\n");
-                DisplayVMXError();
             }
             else
             {
@@ -115,7 +105,6 @@ bool Titan::Write(uint32_t address, const uint8_t* data, int32_t periodMS)
     msg.messageID = address;
     if (!vmx_->can.SendMessage(msg, periodMS, &vmxerr))
     {
-        DisplayVMXError();
         return false;
     }
     return true;
@@ -128,7 +117,6 @@ bool Titan::Read(uint32_t address, uint8_t* data)
     uint64_t sys_timestamp; // We could allow the user to read the timestamp to in future
     if (!vmx_->can.GetBlackboardEntry(canrxhandle, address, blackboard_msg, sys_timestamp, already_retrieved, &vmxerr))
     {
-        DisplayVMXError();
         return false;
     }
     else
@@ -487,22 +475,29 @@ void Titan::InvertMotorRPM(uint8_t motor)
     }
 }
  
-void Titan::InvertEncoderDirection(uint8_t encoder)
+void Titan::InvertEncoderDirection(uint8_t motor)
 {
-    if (encoder == 0)
+    if (motor == 0)
     {
         invertEncoder0 = true;
     }
-    if (encoder == 1)
+    if (motor == 1)
     {
         invertEncoder1 = true;
     }
-    if (encoder == 2)
+    if (motor == 2)
     {
         invertEncoder2 = true;
     }
-    if (encoder == 3)
+    if (motor == 3)
     {
         invertEncoder3 = true;
     }
+}
+
+void Titan::InvertMotor(uint8_t motor)
+{
+    InvertMotorDirection(motor);
+    InvertMotorRPM(motor);
+    InvertEncoderDirection(motor);
 }
