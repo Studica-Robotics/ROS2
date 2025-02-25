@@ -1,6 +1,8 @@
 #include "servo.h"
 using namespace studica_driver;
 
+//test
+
 Servo::Servo(VMXChannelIndex port, ServoType type, int min, int max, std::shared_ptr<VMXPi> vmx) 
     : port_(port), type_(type), min_(min), max_(max), vmx_(vmx), prev_pwm_servo_value_(min - 1) {
     if (port <= 21) {
