@@ -2,14 +2,9 @@
 
 using namespace studica_driver;
 
-void Titan::DisplayVMXError()
-{
-    //const char *p_err_description = GetVMXErrorString(vmxerr);
-    //printf("VMXError &d: %s\n", vmxerr, p_err_description);
-}
  
-Titan::Titan(const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, const float &speed, std::shared_ptr<VMXPi> vmx)
-    : vmx_(vmx), canID_(canID), motorFreq_(motorFreq), distPerTick_(distPerTick), speed_(speed)
+Titan::Titan(const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, std::shared_ptr<VMXPi> vmx)
+    : vmx_(vmx), canID_(canID), motorFreq_(motorFreq), distPerTick_(distPerTick)
 {
     try
     {
@@ -18,7 +13,6 @@ Titan::Titan(const std::string &name, const uint8_t &canID, const uint16_t &moto
             if(!vmx_->can.OpenReceiveStream(canrxhandle, 0x0, 0x0, 100, &vmxerr))
             {
                 printf("Error opening CAN RX Stream 0.\n");
-                DisplayVMXError();
             }
             else
             {
@@ -30,13 +24,11 @@ Titan::Titan(const std::string &name, const uint8_t &canID, const uint16_t &moto
                 else
                 {
                     printf("Error Enabling Blackboard on Stream 0.\n");
-                    DisplayVMXError();
                 }
             }
             if (!vmx_->can.FlushRxFIFO(&vmxerr))
             {
                 printf("Error Flushing CAN RX FIFO.\n");
-                DisplayVMXError();
             }
             else
             {
@@ -46,7 +38,6 @@ Titan::Titan(const std::string &name, const uint8_t &canID, const uint16_t &moto
             if (!vmx_->can.FlushTxFIFO(&vmxerr))
             {
                 printf("Error Flushing CAN TX FIFO.\n");
-                DisplayVMXError();
             }
             else
             {
@@ -56,7 +47,6 @@ Titan::Titan(const std::string &name, const uint8_t &canID, const uint16_t &moto
             if (!vmx_->can.SetMode(VMXCAN::VMXCAN_NORMAL, &vmxerr))
             {
                 printf("Error setting CAN Mode to Normal\n");
-                DisplayVMXError();
             }
             else
             {
@@ -115,7 +105,6 @@ bool Titan::Write(uint32_t address, const uint8_t* data, int32_t periodMS)
     msg.messageID = address;
     if (!vmx_->can.SendMessage(msg, periodMS, &vmxerr))
     {
-        DisplayVMXError();
         return false;
     }
     return true;
@@ -128,7 +117,6 @@ bool Titan::Read(uint32_t address, uint8_t* data)
     uint64_t sys_timestamp; // We could allow the user to read the timestamp to in future
     if (!vmx_->can.GetBlackboardEntry(canrxhandle, address, blackboard_msg, sys_timestamp, already_retrieved, &vmxerr))
     {
-        DisplayVMXError();
         return false;
     }
     else
@@ -487,76 +475,29 @@ void Titan::InvertMotorRPM(uint8_t motor)
     }
 }
  
-void Titan::InvertEncoderDirection(uint8_t encoder)
+void Titan::InvertEncoderDirection(uint8_t motor)
 {
-    if (encoder == 0)
+    if (motor == 0)
     {
         invertEncoder0 = true;
     }
-    if (encoder == 1)
+    if (motor == 1)
     {
         invertEncoder1 = true;
     }
-    if (encoder == 2)
+    if (motor == 2)
     {
         invertEncoder2 = true;
     }
-    if (encoder == 3)
+    if (motor == 3)
     {
         invertEncoder3 = true;
     }
 }
- 
-// int main(int argc, char *argv[])
-// {
-//     Titan titan(42, 15600);
-//     std::this_thread::sleep_for(std::chrono::milliseconds((int64_t)(1.0 * 1000))); //Req after config of titan
- 
-//     printf("Serial Number: %s\n", titan.GetSerialNumber().c_str());
-//     printf("Firmware Version: %s\n", titan.GetFirmwareVersion().c_str());
-//     printf("Hardware Version: %s\n", titan.GetHardwareVersion().c_str());
-    
-//     titan.ConfigureEncoder(0, 0.0006830601); //1464 = 1 rotation
-//     titan.ConfigureEncoder(1, 0.0006830601);
-//     titan.ConfigureEncoder(2, 0.0006830601);
-//     titan.ConfigureEncoder(3, 0.0006830601);
-    
-//     titan.ResetEncoder(0);
-//     titan.ResetEncoder(1);
-//     titan.ResetEncoder(2);
-//     titan.ResetEncoder(3);
- 
-//     // These are flags to be uncommented as needed
-//     // titan.InvertEncoderDirection(0);
-//     // titan.InvertEncoderDirection(1);
-//     // titan.InvertEncoderDirection(2);
-//     // titan.InvertEncoderDirection(3);
- 
-//     // titan.InvertMotorDirection(0);
-//     // titan.InvertMotorDirection(1);
-//     // titan.InvertMotorDirection(2);
-//     // titan.InvertMotorDirection(3);
- 
-//     // titan.InvertMotorRPM(0);
-//     // titan.InvertMotorRPM(1);
-//     // titan.InvertMotorRPM(2);
-//     // titan.InvertMotorRPM(3);
- 
-//     titan.Enable(true);
-    
-//     for(int i = 0; i < 10; i++)
-//     {
-//         std::this_thread::sleep_for(std::chrono::milliseconds((int64_t)(2.0 * 1000)));
-//         titan.SetSpeed(0, 0.8);
-//         titan.SetSpeed(1, 0.8);
-//         titan.SetSpeed(2, 0.8);
-//         titan.SetSpeed(3, 0.8);
-//         printf("Encoder 0 Distance: %f, RPM: %d, Raw: %i\n", titan.GetEncoderDistance(0), titan.GetRPM(0), titan.GetEncoderCount(0));
-//         printf("Encoder 1 Distance: %f, RPM: %d, Raw: %i\n", titan.GetEncoderDistance(1), titan.GetRPM(1), titan.GetEncoderCount(1));
-//         printf("Encoder 2 Distance: %f, RPM: %d, Raw: %i\n", titan.GetEncoderDistance(2), titan.GetRPM(2), titan.GetEncoderCount(2));
-//         printf("Encoder 3 Distance: %f, RPM: %d, Raw: %i\n", titan.GetEncoderDistance(3), titan.GetRPM(3), titan.GetEncoderCount(3));
-//     }
- 
-//     titan.Enable(false);
-//     std::this_thread::sleep_for(std::chrono::milliseconds((int64_t)(5.0 * 1000))); //This Delay is just to check if the Titan does disable
-// }
+
+void Titan::InvertMotor(uint8_t motor)
+{
+    InvertMotorDirection(motor);
+    InvertMotorRPM(motor);
+    InvertEncoderDirection(motor);
+}

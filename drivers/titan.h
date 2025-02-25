@@ -55,7 +55,7 @@ namespace studica_driver
 class Titan
 {
     public:
-        Titan(const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, const float &speed, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
+        Titan(const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
         ~Titan();
         void Enable(bool enable);
         void SetupEncoder(uint8_t encoder);
@@ -76,6 +76,7 @@ class Titan
         void InvertMotorDirection(uint8_t motor);
         void InvertMotorRPM(uint8_t motor);
         void InvertEncoderDirection(uint8_t motor);
+        void InvertMotor(uint8_t motor);
  
     private:
         std::shared_ptr<VMXPi> vmx_;
@@ -83,13 +84,11 @@ class Titan
         uint16_t motorFreq_;
         uint8_t nEncoder_;
         float distPerTick_;
-        float speed_;
 
         VMXCANReceiveStreamHandle canrxhandle = 0;
         VMXErrorCode vmxerr;
         bool Write(uint32_t address, const uint8_t* data, int32_t periodMS);
         bool Read(uint32_t address, uint8_t* data);
-        void DisplayVMXError();
         // Motor Flags
         bool invertMotor0 = false;
         bool invertRPM0 = false;

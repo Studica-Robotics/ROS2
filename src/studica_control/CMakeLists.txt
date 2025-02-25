@@ -5,18 +5,20 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(ament_index_cpp REQUIRED)
-find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
-find_package(rclcpp_components REQUIRED) # for rclcpp_components
+find_package(rclcpp_components REQUIRED)
 find_package(rcutils REQUIRED)
-find_package(std_msgs REQUIRED)
-find_package(std_srvs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(rosidl_typesupport_c REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files (srv, msg, action)
   "msg/InitializeParams.msg"
@@ -41,11 +43,33 @@ set(studica_control_HDRS
   include/studica_control/cobra_component.h
   include/studica_control/imu_component.h
   include/studica_control/dio_component.h
+  include/studica_control/mecanum_drive_component.h
 )
 
-set(dependencies "ament_index_cpp" "sensor_msgs" "rclcpp_components" "rclcpp" "rclcpp_action" "std_msgs" "std_srvs")
+set(dependencies 
+  "ament_index_cpp" 
+  "nav_msgs"
+  "rclcpp" 
+  "rclcpp_action"
+  "rclcpp_components" 
+  "sensor_msgs"  
+  "std_msgs" 
+  "std_srvs" 
+  "tf2"
+  "tf2_ros"
+)
 
-# Define components as shared libraries
+add_library(diff_drive_odometry SHARED
+  src/components/diff_drive_odometry.cpp
+)
+
+add_library(mecanum_drive_odometry SHARED
+  src/components/mecanum_drive_odometry.cpp
+)
+
+ament_target_dependencies(diff_drive_odometry ${dependencies})
+ament_target_dependencies(mecanum_drive_odometry ${dependencies})
+
 add_library(encoder_component SHARED src/components/encoder_component.cpp)
 ament_target_dependencies(encoder_component ${dependencies})
 rclcpp_components_register_nodes(encoder_component "studica_control::encoder")
@@ -78,8 +102,21 @@ add_library(dio_component SHARED src/components/dio_component.cpp)
 ament_target_dependencies(dio_component ${dependencies})
 rclcpp_components_register_nodes(dio_component "studica_control::DIO")
 
-# Install components
+add_library(mecanum_drive_component SHARED src/components/mecanum_drive_component.cpp)
+ament_target_dependencies(mecanum_drive_component ${dependencies})
+rclcpp_components_register_nodes(mecanum_drive_component "studica_control::MecanumDrive")
+
+target_link_libraries(titan_component
+  diff_drive_odometry
+)
+
+target_link_libraries(mecanum_drive_component
+  mecanum_drive_odometry
+)
+
 install(TARGETS 
+  diff_drive_odometry
+  mecanum_drive_odometry
   encoder_component
   servo_component
   ultrasonic_component
@@ -88,16 +125,12 @@ install(TARGETS
   titan_component
   imu_component
   dio_component
-  # ARCHIVE DESTINATION lib
-  # LIBRARY DESTINATION lib
-  # RUNTIME DESTINATION bin
-
- ARCHIVE DESTINATION /usr/local/lib/studica_control
- LIBRARY DESTINATION /usr/local/lib/studica_control
- RUNTIME DESTINATION /usr/local/bin/studica_control
+  mecanum_drive_component
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
-# Executables
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 
 add_executable(manual_composition src/manual_composition.cpp)
@@ -110,62 +143,19 @@ target_link_libraries(manual_composition
   titan_component
   imu_component
   dio_component
+  mecanum_drive_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
   /usr/local/lib/studica_drivers/libstudica_drivers.so
 )
 ament_target_dependencies(manual_composition ${dependencies})
 target_link_libraries(manual_composition "${cpp_typesupport_target}")
 
-# Install executable
+
 install(TARGETS
   manual_composition
   DESTINATION lib/${PROJECT_NAME}
 )
 
-add_executable(manual_composition2 src/manual_composition2.cpp)
-target_link_libraries(manual_composition2 
-  encoder_component
-  servo_component
-  ultrasonic_component
-  sharp_component
-  cobra_component
-  titan_component
-  imu_component
-  dio_component
-  /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
-  /usr/local/lib/studica_drivers/libstudica_drivers.so
-)
-ament_target_dependencies(manual_composition2 ${dependencies})
-target_link_libraries(manual_composition2 "${cpp_typesupport_target}")
-
-# Install executable
-install(TARGETS
-  manual_composition2
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-# # Component test executable
-# add_executable(comp_test src/comp_test.cpp)
-# target_link_libraries(comp_test 
-#   encoder_component
-#   servo_component
-#   sharp_component
-#   cobra_component
-#   titan_component
-#   dio_component
-#   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
-#   /usr/local/lib/studica_drivers/libstudica_drivers.so
-# )
-# ament_target_dependencies(comp_test ${dependencies})
-# target_link_libraries(comp_test "${cpp_typesupport_target}")
-
-
-# install(TARGETS
-#   comp_test
-#   DESTINATION lib/${PROJECT_NAME}
-# )
-
-# Install include files and generated headers
 install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION include/${PROJECT_NAME}
 )
@@ -173,14 +163,16 @@ install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp/
   DESTINATION include/${PROJECT_NAME}
 )
 
-# Install headers
 install(
   DIRECTORY include/
   DESTINATION /usr/local/include/studica_control
 )
 
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}
+)
 
-# Export package information
 ament_export_include_directories(include)
 ament_export_libraries(
   encoder_component 
@@ -190,10 +182,10 @@ ament_export_libraries(
   cobra_component 
   titan_component
   dio_component
+  mecanum_drive_component
 )
 ament_export_dependencies(${dependencies})
 
-# Set RPATH
 set(CMAKE_INSTALL_RPATH "/usr/local/lib/studica_drivers")
 
 ament_package()
