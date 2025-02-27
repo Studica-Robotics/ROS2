@@ -6,7 +6,7 @@ This guide provides an overview of the components and libraries used in Apollo C
 
 ### ROS2 Packages
 * **ROS2 Control**
-    * Drive control package. Provides drive controller for differential drive and mecanum drive (coming soon to humble). Used in  [Studica ROS2 Examples](https://github.com/Studica-Robotics/ROS2-Examples). The ROS2 controller listens to `/cmd_vel` topic to move the robot, enabling communication between navigation nodes like NAV2 and m-explore. 
+    * Drive control package. Provides drive controller for differential drive and mecanum drive. The ROS2 controller listens to `/cmd_vel` topic to move the robot, enabling communication between navigation nodes like NAV2 and m-explore. 
 * **SLAM**
     * Mapping node. Used alongside lidar node, listens to `/scan` data topic. Creates a 2D map, updates the `/map` topic. Provides capa to load and save maps.
 * **NAV2**
@@ -126,7 +126,7 @@ cd ../../../
 **Note:**
 * Depending on the type of lidar you use, replace the ydlidar.yaml file at `ydlidar_ros2_driver/params/ydlidar.yaml` before building.
 * Yellow LiDAR: Change ydliar.yaml to X2.yaml in `ydlidar_launch_view.py`.
-* Black LiDAR: Change ydliar.yaml to TminiPro.yaml in `ydlidar_launch_view.py`. (Ask James if it doesn't work)
+* Black LiDAR: Change ydliar.yaml to TminiPro.yaml in `ydlidar_launch_view.py`. 
 
 
 ## Controller
