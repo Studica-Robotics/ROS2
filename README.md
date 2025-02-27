@@ -1,5 +1,5 @@
 # ROS2
-This repository provides the essential driver library and dependency sources required. (Requires [VMXPI Library](https://example.com) installed)
+This repository provides the essential driver library and dependency sources required. (Requires the [Ubuntu VMXPI Library](https://docs.dev.studica.com/en/latest/docs/VMX/os-images.html) installed)
 
 
 ## Driver library
