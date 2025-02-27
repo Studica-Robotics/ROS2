@@ -1,5 +1,6 @@
 # Studica Device VMX drivers
 ## Build and install
+* Once in the drivers folder of ROS2:
 ``` bash
 make
 make install
@@ -7,7 +8,13 @@ make clean
 ```
 
 ## Dependencies
-* [VMX Hal CPP Library](https://github.com/Studica-Robotics/ubuntu/tree/main/hal/hal_cpp)
+* Run imu example to ensure all dependencies are installed
+```bash
+cd examples/imu_example
+make
+sudo su
+./imu_example
+```
 
 ## Compile and run examples
 ``` bash
