@@ -5,7 +5,7 @@
 
 int main(int argc, char *argv[])
 {
-    studica_driver::Titan titan("ttn1", (uint8_t)45, (uint16_t)15600, (float)0.0006830601, (float)0.8);
+    studica_driver::Titan titan("ttn1", (uint8_t)45, (uint16_t)15600, (float)0.0006830601);
     std::this_thread::sleep_for(std::chrono::milliseconds((int64_t)(1.0 * 1000))); //Req after config of titan
 
     printf("Serial Number: %s\n", titan.GetSerialNumber().c_str());
