@@ -12,8 +12,7 @@ make clean
 ```bash
 cd examples/imu_example
 make
-sudo su
-./imu_example
+sudo ./imu_example
 ```
 
 ## Compile and run examples
