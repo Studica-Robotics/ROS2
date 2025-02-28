@@ -1,8 +1,8 @@
 #include "pwm.h"
 using namespace studica_driver;
 
-PWM::PWM(VMXChannelIndex port, ServoType type, int min, int max, std::shared_ptr<VMXPi> vmx) 
-    : port_(port), type_(type), min_(min), max_(max), vmx_(vmx), prev_pwm_servo_value_(min - 1) {
+PWM::PWM(VMXChannelIndex port, PWMType type, int min, int max, std::shared_ptr<VMXPi> vmx) 
+    : port_(port), type_(type), min_(min), max_(max), vmx_(vmx), prev_pwm_pwm_value_(min - 1) {
     if (port <= 21) {
         PWMGeneratorConfig pwmgen_cfg(50);  // 50Hz for servos
         pwmgen_cfg.SetMaxDutyCycleValue(5000);  // Set PWM precision for better accuracy
