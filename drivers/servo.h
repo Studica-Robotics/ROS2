@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <memory>
 #include "VMXPi.h"
+#include "pwm.h"
 
 namespace studica_driver {
 
@@ -22,19 +23,7 @@ public:
     void SetSpeed(int speed);
 
 private:
-    VMXChannelIndex port_;
-    ServoType type_;
-    int min_;
-    int max_;
-    std::shared_ptr<VMXPi> vmx_;
-    VMXResourceHandle pwm_res_handle_;
-    int min_us_;
-    int max_us_;
-    int center_us_;
     int prev_pwm_servo_value_;
-
-    int Map(int value);
-    void DisplayVMXError(VMXErrorCode vmxerr);
 };
 
 }

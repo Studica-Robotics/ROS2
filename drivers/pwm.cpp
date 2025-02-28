@@ -1,7 +1,7 @@
-#include "servo.h"
+#include "pwm.h"
 using namespace studica_driver;
 
-Servo::Servo(VMXChannelIndex port, ServoType type, int min, int max, std::shared_ptr<VMXPi> vmx) 
+PWM::PWM(VMXChannelIndex port, ServoType type, int min, int max, std::shared_ptr<VMXPi> vmx) 
     : port_(port), type_(type), min_(min), max_(max), vmx_(vmx), prev_pwm_servo_value_(min - 1) {
     if (port <= 21) {
         PWMGeneratorConfig pwmgen_cfg(50);  // 50Hz for servos
@@ -21,7 +21,7 @@ Servo::Servo(VMXChannelIndex port, ServoType type, int min, int max, std::shared
     }
 }
 
-Servo::~Servo() {
+PWM::~PWM() {
     VMXErrorCode vmxerr;
     if (!vmx_->io.DeallocateResource(pwm_res_handle_, &vmxerr)) {
         printf("Failed to deallocate PWMGenerator Resource %d\n", port_);
@@ -31,48 +31,20 @@ Servo::~Servo() {
     }
 }
 
-void Servo::SetBounds(double min, double center, double max) {
+void PWM::SetBounds(double min, double center, double max) {
     min_us_ = static_cast<int>((min / 20) * 5000);
     center_us_ = static_cast<int>((center / 20) * 5000);
     max_us_ = static_cast<int>((max / 20) * 5000);
 }
 
-int Servo::Map(int value) {
+int PWM::Map(int value) {
     printf("Min: %d Max: %d Min_us: %d Max_us: %d\n", min_, max_, min_us_, max_us_);
     if (value < min_) value = min_;
     if (value > max_) value = max_;
     return static_cast<int>((value - min_) * (max_us_ - min_us_) / (max_ - min_) + min_us_);
 }
 
-void Servo::SetAngle(int angle) {
-    if (prev_pwm_servo_value_ != angle) {
-        VMXErrorCode vmxerr;
-        bool success = vmx_->io.PWMGenerator_SetDutyCycle(pwm_res_handle_, port_, Map(angle), &vmxerr);
-        prev_pwm_servo_value_ = angle;
-        if (!success) { 
-            printf("Failed to set duty cycle for servo on port %d\n", port_);
-            DisplayVMXError(vmxerr);
-        } else {
-            printf("PWM Duty cycle set on port %d at %d\n", port_, angle);
-        }
-    }
-}
-
-void Servo::SetSpeed(int speed) {
-    if (prev_pwm_servo_value_ != speed) {
-        VMXErrorCode vmxerr;
-        bool success = vmx_->io.PWMGenerator_SetDutyCycle(pwm_res_handle_, port_, Map(speed), &vmxerr);
-        prev_pwm_servo_value_ = speed;
-        if (!success) { 
-            printf("Failed to set duty cycle for servo on port %d\n", port_);
-            DisplayVMXError(vmxerr);
-        } else {
-            printf("PWM Duty cycle set on port %d at %d\n", port_, speed);
-        }
-    }
-}
-
-void Servo::DisplayVMXError(VMXErrorCode vmxerr) 
+void PWM::DisplayVMXError(VMXErrorCode vmxerr) 
 {
     const char* p_err_description = GetVMXErrorString(vmxerr);
     printf("VMXError %d: %s\n", vmxerr, p_err_description);

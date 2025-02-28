@@ -3,46 +3,23 @@ using namespace studica_driver;
 
 Servo::Servo(VMXChannelIndex port, ServoType type, int min, int max, std::shared_ptr<VMXPi> vmx) 
     : port_(port), type_(type), min_(min), max_(max), vmx_(vmx), prev_pwm_servo_value_(min - 1) {
-    if (port <= 21) {
-        PWMGeneratorConfig pwmgen_cfg(50);  // 50Hz for servos
-        pwmgen_cfg.SetMaxDutyCycleValue(5000);  // Set PWM precision for better accuracy
-        VMXErrorCode vmxerr;
-        bool success = vmx_->io.ActivateSinglechannelResource(VMXChannelInfo(port_, VMXChannelCapability::PWMGeneratorOutput), 
-                                                              &pwmgen_cfg, pwm_res_handle_, &vmxerr);
+
         SetBounds(0.5, 1.5, 2.5);
-        if (!success) {
-            printf("Failed to initialize servo for port %d\n", port_);
-            DisplayVMXError(vmxerr);
+        if (port <= 21) {
+            printf("Successfully initialized port %d as a servo output\n", port);
         } else {
-            printf("Successfully initialized port %d as a servo output\n", port_);
+            printf("Port %d is not a valid servo port!\n", port);
         }
-    } else {
-        printf("Port %d is not a valid servo port!\n", port_);
-    }
 }
 
 Servo::~Servo() {
-    VMXErrorCode vmxerr;
-    if (!vmx_->io.DeallocateResource(pwm_res_handle_, &vmxerr)) {
-        printf("Failed to deallocate PWMGenerator Resource %d\n", port_);
-        DisplayVMXError(vmxerr);
-    } else {
-        printf("Deallocated PWMGenerator Resource %d\n", port_);
-    }
+    printf("Servo on port %d deconstructed.\n", port_);
 }
 
 void Servo::SetBounds(double min, double center, double max) {
-    min_us_ = static_cast<int>((min / 20) * 5000);
-    center_us_ = static_cast<int>((center / 20) * 5000);
-    max_us_ = static_cast<int>((max / 20) * 5000);
+    PWM::SetBounds(min, center, max);
 }
 
-int Servo::Map(int value) {
-    printf("Min: %d Max: %d Min_us: %d Max_us: %d\n", min_, max_, min_us_, max_us_);
-    if (value < min_) value = min_;
-    if (value > max_) value = max_;
-    return static_cast<int>((value - min_) * (max_us_ - min_us_) / (max_ - min_) + min_us_);
-}
 
 void Servo::SetAngle(int angle) {
     if (prev_pwm_servo_value_ != angle) {
@@ -70,10 +47,4 @@ void Servo::SetSpeed(int speed) {
             printf("PWM Duty cycle set on port %d at %d\n", port_, speed);
         }
     }
-}
-
-void Servo::DisplayVMXError(VMXErrorCode vmxerr) 
-{
-    const char* p_err_description = GetVMXErrorString(vmxerr);
-    printf("VMXError %d: %s\n", vmxerr, p_err_description);
 }
