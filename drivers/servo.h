@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <memory>
 #include "VMXPi.h"
+#include "pwm.h"
 
 namespace studica_driver {
 
@@ -13,28 +14,17 @@ enum class ServoType {
     Linear
 };
 
-class Servo {
+class Servo : public PWM {
 public:
-    Servo(VMXChannelIndex port, ServoType type, int min = -150, int max = 150, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
+    Servo(VMXChannelIndex port, ServoType type, int min = -150, int max = 150, 
+          std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
     ~Servo();
     void SetBounds(double min, double center, double max);
     void SetAngle(int angle);
     void SetSpeed(int speed);
 
 private:
-    VMXChannelIndex port_;
-    ServoType type_;
-    int min_;
-    int max_;
-    std::shared_ptr<VMXPi> vmx_;
-    VMXResourceHandle pwm_res_handle_;
-    int min_us_;
-    int max_us_;
-    int center_us_;
     int prev_pwm_servo_value_;
-
-    int Map(int value);
-    void DisplayVMXError(VMXErrorCode vmxerr);
 };
 
 }

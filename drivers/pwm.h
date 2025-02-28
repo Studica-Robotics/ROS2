@@ -18,10 +18,8 @@ public:
     PWM(VMXChannelIndex port, PWMType type, int min = -150, int max = 150, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
     ~PWM();
     void SetBounds(double min, double center, double max);
-    void SetAngle(int angle);
-    void SetSpeed(int speed);
 
-private:
+protected:
     VMXChannelIndex port_;
     PWMType type_;
     int min_;
