@@ -2,7 +2,7 @@
 using namespace studica_driver;
 
 Servo::Servo(VMXChannelIndex port, ServoType type, int min, int max, std::shared_ptr<VMXPi> vmx) 
-    : port_(port), type_(type), min_(min), max_(max), vmx_(vmx), prev_pwm_servo_value_(min - 1) {
+        : PWM(port, PWMType::Standard, min, max, vmx), prev_pwm_servo_value_(min - 1) {
 
         SetBounds(0.5, 1.5, 2.5);
         if (port <= 21) {
