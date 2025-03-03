@@ -1,102 +1,87 @@
-#include "studica_control/mecanum_drive_component.h"
+#include "studica_control/diff_drive_component.h"
 
 namespace studica_control {
 
-MecanumDrive::MecanumDrive(const rclcpp::NodeOptions & options) : Node("mecanum_drive_", options) {}
+DiffDrive::DiffDrive(const rclcpp::NodeOptions & options) : Node("diff_drive_", options) {}
 
-MecanumDrive::MecanumDrive(
-    std::shared_ptr<VMXPi> vmx, 
-    const std::string &name, 
-    const uint8_t &canID, 
-    const uint16_t &motor_freq, 
-    const float &ticks_per_rotation, 
-    const float &wheel_radius, 
-    const float &wheelbase, 
-    const float &width,
-    const uint8_t &front_left,
-    const uint8_t &front_right,
-    const uint8_t &rear_left,
-    const uint8_t &rear_right,
-    const bool &invert_front_left,
-    const bool &invert_front_right,
-    const bool &invert_rear_left,
-    const bool &invert_rear_right)
-    : Node("titan_"), 
-      vmx_(vmx), 
-      name_(name), 
-      canID_(canID), 
-      motor_freq_(motor_freq), 
-      ticks_per_rotation_(ticks_per_rotation), 
-      wheel_radius_(wheel_radius), 
-      wheelbase_(wheelbase), 
-      width_(width),
-      fl_(front_left),
-      fr_(front_right),
-      rl_(rear_left),
-      rr_(rear_right) {
+DiffDrive::DiffDrive(
+    std::shared_ptr<VMXPi> vmx,
+    const std::string &name,
+    const uint8_t &canID,
+    const uint16_t &motor_freq,
+    const float &ticks_per_rotation,
+    const float &wheel_radius,
+    const float &wheel_separation,
+    const uint8_t left,
+    const uint8_t right,
+    const bool invert_left,
+    const bool invert_right) 
+    : Node("titan_"),
+      vmx_(vmx),
+      name_(name),
+      canID_(canID),
+      motor_freq_(motor_freq),
+      ticks_per_rotation_(ticks_per_rotation),
+      wheel_radius_(wheel_radius),
+      wheel_separation_(wheel_separation),
+      left_(left),
+      right_(right) {
 
     dist_per_tick_ = 2 * M_PI * wheel_radius_ / ticks_per_rotation_;
+
     titan_ = std::make_shared<studica_driver::Titan>(name, canID_, motor_freq_, dist_per_tick_, vmx_);
+
     service_ = this->create_service<studica_control::srv::SetData>(
         "titan_cmd",
-        std::bind(&MecanumDrive::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
-    
-    titan_->ConfigureEncoder(fl_, dist_per_tick_);
-    titan_->ConfigureEncoder(fr_, dist_per_tick_);
-    titan_->ConfigureEncoder(rl_, dist_per_tick_);
-    titan_->ConfigureEncoder(rr_, dist_per_tick_);
+        std::bind(&DiffDrive::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
 
-    titan_->ResetEncoder(fl_);
-    titan_->ResetEncoder(fr_);
-    titan_->ResetEncoder(rl_);
-    titan_->ResetEncoder(rr_);
+    titan_->ConfigureEncoder(left_, dist_per_tick_);
+    titan_->ConfigureEncoder(right_, dist_per_tick_);
 
-    if (invert_front_left) titan_->InvertMotor(fl_);
-    if (invert_front_right) titan_->InvertMotor(fr_);
-    if (invert_rear_left) titan_->InvertMotor(rl_);
-    if (invert_rear_right) titan_->InvertMotor(rr_);
+    titan_->ResetEncoder(left_);
+    titan_->ResetEncoder(right_);
+
+    if (invert_left) titan_->InvertMotor(left_);
+    if (invert_right) titan_->InvertMotor(right_);
 
     titan_->Enable(true);
 
-    odom_ = std::make_unique<MecanumOdometry>();
-    odom_->setWheelParams(wheelbase_, width_);
+    odom_ = std::make_unique<DiffOdometry>();
+    odom_->setWheelParams(wheel_separation_);
+    odom_->init(this->now());
     
     odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
     tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
-        std::bind(&MecanumDrive::publish_odometry, this));
+        std::bind(&DiffDrive::publish_odometry, this));
 
     cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
         "cmd_vel",
         10,
-        std::bind(&MecanumDrive::cmd_vel_callback, this, std::placeholders::_1)
+        std::bind(&DiffDrive::cmd_vel_callback, this, std::placeholders::_1)
     );
 }
-MecanumDrive::~MecanumDrive() {}
 
-void MecanumDrive::cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
+DiffDrive::~DiffDrive() {}
+
+void DiffDrive::cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
     std::string params = request->params;
     cmd(params, request, response);
 }
 
-void MecanumDrive::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg) {
-    double x_vel = msg->linear.x;
-    double y_vel = msg->linear.y;
+void DiffDrive::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg) {
+    double linear = msg->linear.x;
     double angular = msg->angular.z;
 
-    double front_left = x_vel - y_vel - angular * (wheelbase_ + width_);
-    double front_right = x_vel + y_vel + angular * (wheelbase_ + width_);
-    double rear_left = x_vel + y_vel - angular * (wheelbase_ + width_);
-    double rear_right = x_vel - y_vel + angular * (wheelbase_ + width_);
+    left_command_ = linear - angular * wheel_separation_ / 2.0;
+    right_command_ = linear + angular * wheel_separation_ / 2.0;
 
-    titan_->SetSpeed(fl_, front_left);
-    titan_->SetSpeed(fr_, front_right);
-    titan_->SetSpeed(rl_, rear_left);
-    titan_->SetSpeed(rr_, rear_right);
+    titan_->SetSpeed(left_, left_command_);
+    titan_->SetSpeed(right_, -1.0 * right_command_);
 }
 
-void MecanumDrive::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
+void DiffDrive::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
     if (params == "enable") {
         titan_->Enable(true);
         response->success = true;
@@ -146,15 +131,13 @@ void MecanumDrive::cmd(std::string params, std::shared_ptr<studica_control::srv:
     }
 }
 
-void MecanumDrive::publish_odometry() {
-    double front_left = titan_->GetEncoderDistance(fl_);
-    double front_right = titan_->GetEncoderDistance(fr_);
-    double rear_left = titan_->GetEncoderDistance(rl_);
-    double rear_right = titan_->GetEncoderDistance(rr_);
+void DiffDrive::publish_odometry() {
+    double left_encoder = titan_->GetEncoderDistance(left_);
+    double right_encoder = -1.0 * titan_->GetEncoderDistance(right_);
 
     auto current_time = this->now();
 
-    odom_->update(front_left, front_right, rear_left, rear_right, current_time);
+    odom_->update(left_encoder, right_encoder, current_time);
 
     auto odom_msg = nav_msgs::msg::Odometry();
     odom_msg.header.stamp = current_time;
@@ -171,6 +154,9 @@ void MecanumDrive::publish_odometry() {
     odom_msg.pose.pose.orientation.y = q.y();
     odom_msg.pose.pose.orientation.z = q.z();
     odom_msg.pose.pose.orientation.w = q.w();
+
+    odom_msg.twist.twist.linear.x = odom_->getLinear();
+    odom_msg.twist.twist.angular.z = odom_->getAngular();
 
     odom_publisher_->publish(odom_msg);
 
@@ -195,4 +181,4 @@ void MecanumDrive::publish_odometry() {
 // Register the component with class_loader.
 // This acts as a sort of entry point, allowing the component to be discoverable when its library
 // is being loaded into a running process.
-RCLCPP_COMPONENTS_REGISTER_NODE(studica_control::MecanumDrive)
+RCLCPP_COMPONENTS_REGISTER_NODE(studica_control::DiffDrive)

@@ -1,14 +1,16 @@
 #include <memory>
 
-#include "studica_control/encoder_component.h"
-#include "studica_control/servo_component.h"
-#include "studica_control/imu_component.h"
-#include "studica_control/titan_component.h"
-#include "studica_control/dio_component.h"
-#include "studica_control/mecanum_drive_component.h"
 #include "rclcpp/rclcpp.hpp"
-#include "VMXPi.h"
+
+#include "studica_control/diff_drive_component.h"
+#include "studica_control/dio_component.h"
+#include "studica_control/encoder_component.h"
+#include "studica_control/imu_component.h"
+#include "studica_control/mecanum_drive_component.h"
+#include "studica_control/servo_component.h"
+#include "studica_control/titan_component.h"
 #include <studica_control/msg/initialize_params.hpp>
+#include "VMXPi.h"
 
 class ControlServer : public rclcpp::Node {
 private:
@@ -93,9 +95,8 @@ private:
                     vmx_, "Titan", 
                     ip.can_id, 
                     ip.motor_freq, 
-                    ip.ticks_per_rotation, 
-                    ip.wheel_radius, 
-                    ip.wheel_separation);
+                    ip.ticks_per_rotation,
+                    ip.wheel_radius);
                 executor_->add_node(titan_node);
                 component_map[name] = titan_node;
 
@@ -103,9 +104,9 @@ private:
                 response->message = "Titan '" + name + "' created successfully.";
                 RCLCPP_INFO(this->get_logger(), "Created Titan component '%s'.", name.c_str());
             } catch (const std::exception &e) {
-                RCLCPP_ERROR(this->get_logger(), "Failed to create servo component: %s", e.what());
+                RCLCPP_ERROR(this->get_logger(), "Failed to create Titan component: %s", e.what());
                 response->success = false;
-                response->message = "Failed to create servo component: " + std::string(e.what());
+                response->message = "Failed to create Titan component: " + std::string(e.what());
             }
         } else if (component == "dio") {
             try {
@@ -121,6 +122,31 @@ private:
                 RCLCPP_ERROR(this->get_logger(), "Failed to create DIO component: %s", e.what());
                 response->success = false;
                 response->message = "Failed to create DIO component: " + std::string(e.what());
+            }
+        } else if (component == "diffdrive") {
+            try {
+                auto ip = request->initparams;
+                auto diff_node = std::make_shared<studica_control::DiffDrive>(
+                    vmx_, "DiffDrive", 
+                    ip.can_id, 
+                    ip.motor_freq, 
+                    ip.ticks_per_rotation, 
+                    ip.wheel_radius, 
+                    ip.wheel_separation,
+                    ip.left,
+                    ip.right,
+                    ip.invert_left,
+                    ip.invert_right);
+                executor_->add_node(diff_node);
+                component_map[name] = diff_node;
+
+                response->success = true;
+                response->message = "Differential Drive Controller '" + name + "' created successfully.";
+                RCLCPP_INFO(this->get_logger(), "Created DiffDrive component '%s'.", name.c_str());
+            } catch (const std::exception &e) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to create differential drive component: %s", e.what());
+                response->success = false;
+                response->message = "Failed to create differential drive component: " + std::string(e.what());
             }
         } else if (component == "mecanum") {
             try {

@@ -38,9 +38,9 @@ private:
     size_t window_size_;
 };
 
-class Odometry {
+class DiffOdometry {
 public:
-    explicit Odometry(size_t velocity_rolling_window_size = 10);
+    explicit DiffOdometry(size_t velocity_rolling_window_size = 10);
 
     void init(const rclcpp::Time &time);
     bool update(double left_pos, double right_pos, const rclcpp::Time &time);

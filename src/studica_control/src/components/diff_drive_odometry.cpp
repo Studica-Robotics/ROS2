@@ -2,9 +2,7 @@
 
 namespace studica_control {
 
-// Odometry::Odometry(const rclcpp::NodeOptions &options) : Node("odometry_", options) {}
-
-Odometry::Odometry(size_t velocity_rolling_window_size) :
+DiffOdometry::DiffOdometry(size_t velocity_rolling_window_size) :
 timestamp_(0.0), 
 x_(0.0), y_(0.0), 
 heading_(0.0), 
@@ -18,12 +16,12 @@ linear_accumulator_(velocity_rolling_window_size),
 angular_accumulator_(velocity_rolling_window_size)
 {}
 
-void Odometry::init(const rclcpp::Time &time) {
+void DiffOdometry::init(const rclcpp::Time &time) {
     resetAccumulators();
     timestamp_ = time;
 }
 
-bool Odometry::update(double left_pos, double right_pos, const rclcpp::Time &time) {
+bool DiffOdometry::update(double left_pos, double right_pos, const rclcpp::Time &time) {
     const double dt = time.seconds() - timestamp_.seconds();
     if (dt < 0.0001) return false;
 
@@ -41,7 +39,7 @@ bool Odometry::update(double left_pos, double right_pos, const rclcpp::Time &tim
     return true;
 }
 
-bool Odometry::updateFromVelocity(double left_vel, double right_vel, const rclcpp::Time &time) {
+bool DiffOdometry::updateFromVelocity(double left_vel, double right_vel, const rclcpp::Time &time) {
     const double dt = time.seconds() - timestamp_.seconds();
     if (dt < 0.0001) return false;
 
@@ -61,7 +59,7 @@ bool Odometry::updateFromVelocity(double left_vel, double right_vel, const rclcp
     return true;
 }
 
-void Odometry::updateOpenLoop(double linear, double angular, const rclcpp::Time &time) {
+void DiffOdometry::updateOpenLoop(double linear, double angular, const rclcpp::Time &time) {
     linear_ = linear;
     angular_ = angular;
 
@@ -70,22 +68,22 @@ void Odometry::updateOpenLoop(double linear, double angular, const rclcpp::Time 
     integrateExact(linear * dt, angular * dt);
 }
 
-void Odometry::resetOdometry() {
+void DiffOdometry::resetOdometry() {
     x_ = 0.0;
     y_ = 0.0;
     heading_ = 0.0;
 }
 
-void Odometry::setWheelParams(float wheel_separation) {
+void DiffOdometry::setWheelParams(float wheel_separation) {
     wheel_separation_ = wheel_separation;
 }
 
-void Odometry::setVelocityRollingWindowSize(size_t velocity_rolling_window_size) {
+void DiffOdometry::setVelocityRollingWindowSize(size_t velocity_rolling_window_size) {
     velocity_rolling_window_size_ = velocity_rolling_window_size;
     resetAccumulators();
 }
 
-void Odometry::integrateRungeKutta2(double linear, double angular) {
+void DiffOdometry::integrateRungeKutta2(double linear, double angular) {
     const double direction = heading_ + angular * 0.5;
 
     x_ += linear * std::cos(direction);
@@ -93,7 +91,7 @@ void Odometry::integrateRungeKutta2(double linear, double angular) {
     heading_ += angular;
 }
 
-void Odometry::integrateExact(double linear, double angular) {
+void DiffOdometry::integrateExact(double linear, double angular) {
     if (fabs(angular) < 1e-6) integrateRungeKutta2(linear, angular);
     else {
         const double prev_heading = heading_;
@@ -104,10 +102,9 @@ void Odometry::integrateExact(double linear, double angular) {
     }
 }
 
-void Odometry::resetAccumulators() {
+void DiffOdometry::resetAccumulators() {
     linear_accumulator_ = RollingMeanAccumulator(velocity_rolling_window_size_);
     angular_accumulator_ = RollingMeanAccumulator(velocity_rolling_window_size_);
 }
 
-
-}
+} // namespace studica_control
