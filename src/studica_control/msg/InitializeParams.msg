@@ -24,3 +24,7 @@ bool invert_front_left
 bool invert_front_right
 bool invert_rear_left
 bool invert_rear_right
+int32 left
+int32 right
+bool invert_left
+bool invert_right
