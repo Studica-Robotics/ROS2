@@ -8,8 +8,8 @@ MecanumDrive::MecanumDrive(
     std::shared_ptr<VMXPi> vmx, 
     const std::string &name, 
     const uint8_t &canID, 
-    const uint16_t &motorFreq, 
-    const float &ticksPerRotation, 
+    const uint16_t &motor_freq, 
+    const float &ticks_per_rotation, 
     const float &wheel_radius, 
     const float &wheelbase, 
     const float &width,
@@ -25,8 +25,8 @@ MecanumDrive::MecanumDrive(
       vmx_(vmx), 
       name_(name), 
       canID_(canID), 
-      motorFreq_(motorFreq), 
-      ticksPerRotation_(ticksPerRotation), 
+      motor_freq_(motor_freq), 
+      ticks_per_rotation_(ticks_per_rotation), 
       wheel_radius_(wheel_radius), 
       wheelbase_(wheelbase), 
       width_(width),
@@ -35,16 +35,16 @@ MecanumDrive::MecanumDrive(
       rl_(rear_left),
       rr_(rear_right) {
 
-    distPerTick_ = 2 * M_PI * wheel_radius_ / ticksPerRotation_;
-    titan_ = std::make_shared<studica_driver::Titan>(name, canID_, motorFreq_, distPerTick_, vmx_);
+    dist_per_tick_ = 2 * M_PI * wheel_radius_ / ticks_per_rotation_;
+    titan_ = std::make_shared<studica_driver::Titan>(name, canID_, motor_freq_, dist_per_tick_, vmx_);
     service_ = this->create_service<studica_control::srv::SetData>(
         "titan_cmd",
         std::bind(&MecanumDrive::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
     
-    titan_->ConfigureEncoder(fl_, distPerTick_);
-    titan_->ConfigureEncoder(fr_, distPerTick_);
-    titan_->ConfigureEncoder(rl_, distPerTick_);
-    titan_->ConfigureEncoder(rr_, distPerTick_);
+    titan_->ConfigureEncoder(fl_, dist_per_tick_);
+    titan_->ConfigureEncoder(fr_, dist_per_tick_);
+    titan_->ConfigureEncoder(rl_, dist_per_tick_);
+    titan_->ConfigureEncoder(rr_, dist_per_tick_);
 
     titan_->ResetEncoder(fl_);
     titan_->ResetEncoder(fr_);
@@ -109,7 +109,7 @@ void MecanumDrive::cmd(std::string params, std::shared_ptr<studica_control::srv:
         titan_->Enable(true);
         response->success = true;
         response->message = "Titan started";
-    } else if (params == "setup_enc") {
+    } else if (params == "setup_encoder") {
         titan_->SetupEncoder(request->initparams.n_encoder);
         response->success = true;
         response->message = "Titan encoder setup complete";
@@ -131,14 +131,13 @@ void MecanumDrive::cmd(std::string params, std::shared_ptr<studica_control::srv:
         RCLCPP_INFO(this->get_logger(), "Setting speed to %f", speed);
         titan_->SetSpeed(request->initparams.n_encoder, speed);
         response->message = "Encoder " + std::to_string(request->initparams.n_encoder) + " speed set to " + std::to_string(request->initparams.speed);
-    }
-    else if (params == "get_enc_dist") {
+    } else if (params == "get_encoder_distance") {
         response->success = true;
         response->message = std::to_string(titan_->GetEncoderDistance(request->initparams.n_encoder));
     } else if (params == "get_rpm") {
         response->success = true;
         response->message = std::to_string(titan_->GetRPM(request->initparams.n_encoder));
-    } else if (params == "get_enc_cnt") {
+    } else if (params == "get_encoder_count") {
         response->success = true;
         response->message = std::to_string(titan_->GetEncoderCount(request->initparams.n_encoder));
     } else {

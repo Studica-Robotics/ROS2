@@ -4,7 +4,12 @@
 #include <cmath>
 #include <deque>
 
+#include "geometry_msgs/msg/transform_stamped.hpp"
+#include "geometry_msgs/msg/twist.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/time.hpp"
+#include "tf2/LinearMath/Quaternion.h"
+#include "tf2_ros/transform_broadcaster.h"
 
 namespace studica_control {
 
@@ -38,12 +43,15 @@ private:
     size_t window_size_;
 };
 
-class Odometry {
+class DiffOdometry : public rclcpp::Node {
 public:
-    explicit Odometry(size_t velocity_rolling_window_size = 10);
+    explicit DiffOdometry(const rclcpp::NodeOptions & options);
+    explicit DiffOdometry(size_t velocity_rolling_window_size = 10);
+    ~DiffOdometry();
 
     void init(const rclcpp::Time &time);
-    bool update(double left_pos, double right_pos, const rclcpp::Time &time);
+    void publishOdometry();
+    bool updateAndPublish(double left_pos, double right_pos, const rclcpp::Time &time);
     bool updateFromVelocity(double left_vel, double right_vel, const rclcpp::Time &time);
     void updateOpenLoop(double linear, double angular, const rclcpp::Time &time);
     void resetOdometry();
@@ -62,6 +70,9 @@ private:
     void integrateExact(double linear, double angular);
     void resetAccumulators();
 
+    rclcpp::Node::SharedPtr node_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
+    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     rclcpp::Time timestamp_;
     double x_, y_, heading_;
     double linear_, angular_;

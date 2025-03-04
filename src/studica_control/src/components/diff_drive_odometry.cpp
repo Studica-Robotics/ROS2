@@ -2,28 +2,72 @@
 
 namespace studica_control {
 
-// Odometry::Odometry(const rclcpp::NodeOptions &options) : Node("odometry_", options) {}
+DiffOdometry::DiffOdometry(const rclcpp::NodeOptions & options) : Node("diff_drive_", options) {}
 
-Odometry::Odometry(size_t velocity_rolling_window_size) :
-timestamp_(0.0), 
-x_(0.0), y_(0.0), 
-heading_(0.0), 
-linear_(0.0), 
-angular_(0.0), 
-wheel_separation_(0.0), 
-left_wheel_prev_pos_(0.0),
-right_wheel_prev_pos_(0.0),
-velocity_rolling_window_size_(velocity_rolling_window_size),
-linear_accumulator_(velocity_rolling_window_size),
-angular_accumulator_(velocity_rolling_window_size)
-{}
+DiffOdometry::DiffOdometry(size_t velocity_rolling_window_size)
+: Node("diff_odometry"),
+  timestamp_(0.0), 
+  x_(0.0), y_(0.0), 
+  heading_(0.0), 
+  linear_(0.0), 
+  angular_(0.0), 
+  wheel_separation_(0.0), 
+  left_wheel_prev_pos_(0.0),
+  right_wheel_prev_pos_(0.0),
+  velocity_rolling_window_size_(velocity_rolling_window_size),
+  linear_accumulator_(velocity_rolling_window_size),
+  angular_accumulator_(velocity_rolling_window_size) {}
 
-void Odometry::init(const rclcpp::Time &time) {
+  DiffOdometry::~DiffOdometry() {}
+
+void DiffOdometry::init(const rclcpp::Time &time) {
     resetAccumulators();
     timestamp_ = time;
+
+    odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
+    tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 }
 
-bool Odometry::update(double left_pos, double right_pos, const rclcpp::Time &time) {
+void DiffOdometry::publishOdometry() {
+    auto current_time = this->now();
+    
+    nav_msgs::msg::Odometry odom_msg;
+    odom_msg.header.stamp = current_time;
+    odom_msg.header.frame_id = "odom";
+    odom_msg.child_frame_id = "base_link";
+
+    tf2::Quaternion q;
+    q.setRPY(0, 0, heading_);
+
+    odom_msg.pose.pose.position.x = x_;
+    odom_msg.pose.pose.position.y = y_;
+    odom_msg.pose.pose.position.z = 0.0;
+    odom_msg.pose.pose.orientation.x = q.x();
+    odom_msg.pose.pose.orientation.y = q.y();
+    odom_msg.pose.pose.orientation.z = q.z();
+    odom_msg.pose.pose.orientation.w = q.w();
+
+    odom_msg.twist.twist.linear.x = linear_;
+    odom_msg.twist.twist.linear.y = 0.0;
+    odom_msg.twist.twist.angular.z = angular_;
+
+    odom_publisher_->publish(odom_msg);
+
+    geometry_msgs::msg::TransformStamped tf;
+    tf.header.stamp = current_time;
+    tf.header.frame_id = "odom";
+    tf.child_frame_id = "base_footprint";
+
+    tf.transform.translation.x = x_;
+    tf.transform.translation.y = y_;
+    tf.transform.translation.z = 0.0;
+
+    tf.transform.rotation = odom_msg.pose.pose.orientation;
+    
+    tf_broadcaster_->sendTransform(tf);
+}
+
+bool DiffOdometry::updateAndPublish(double left_pos, double right_pos, const rclcpp::Time &time) {
     const double dt = time.seconds() - timestamp_.seconds();
     if (dt < 0.0001) return false;
 
@@ -38,10 +82,12 @@ bool Odometry::update(double left_pos, double right_pos, const rclcpp::Time &tim
 
     updateFromVelocity(left_wheel_est_vel, right_wheel_est_vel, time);
 
+    publishOdometry();
+
     return true;
 }
 
-bool Odometry::updateFromVelocity(double left_vel, double right_vel, const rclcpp::Time &time) {
+bool DiffOdometry::updateFromVelocity(double left_vel, double right_vel, const rclcpp::Time &time) {
     const double dt = time.seconds() - timestamp_.seconds();
     if (dt < 0.0001) return false;
 
@@ -61,7 +107,7 @@ bool Odometry::updateFromVelocity(double left_vel, double right_vel, const rclcp
     return true;
 }
 
-void Odometry::updateOpenLoop(double linear, double angular, const rclcpp::Time &time) {
+void DiffOdometry::updateOpenLoop(double linear, double angular, const rclcpp::Time &time) {
     linear_ = linear;
     angular_ = angular;
 
@@ -70,22 +116,22 @@ void Odometry::updateOpenLoop(double linear, double angular, const rclcpp::Time 
     integrateExact(linear * dt, angular * dt);
 }
 
-void Odometry::resetOdometry() {
+void DiffOdometry::resetOdometry() {
     x_ = 0.0;
     y_ = 0.0;
     heading_ = 0.0;
 }
 
-void Odometry::setWheelParams(float wheel_separation) {
+void DiffOdometry::setWheelParams(float wheel_separation) {
     wheel_separation_ = wheel_separation;
 }
 
-void Odometry::setVelocityRollingWindowSize(size_t velocity_rolling_window_size) {
+void DiffOdometry::setVelocityRollingWindowSize(size_t velocity_rolling_window_size) {
     velocity_rolling_window_size_ = velocity_rolling_window_size;
     resetAccumulators();
 }
 
-void Odometry::integrateRungeKutta2(double linear, double angular) {
+void DiffOdometry::integrateRungeKutta2(double linear, double angular) {
     const double direction = heading_ + angular * 0.5;
 
     x_ += linear * std::cos(direction);
@@ -93,7 +139,7 @@ void Odometry::integrateRungeKutta2(double linear, double angular) {
     heading_ += angular;
 }
 
-void Odometry::integrateExact(double linear, double angular) {
+void DiffOdometry::integrateExact(double linear, double angular) {
     if (fabs(angular) < 1e-6) integrateRungeKutta2(linear, angular);
     else {
         const double prev_heading = heading_;
@@ -104,10 +150,9 @@ void Odometry::integrateExact(double linear, double angular) {
     }
 }
 
-void Odometry::resetAccumulators() {
+void DiffOdometry::resetAccumulators() {
     linear_accumulator_ = RollingMeanAccumulator(velocity_rolling_window_size_);
     angular_accumulator_ = RollingMeanAccumulator(velocity_rolling_window_size_);
 }
 
-
-}
+} // namespace studica_control
