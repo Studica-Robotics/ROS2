@@ -37,6 +37,7 @@ set(studica_control_HDRS
   include/studica_control/cobra_component.h
   include/studica_control/device.h
   include/studica_control/diff_drive_component.h
+  include/studica_control/diff_drive_odometry.h
   include/studica_control/dio_component.h
   include/studica_control/encoder_component.h
   include/studica_control/imu_component.h
@@ -60,12 +61,6 @@ set(dependencies
   "tf2_ros"
 )
 
-add_library(diff_drive_odometry SHARED src/components/diff_drive_odometry.cpp)
-add_library(mecanum_drive_odometry SHARED src/components/mecanum_drive_odometry.cpp)
-
-ament_target_dependencies(diff_drive_odometry ${dependencies})
-ament_target_dependencies(mecanum_drive_odometry ${dependencies})
-
 add_library(cobra_component SHARED src/components/cobra_component.cpp)
 ament_target_dependencies(cobra_component ${dependencies})
 rclcpp_components_register_nodes(cobra_component "studica_control::cobra")
@@ -73,6 +68,10 @@ rclcpp_components_register_nodes(cobra_component "studica_control::cobra")
 add_library(diff_drive_component SHARED src/components/diff_drive_component.cpp)
 ament_target_dependencies(diff_drive_component ${dependencies})
 rclcpp_components_register_nodes(diff_drive_component "studica_control::DiffDrive")
+
+add_library(diff_drive_odometry SHARED src/components/diff_drive_odometry.cpp)
+ament_target_dependencies(diff_drive_odometry ${dependencies})
+rclcpp_components_register_nodes(diff_drive_odometry "studica_control::DiffOdometry")
 
 add_library(dio_component SHARED src/components/dio_component.cpp)
 ament_target_dependencies(dio_component ${dependencies})
@@ -89,6 +88,9 @@ rclcpp_components_register_nodes(imu_component "studica_control::imu")
 add_library(mecanum_drive_component SHARED src/components/mecanum_drive_component.cpp)
 ament_target_dependencies(mecanum_drive_component ${dependencies})
 rclcpp_components_register_nodes(mecanum_drive_component "studica_control::MecanumDrive")
+
+add_library(mecanum_drive_odometry SHARED src/components/mecanum_drive_odometry.cpp)
+ament_target_dependencies(mecanum_drive_odometry ${dependencies})
 
 add_library(servo_component SHARED src/components/servo_component.cpp)
 ament_target_dependencies(servo_component ${dependencies})
@@ -175,6 +177,7 @@ ament_export_include_directories(include)
 ament_export_libraries(
   cobra_component
   diff_drive_component
+  diff_drive_odometry
   dio_component
   encoder_component
   imu_component

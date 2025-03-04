@@ -202,7 +202,6 @@ public:
 
 
 int main(int argc, char *argv[]) {
-
     setvbuf(stdout, NULL, _IONBF, BUFSIZ);
     rclcpp::init(argc, argv);
 
@@ -211,9 +210,6 @@ int main(int argc, char *argv[]) {
     auto control_server = std::make_shared<ControlServer>();
     control_server->set_executor(executor);
     executor->add_node(control_server);
-
-    // auto servo = std::make_shared<studica_control::Servo>(13, studica_driver::ServoType::Standard);
-    // auto servo2 = std::make_shared<studica_control::Servo>(14, studica_driver::ServoType::Continuous);
     
     executor->spin();
 

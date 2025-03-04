@@ -4,7 +4,6 @@
 #include <cmath>
 #include <memory>
 #include <string>
-#include <iostream>
 
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
@@ -47,8 +46,7 @@ public:
 private:
     std::shared_ptr<VMXPi> vmx_;
     std::shared_ptr<studica_driver::Titan> titan_;
-
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
+    
     rclcpp::TimerBase::SharedPtr timer_;
     std::unique_ptr<DiffOdometry> odom_;
 
