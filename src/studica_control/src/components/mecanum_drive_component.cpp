@@ -60,9 +60,7 @@ MecanumDrive::MecanumDrive(
 
     odom_ = std::make_unique<MecanumOdometry>();
     odom_->setWheelParams(wheelbase_, width_);
-    
-    odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
-    tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+    odom_->init(this->now());
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
         std::bind(&MecanumDrive::publish_odometry, this));
@@ -154,38 +152,7 @@ void MecanumDrive::publish_odometry() {
 
     auto current_time = this->now();
 
-    odom_->update(front_left, front_right, rear_left, rear_right, current_time);
-
-    auto odom_msg = nav_msgs::msg::Odometry();
-    odom_msg.header.stamp = current_time;
-    odom_msg.header.frame_id = "odom";
-    odom_msg.child_frame_id = "base_link";
-
-    odom_msg.pose.pose.position.x = odom_->getX();
-    odom_msg.pose.pose.position.y = odom_->getY();
-    odom_msg.pose.pose.position.z = 0.0;
-
-    tf2::Quaternion q;
-    q.setRPY(0, 0, odom_->getHeading());
-    odom_msg.pose.pose.orientation.x = q.x();
-    odom_msg.pose.pose.orientation.y = q.y();
-    odom_msg.pose.pose.orientation.z = q.z();
-    odom_msg.pose.pose.orientation.w = q.w();
-
-    odom_publisher_->publish(odom_msg);
-
-    geometry_msgs::msg::TransformStamped tf;
-    tf.header.stamp = current_time;
-    tf.header.frame_id = "odom";
-    tf.child_frame_id = "base_footprint";
-
-    tf.transform.translation.x = odom_->getX();
-    tf.transform.translation.y = odom_->getY();
-    tf.transform.translation.z = 0.0;
-
-    tf.transform.rotation = odom_msg.pose.pose.orientation;
-    
-    tf_broadcaster_->sendTransform(tf);
+    odom_->updateAndPublish(front_left, front_right, rear_left, rear_right, current_time);
 }
 
 } // namespace studica_control

@@ -51,12 +51,8 @@ public:
 private:
     std::shared_ptr<VMXPi> vmx_;
     std::shared_ptr<studica_driver::Titan> titan_;
-
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
-    rclcpp::TimerBase::SharedPtr timer_;
     std::unique_ptr<MecanumOdometry> odom_;
-
-    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+    rclcpp::TimerBase::SharedPtr timer_;
 
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
 
