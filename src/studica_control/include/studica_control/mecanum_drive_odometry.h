@@ -14,13 +14,13 @@
 
 namespace studica_control {
 
-class MecanumOdometry : public rcpcpp::Node {
+class MecanumOdometry : public rclcpp::Node {
     public:
         explicit MecanumOdometry(const rclcpp::NodeOptions & options);
         explicit MecanumOdometry();
         ~MecanumOdometry();
 
-        void init(const rclcpp::Time &time)
+        void init(const rclcpp::Time &time);
         bool updateAndPublish(
             const double front_left, const double front_right,
             const double rear_left, const double rear_right, const rclcpp::Time &dt);

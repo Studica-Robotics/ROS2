@@ -78,7 +78,7 @@ void MecanumOdometry::publishOdometry() {
     odom_msg.child_frame_id = "base_link";
 
     tf2::Quaternion q;
-    q.setRPY(0, 0, heading_);
+    q.setRPY(0, 0, theta_);
 
     odom_msg.pose.pose.position.x = x_;
     odom_msg.pose.pose.position.y = y_;
@@ -87,10 +87,6 @@ void MecanumOdometry::publishOdometry() {
     odom_msg.pose.pose.orientation.y = q.y();
     odom_msg.pose.pose.orientation.z = q.z();
     odom_msg.pose.pose.orientation.w = q.w();
-
-    odom_msg.twist.twist.linear.x = linear_;
-    odom_msg.twist.twist.linear.y = 0.0;
-    odom_msg.twist.twist.angular.z = angular_;
 
     odom_publisher_->publish(odom_msg);
 
