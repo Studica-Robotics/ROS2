@@ -9,9 +9,11 @@ To do so, make sure to link the driver library.
 
 ### Compile & Install
 ``` bash
-cd drivers
-make
-make install
+sudo su
+cd ROS2
+chmod +x setup.sh
+./setup.sh
+colcon build --packages-select studica_control
 ```
 ### Example Usage
 C++ Examples of using the drivers can be found and built in the examples folder. See 
@@ -51,10 +53,9 @@ Components can be loaded in a ROS2 node. This project contains a collection of c
 ```bash
 # use sudo su mode since HAL requires root permissions
 sudo su
-# source your ROS e.g. 
-. /opt/ros/humble/setup.bash
 cd src/studica_control
 colcon build
+. install/setup.bash
 ```
 (requires drivers to be installed first, run make and make install in ../drivers folder)
 
