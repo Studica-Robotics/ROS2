@@ -4,7 +4,7 @@ using namespace studica_driver;
 void Cobra::DisplayVMXError(VMXErrorCode vmxerr)
 {
     const char *p_err_description = GetVMXErrorString(vmxerr);
-    printf("VMXError &d: %s\n", vmxerr, p_err_description);
+    printf("VMXError &d: %s\n", p_err_description);
 }
 
 Cobra::Cobra(int _vRef)
@@ -58,7 +58,7 @@ Cobra::Cobra(int _vRef)
         printf("Caught exception: %s", ex.what());
     }
 }
-Cobra::~Cobra() {}
+// Cobra::~Cobra() {}
 
 int Cobra::GetRawValue(uint8_t channel)
 {
@@ -170,7 +170,7 @@ int Cobra::GetSingle(uint8_t channel)
     uint8_t raw[2];
     raw[0] = (uint8_t) (config>>8);
     raw[1] = (uint8_t) (config & 0xFF);
-    WriteI2c(POINTER_CONVERT, raw);
+    WriteI2C(POINTER_CONVERT, raw);
     Delay(DELAY);
     return ReadRegister(POINTER_CONVERT)>>4;
 }

@@ -4,14 +4,9 @@
 
 int main(int argc, char *argv[])
 {
-    float vref = 0.5;
-    int muxch = 1;
-    studica_driver::Cobra cobra(vref, muxch);
-    for (int i = 0; i < 10; ++i) {
-        printf("%d |  Raw ADC Value: %d, ", i, cobra.GetRawValue());
-        std::this_thread::sleep_for(std::chrono::milliseconds(80));
-        printf("Voltage: %f\n", cobra.GetVoltage());
-        std::this_thread::sleep_for(std::chrono::milliseconds(80));
-    }
-    return 0;
+    studica_driver::Cobra cobra(5.0F);
+    float voltage = cobra.GetVoltage(1);
+    int value = cobra.GetRawValue(1);
+    printf("\nVoltage: %f", voltage);
+    printf("\nADC Value: %d", value);
 }
