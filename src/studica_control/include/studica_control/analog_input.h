@@ -1,9 +1,10 @@
 #ifndef ANALOG_INPUT_H
 #define ANALOG_INPUT_H
 
-#include "VMXPi.h"
 #include <iostream>
 #include <memory>
+
+#include "VMXPi.h"
 
 class AnalogInput {
 public:
@@ -20,4 +21,4 @@ private:
     bool active_; 
 };
 
-#endif
+#endif // ANALOG_INPUT_H

@@ -9,11 +9,10 @@
 #include "VMXManager.h"
 #include "VMXPi.h" 
 
-#include <studica_control/srv/set_data.hpp>
+#include "studica_control/srv/set_data.hpp"
 #include "titan.h"
 
-namespace studica_control
-{
+namespace studica_control {
 
 class Titan : public rclcpp::Node {
 public:
@@ -39,6 +38,7 @@ private:
     float dist_per_tick_;
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
 };
+
 }  // namespace studica_control
 
 #endif  // TITAN_COMPONENT_H

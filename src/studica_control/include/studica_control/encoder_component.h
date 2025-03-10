@@ -21,6 +21,7 @@ public:
     void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);
     void DisplayVMXError(VMXErrorCode vmxerr);
+    
 private:
     rclcpp::TimerBase::SharedPtr timer_;
     std::shared_ptr<studica_driver::Encoder> encoder_;

@@ -2,12 +2,13 @@
 #define DIO_COMPONENT_H
 
 #include <memory>
-#include "VMXPi.h"
-#include "rclcpp/rclcpp.hpp"
-#include "dio.h"
-// Messages
-#include <studica_control/srv/set_data.hpp>
+
+#include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/bool.hpp>
+
+#include "dio.h"
+#include "studica_control/srv/set_data.hpp"
+#include "VMXPi.h"
 
 namespace studica_control {
 
@@ -18,20 +19,15 @@ public:
     ~DIO();
 
 private:
-    // Service callback for setting the DIO pin state or designating a button pin
     void cmd_callback(const std::shared_ptr<studica_control::srv::SetData::Request> request,
                       std::shared_ptr<studica_control::srv::SetData::Response> response);
 
-    // Timer callback for publishing DIO state
     void publish_dio_state();
 
-    // Starts the timer for periodic state publishing (used for button pins)
     // void start_publishing();
 
-    // Logs or handles VMX errors
     void DisplayVMXError(VMXErrorCode vmxerr);
 
-    // Member variables for managing the DIO component
     std::shared_ptr<VMXPi> vmx_;                                  // VMXPi instance
     std::shared_ptr<studica_driver::DIO> dio_;                    // DIO instance
     VMXChannelIndex pin_;                                         // Pin index for the DIO component

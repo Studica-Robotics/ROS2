@@ -71,6 +71,7 @@ MecanumDrive::MecanumDrive(
         std::bind(&MecanumDrive::cmd_vel_callback, this, std::placeholders::_1)
     );
 }
+
 MecanumDrive::~MecanumDrive() {}
 
 void MecanumDrive::cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {

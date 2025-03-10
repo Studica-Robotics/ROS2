@@ -18,7 +18,6 @@
 #include "VMXManager.h"
 #include "VMXPi.h"
 
-
 namespace studica_control {
 
 class MecanumDrive : public rclcpp::Node {

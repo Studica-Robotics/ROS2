@@ -18,7 +18,7 @@ DiffOdometry::DiffOdometry(size_t velocity_rolling_window_size)
   linear_accumulator_(velocity_rolling_window_size),
   angular_accumulator_(velocity_rolling_window_size) {}
 
-  DiffOdometry::~DiffOdometry() {}
+DiffOdometry::~DiffOdometry() {}
 
 void DiffOdometry::init(const rclcpp::Time &time) {
     resetAccumulators();
@@ -156,3 +156,10 @@ void DiffOdometry::resetAccumulators() {
 }
 
 } // namespace studica_control
+
+#include "rclcpp_components/register_node_macro.hpp"
+
+// Register the component with class_loader.
+// This acts as a sort of entry point, allowing the component to be discoverable when its library
+// is being loaded into a running process.
+RCLCPP_COMPONENTS_REGISTER_NODE(studica_control::DiffDrive)

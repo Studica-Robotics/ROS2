@@ -2,14 +2,12 @@
 #include "std_msgs/msg/bool.hpp"
 #include "studica_control/srv/set_data.hpp"
 
-namespace studica_control
-{
+namespace studica_control {
 
 DIO::DIO(const rclcpp::NodeOptions &options) : rclcpp::Node("dio", options), is_publishing(false) {}
 
 DIO::DIO(std::shared_ptr<VMXPi> vmx, VMXChannelIndex pin, studica_driver::PinMode pin_mode, std::string type) 
     : rclcpp::Node("dio_component"), vmx_(vmx), pin_(pin), pin_mode_(pin_mode), is_publishing(false), btn_pin(-1) {
-    // Initialize DIO component
     dio_ = std::make_shared<studica_driver::DIO>(pin_, pin_mode_, vmx_);
     if (type == "button") {
         btn_pin = pin_;
@@ -22,9 +20,8 @@ DIO::DIO(std::shared_ptr<VMXPi> vmx, VMXChannelIndex pin, studica_driver::PinMod
         std::bind(&DIO::cmd_callback, this, std::placeholders::_1, std::placeholders::_2)
     );
 
-    // Create a timer to publish the DIO state periodically
     timer_ = this->create_wall_timer(
-        std::chrono::seconds(1), // Adjust the interval as needed
+        std::chrono::seconds(1),
         std::bind(&DIO::publish_dio_state, this)
     );
 
@@ -34,15 +31,11 @@ DIO::DIO(std::shared_ptr<VMXPi> vmx, VMXChannelIndex pin, studica_driver::PinMod
 DIO::~DIO() {}
 
 void DIO::publish_dio_state() {
-    if (!is_publishing) {
-        return; // Do nothing if publishing is not active
-    }
+    if (!is_publishing) return;
     try {
         if (pin_ == btn_pin) {
-            // Get the current DIO state
             bool dio_value = dio_->Get();
 
-            // Publish the state
             auto message = std_msgs::msg::Bool();
             message.data = dio_value;
             publisher_->publish(message);
@@ -94,4 +87,6 @@ void DIO::cmd_callback(const std::shared_ptr<studica_control::srv::SetData::Requ
 #include "rclcpp_components/register_node_macro.hpp"
 
 // Register the component with class_loader.
+// This acts as a sort of entry point, allowing the component to be discoverable when its library
+// is being loaded into a running process.
 RCLCPP_COMPONENTS_REGISTER_NODE(studica_control::DIO)

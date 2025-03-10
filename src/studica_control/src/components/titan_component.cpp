@@ -1,7 +1,6 @@
 #include "studica_control/titan_component.h"
 
-namespace studica_control
-{
+namespace studica_control {
 
 Titan::Titan(const rclcpp::NodeOptions & options) : Node("titan_", options) {}
 

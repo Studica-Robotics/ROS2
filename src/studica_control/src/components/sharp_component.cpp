@@ -1,7 +1,6 @@
 #include "studica_control/sharp_component.h"
 
-namespace studica_control
-{
+namespace studica_control {
 void Sharp::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response) {
     if (params == "get_distance") {
         response->success = true;
