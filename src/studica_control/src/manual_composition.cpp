@@ -2,6 +2,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 
+#include "studica_control/cobra_component.h"
 #include "studica_control/diff_drive_component.h"
 #include "studica_control/dio_component.h"
 #include "studica_control/encoder_component.h"
@@ -9,7 +10,8 @@
 #include "studica_control/mecanum_drive_component.h"
 #include "studica_control/servo_component.h"
 #include "studica_control/titan_component.h"
-#include <studica_control/msg/initialize_params.hpp>
+#include "studica_control/ultrasonic_component.h"
+#include "studica_control/msg/initialize_params.hpp"
 #include "VMXPi.h"
 
 class ControlServer : public rclcpp::Node {
@@ -21,18 +23,16 @@ private:
 
     void service_callback(
         const std::shared_ptr<studica_control::srv::SetData::Request> request,
-        std::shared_ptr<studica_control::srv::SetData::Response> response) 
-    {
+        std::shared_ptr<studica_control::srv::SetData::Response> response) {
+
         std::string name = request->name;
         std::string component = request->component;
 
         if (component == "servo") {
-            // Extract initialization parameters
             uint8_t pin = request->initparams.pin;
             std::string servo_type_str = request->initparams.servo_type;
             std::string name = request->name;
 
-            // Determine the servo type
             studica_driver::ServoType servo_type;
             int min_angle = 0, max_angle = 0;
             
@@ -57,11 +57,6 @@ private:
 
             try {
                 auto servo_node = std::make_shared<studica_control::Servo>(vmx_, name, pin, servo_type, min_angle, max_angle);
-            
-                // auto node_options = rclcpp::NodeOptions();
-                // auto servo_node = std::make_shared<studica_control::Servo>(node_options);
-
-                // Add to executor and component map
                 executor_->add_node(servo_node);
                 component_map[name] = servo_node;
 
@@ -73,6 +68,42 @@ private:
                 RCLCPP_ERROR(this->get_logger(), "Failed to create servo component: %s", e.what());
                 response->success = false;
                 response->message = "Failed to create servo component: " + std::string(e.what());
+            }
+        } else if (component == "cobra") {
+            try {
+                auto ip = request->initparams;
+                auto cobra_node = std::make_shared<studica_control::Cobra>(
+                    vmx_, "Cobra", 
+                    ip.vref, 
+                    ip.mux_ch);
+                executor_->add_node(cobra_node);
+                component_map[name] = cobra_node;
+
+                response->success = true;
+                response->message = "Cobra '" + name + "' created successfully.";
+                RCLCPP_INFO(this->get_logger(), "Created Cobra component '%s'.", name.c_str());
+            } catch (const std::exception &e) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to create Cobra component: %s", e.what());
+                response->success = false;
+                response->message = "Failed to create Cobra component: " + std::string(e.what());
+            }
+        } else if (component == "encoder") {
+            try {
+                auto ip = request->initparams;
+                auto encoder_node = std::make_shared<studica_control::Encoder>(
+                    vmx_, "Encoder", 
+                    ip.port_a, 
+                    ip.port_b);
+                executor_->add_node(encoder_node);
+                component_map[name] = encoder_node;
+
+                response->success = true;
+                response->message = "Encoder '" + name + "' created successfully.";
+                RCLCPP_INFO(this->get_logger(), "Created Encoder component '%s'.", name.c_str());
+            } catch (const std::exception &e) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to create Encoder component: %s", e.what());
+                response->success = false;
+                response->message = "Failed to create Encoder component: " + std::string(e.what());
             }
         } else if (component == "imu") {
             try {
@@ -177,7 +208,22 @@ private:
                 RCLCPP_ERROR(this->get_logger(), "Failed to create mecanum drive component: %s", e.what());
                 response->success = false;
                 response->message = "Failed to create mecanum drive component: " + std::string(e.what());
-        }
+            }
+        } else if (component == "ultrasonic") {
+            try {
+                auto ip = request->initparams;
+                auto ultrasonic_node = std::make_shared<studica_control::Ultrasonic>(vmx_, "ultrasonic", ip.ping, ip.echo);
+                executor_->add_node(ultrasonic_node);
+                component_map[name] = ultrasonic_node;
+
+                response->success = true;
+                response->message = "Ultrasonic component '" + name + "' created successfully.";
+                RCLCPP_INFO(this->get_logger(), "Created Ultrasonic component '%s'.", name.c_str());
+            } catch (const std::exception &e) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to create Ultrasonic component: %s", e.what());
+                response->success = false;
+                response->message = "Failed to create Ultrasonic component: " + std::string(e.what());
+            }
         } else {
             RCLCPP_WARN(this->get_logger(), "Invalid component type '%s'.", component.c_str());
             response->success = false;

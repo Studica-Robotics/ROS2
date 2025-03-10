@@ -1,36 +1,22 @@
 #include "studica_control/encoder_component.h"
 
-namespace studica_control
-{
+namespace studica_control {
 
-Encoder::Encoder(const rclcpp::NodeOptions & options) : Node("encoder", options) {
-    // Constructor
-}
+Encoder::Encoder(const rclcpp::NodeOptions & options) : Node("encoder", options) {}
 
-Encoder::~Encoder() {
-    // Destructor
-    auto& vmx_manager = studica_driver::VMXManager::getInstance();
-    vmx_manager.setPinUnused(port_a_);
-    vmx_manager.setPinUnused(port_b_);
-}
-
-void Encoder::Initialize(VMXChannelIndex port_a, VMXChannelIndex port_b) {
-    port_a_ = port_a;
-    port_b_ = port_b;
-    auto& vmx_manager = studica_driver::VMXManager::getInstance();
-    vmx_ = vmx_manager.getVMX();
-    if (vmx_manager.isPinUsed(port_a)) {
-        printf("Port %d is already in use\n", port_a);
-        return;
-    }
-    if (vmx_manager.isPinUsed(port_b)) {
-        printf("Port %d is already in use\n", port_b);
-        return;
-    }
-    vmx_manager.setPinUsed(port_a);
-    vmx_manager.setPinUsed(port_b);
-
+Encoder::Encoder(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex port_a, VMXChannelIndex port_b) 
+    : Node(name), vmx_(vmx), port_a_(port_a), port_b_(port_b) {
     encoder_ = std::make_shared<studica_driver::Encoder>(port_a_, port_b_, vmx_);
+    service_ = this->create_service<studica_control::srv::SetData>(
+        "encoder_cmd",
+        std::bind(&Encoder::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
+}
+
+Encoder::~Encoder() {}
+
+void Encoder::cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
+    std::string params = request->params;
+    cmd(params, response);
 }
 
 void Encoder::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response) {

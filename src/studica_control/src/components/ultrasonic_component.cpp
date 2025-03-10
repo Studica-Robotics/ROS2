@@ -1,25 +1,44 @@
 #include "studica_control/ultrasonic_component.h"
 
-namespace studica_control
-{
+namespace studica_control {
 
-Ultrasonic::Ultrasonic(const rclcpp::NodeOptions &options) : Node("ultrasonic_", options) {
+Ultrasonic::Ultrasonic(const rclcpp::NodeOptions &options) : Node("ultrasonic_", options) {}
+
+Ultrasonic::Ultrasonic(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping, VMXChannelIndex echo) 
+    : Node(name), vmx_(vmx), ping_(ping), echo_(echo) {
+    ultrasonic_ = std::make_shared<studica_driver::Ultrasonic>(ping_, echo_, vmx_);
+    service_ = this->create_service<studica_control::srv::SetData>(
+        "ultrasonic_cmd",
+        std::bind(&Ultrasonic::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
 }
 
-Ultrasonic::Ultrasonic(VMXChannelIndex ping, VMXChannelIndex echo) : Node("ultrasonic_") {
-    auto& vmx_manager = studica_driver::VMXManager::getInstance();
-    vmx_ = vmx_manager.getVMX();
-    if (vmx_manager.isPinUsed(ping)) {
-        printf("Port %d is already in use\n", ping);
-        return;
+Ultrasonic::~Ultrasonic() {}
+
+void Ultrasonic::cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
+    std::string params = request->params;
+    cmd(params, response);
+}
+
+void Ultrasonic::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response) {
+    if (params == "get_distance_inches") {
+        ultrasonic_->Ping();
+        response->success = true;
+        response->message = std::to_string(ultrasonic_->GetDistanceIN());
+        ultrasonic_->Ping();
+    } else if (params == "get_distance_millimeters") {
+        ultrasonic_->Ping();
+        response->success = true;
+        response->message = std::to_string(ultrasonic_->GetDistanceMM());
+        ultrasonic_->Ping();
+    } else if (params == "get_distance") {
+        ultrasonic_->Ping();
+        response->success = true;
+        response->message = std::to_string(ultrasonic_->GetDistanceMM());
+        ultrasonic_->Ping();
+    } else {
+        response->success = false;
+        response->message = "No such command '" + params + "'";
     }
-    if (vmx_manager.isPinUsed(echo)) {
-        printf("Port %d is already in use\n", echo);
-        return;
-    }
-    vmx_manager.setPinUsed(ping);
-    vmx_manager.setPinUsed(echo);
-    ultrasonic_ = std::make_shared<studica_driver::Ultrasonic>(ping, echo, vmx_);
 }
 
 void Ultrasonic::DisplayVMXError(VMXErrorCode vmxerr) {
