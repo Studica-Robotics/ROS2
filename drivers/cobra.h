@@ -63,8 +63,13 @@ namespace studica_driver
         private:
             VMXPi vmx{true, (uint8_t)50};
             VMXResourceHandle i2c_res_handle;
-            bool WriteI2C(int registerAddress, uint8_t* data);
+
+            /* Move these read and write functions into the I2C driver */
+            bool WriteI2C(int registerAddress, uint8_t* data); 
             bool ReadI2C(int count, int registerAddress, uint8_t* data);
+            // In a protected library probably? or private -- Figure that out
+            //Which of the variables to move into the i2c header. deviceAddress and port?
+
             void Delay(double seconds);
             bool IsConnected();
             int GetSingle(uint8_t channel);
@@ -77,7 +82,7 @@ namespace studica_driver
             int sampleRate;
             float multiplierVolts;
             int port;
-            int deviceAddress;
+            int deviceAddress; 
     };
 }
 
