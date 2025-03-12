@@ -35,3 +35,33 @@ bool I2C::i2cTransaction(uint8_t device_address, uint8_t* tx_data, size_t tx_siz
     VMXErrorCode vmxerr;
     return vmx_->io.I2C_Transaction(i2c_res_handle_, device_address, tx_data, tx_size, rx_data, rx_size, &vmxerr);
 }
+
+bool I2C::WriteI2C(uint8_t deviceAddress, int registerAddress, uint8_t* data, size_t data_size) {
+    VMXErrorCode vmxerr;
+    if (!vmx_->io.I2C_Write(i2c_res_handle_, deviceAddress, registerAddress, data, data_size, &vmxerr)) {
+        std::cout << "Error Writing to I2C bus!" << std::endl;
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+
+bool I2C::ReadI2C(uint8_t deviceAddress, int registerAddress, uint8_t* data, size_t count) {
+    VMXErrorCode vmxerr;
+    if (count < 1) {
+        std::cout << "I2C Read count out of range" << std::endl;
+        return true;
+    }
+    if (data == nullptr) {
+        std::cout << "I2C Read data is a null pointer" << std::endl;
+        return true;
+    }
+    if (!vmx_->io.I2C_Read(i2c_res_handle_, deviceAddress, registerAddress, data, count, &vmxerr)) {
+        std::cout << "Error reading I2C bus!" << std::endl;
+        return true;
+    }
+    else {
+        return false;
+    }
+}

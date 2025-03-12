@@ -57,21 +57,21 @@ namespace studica_driver
     class Cobra
     {
         public:
-            Cobra(int _vRef);
+            Cobra(std::shared_ptr<VMXPi> vmx, int vRef);
             int GetRawValue(uint8_t channel);
             float GetVoltage(uint8_t channel);
         private:
-            VMXPi vmx{true, (uint8_t)50};
-            VMXResourceHandle i2c_res_handle;
-            bool WriteI2C(int registerAddress, uint8_t* data);
-            bool ReadI2C(int count, int registerAddress, uint8_t* data);
+            std::shared_ptr<VMXPi> vmx_;
+            std::shared_ptr<I2C> i2c_;
+
             void Delay(double seconds);
             bool IsConnected();
             int GetSingle(uint8_t channel);
             int ReadRegister(uint8_t location);
             void DisplayVMXError(VMXErrorCode vmxerr);
             
-            float vRef;
+           
+            float vRef_;
             int mode;
             int gain;
             int sampleRate;

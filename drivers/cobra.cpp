@@ -7,49 +7,25 @@ void Cobra::DisplayVMXError(VMXErrorCode vmxerr)
     printf("VMXError &d: %s\n", p_err_description);
 }
 
-Cobra::Cobra(int _vRef)
+Cobra::Cobra(std::shared_ptr<VMXPi> vmx, int vRef) : vmx_(vmx), vRef_(vRef)
 {
     port = 1;
     deviceAddress = 0x48;
-    vRef = _vRef;
     mode = CONFIG_MODE_CONT;
     gain = CONFIG_PGA_2;
     sampleRate = CONFIG_RATE_1600HZ;
     multiplierVolts = 1.0F;
+
+    i2c_ = std::make_shared<I2C>(vmx_);
+
     try
     {
-        if(vmx.IsOpen())
+        if(!i2c_->isOpen())
         {
-            VMXErrorCode vmxerr;
-            VMXChannelInfo i2c_channels[2] = 
-            {
-                { 
-                    VMXChannelInfo(vmx.getIO().GetSoleChannelIndex(VMXChannelCapability::I2C_SDA), VMXChannelCapability::I2C_SDA) 
-                },
-                {    
-                    VMXChannelInfo(vmx.getIO().GetSoleChannelIndex(VMXChannelCapability::I2C_SCL), VMXChannelCapability::I2C_SCL) 
-                }
-            };
-
-			I2CConfig i2c_cfg;
-
-			if (!vmx.io.ActivateDualchannelResource(i2c_channels[0], i2c_channels[1], &i2c_cfg, i2c_res_handle, &vmxerr)) 
-            {
-				printf("Failed to Activate I2C Resource.\n");
-				DisplayVMXError(vmxerr);
-			} 
-            else 
-            {
-				printf("Successfully Activated I2C Resource with VMXChannels %d and %d\n",
-						i2c_channels[0].index, i2c_channels[1].index);
-			}
-        }
-        else
-        {
-            printf("Error:  Unable to open VMX Client.\n");
-			printf("\n");
-			printf("        - Is pigpio (or the system resources it requires) in use by another process?\n");
-			printf("        - Does this application have root privileges?\n");
+            printf("Error:  Unable to open VMX via I2C.\n");
+            printf("\n");
+            printf("        - Is pigpio (or the system resources it requires) in use by another process?\n");
+            printf("        - Does this application have root privileges?\n");
         }
         IsConnected();
     }
@@ -58,7 +34,6 @@ Cobra::Cobra(int _vRef)
         printf("Caught exception: %s", ex.what());
     }
 }
-// Cobra::~Cobra() {}
 
 int Cobra::GetRawValue(uint8_t channel)
 {
@@ -68,47 +43,10 @@ int Cobra::GetRawValue(uint8_t channel)
 float Cobra::GetVoltage(uint8_t channel)
 {
     float raw = GetSingle(channel);
-    float mV = vRef/0x800;
+    float mV = vRef_/0x800;
     return raw * mV;
 }
 
-bool Cobra::WriteI2C(int registerAddress, uint8_t* data)
-{
-    VMXErrorCode vmxerr;
-    if(!vmx.io.I2C_Write(i2c_res_handle, deviceAddress, registerAddress, data, sizeof(data), &vmxerr))
-    {
-        printf("Error Writing to I2C bus!");
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-
-bool Cobra::ReadI2C(int count, int registerAddress, uint8_t* data)
-{
-    VMXErrorCode vmxerr;
-    if (count < 1)
-    {
-        printf("I2C Read count out of range");
-        return true;
-    }
-    if (data == nullptr)
-    {
-        printf("I2C Read data is a null pointer");
-        return true;
-    }
-    if(!vmx.io.I2C_Read(i2c_res_handle, deviceAddress, registerAddress, data, count, &vmxerr))
-    {
-        printf("Error reading I2C bus!");
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
 
 void Cobra::Delay(double seconds)
 {
@@ -120,9 +58,9 @@ int Cobra::ReadRegister(uint8_t location)
     uint8_t buffer[2];
     uint8_t data[1];
     data[0] = POINTER_CONVERT;
-    WriteI2C(location, data);
+    i2c_->WriteI2C(deviceAddress, location, data, 1);
     Delay(DELAY);
-    ReadI2C(2, location, buffer);
+    i2c_->ReadI2C(deviceAddress, location, buffer, 2);
     return (int)((buffer[0]<<8) & 0xFF00) | (buffer[1] & 0xFF);
 }
 
@@ -130,14 +68,13 @@ bool Cobra::IsConnected()
 {
     uint8_t partID = 0;
     
-    if(ReadI2C(1, 0, &partID))
-    {
-        printf("Cobra could not be found!");
+    bool error = i2c_->ReadI2C(deviceAddress, 0, &partID, 1);
+
+    if (error) {
+        printf("Cobra could not be found at 0x%02X!\n", deviceAddress);
         return false;
-    }
-    else
-    {
-        printf("Cobra is Connected!");
+    } else {
+        printf("Cobra is connected at 0x%02X!\n", deviceAddress);
         return true;
     }
 }
@@ -170,7 +107,7 @@ int Cobra::GetSingle(uint8_t channel)
     uint8_t raw[2];
     raw[0] = (uint8_t) (config>>8);
     raw[1] = (uint8_t) (config & 0xFF);
-    WriteI2C(POINTER_CONVERT, raw);
+    i2c_->WriteI2C(deviceAddress, POINTER_CONVERT, raw, 2);
     Delay(DELAY);
     return ReadRegister(POINTER_CONVERT)>>4;
 }
