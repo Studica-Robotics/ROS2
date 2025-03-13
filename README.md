@@ -44,13 +44,17 @@ sudo su
 source install/setup.bash
 ros2 service call /create_component studica_control/srv/SetData "{component: 'diffdrive', initparams: {can_id: 42, motor_freq: 15600, ticks_per_rotation: 1470, wheel_radius: 0.05, wheel_separation: 0.29, left: 2, right: 3, invert_left: False, invert_right: False}}" 
 ```
+where `wheel_seperation`, `wheel_radius` are in meters, and `left`, `right` correspond to titan ports. Set `invert_left` and/or `invert_right` to `True` to reverse motor direction.
 
 For mecanum drive robots:
 ``` bash
 sudo su
 source install/setup.bash
-ros2 service call /create_component studica_control/srv/SetData "{component: 'mecanum', initparams: {can_id: 42, motor_freq: 15600, ticks_per_rotation: 1120, wheel_radius: 0.05, wheelbase: 0.3, width: 0.28, front_left: 2, front_right: 0, rear_left: 3, rear_right: 1, invert_front_left: True, invert_front_right: False, invert_rear_left: True, invert_rear_right: False}}" 
+ros2 service call /create_component studica_control/srv/SetData "{component: 'mecanum', initparams: {can_id: 42, motor_freq: 15600, ticks_per_rotation: 1120, wheel_radius: 0.05, wheelbase: 0.3, width: 0.28, front_left: 2, front_right: 0, rear_left: 3, rear_right: 1, invert_front_left: False, invert_front_right: False, invert_rear_left: False, invert_rear_right: False}}" 
 ```
+where `wheel_radius`, `wheelbase`, `width` are in meters, and `front_left`, `front_right`, `rear_left`, `rear_right` correspond to titan ports. Set `invert_front_left`, `invert_front_right`, `invert_rear_left`, and/or `invert_rear_right` to `True` to reverse motor direction.
+
+See Service Calls for more info. 
 
 3. Start keyboard controller
 ``` bash
@@ -58,7 +62,7 @@ sudo su
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ```
 
-### Service calls
+### Service Calls
 
 Services use parameters defined in the `.srv` file, while nodes use those defined in the `.msg` file.
 
