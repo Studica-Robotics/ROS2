@@ -1,5 +1,6 @@
 # Studica Device VMX drivers
 ## Build and install
+* Ensure that you have completed the previous build step from [ROS2 README](https://github.com/Studica-Robotics/ROS2/blob/main/README.md) for the examples to run properly. 
 * Once in the drivers folder of ROS2:
 ``` bash
 make
