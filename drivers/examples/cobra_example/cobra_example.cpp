@@ -2,8 +2,7 @@
 #include <thread>
 #include <chrono>
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     studica_driver::Cobra cobra(5.0F);
     float voltage = cobra.GetVoltage(1);
     int value = cobra.GetRawValue(1);

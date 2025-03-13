@@ -54,8 +54,7 @@
 
 namespace studica_driver
 {
-    class Cobra
-    {
+    class Cobra {
         public:
             Cobra(std::shared_ptr<VMXPi> vmx, int vRef);
             int GetRawValue(uint8_t channel);
