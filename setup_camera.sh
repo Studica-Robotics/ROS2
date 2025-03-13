@@ -28,7 +28,7 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 sudo apt install -y ros-$ROS_DISTRO-compressed-image-transport || { echo "Failed to install compressed image transport"; exit 1; }
 
-cd $ROS2_DIR/ros_dependencies/depth_camera 
+cd $ROS2_DIR/depth_camera 
 sudo dpkg -i ros-$ROS_DISTRO-orbbec-camera-msgs_jammy_arm64.deb || { echo "Failed to install orbbec camera msgs package"; exit 1; }
 sudo dpkg -i ros-$ROS_DISTRO-orbbec-camera_jammy_arm64.deb || { echo "Failed to install orbbec camera package"; exit 1; }
 
