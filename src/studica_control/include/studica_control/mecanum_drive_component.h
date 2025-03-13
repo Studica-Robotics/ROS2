@@ -15,7 +15,6 @@
 #include "mecanum_drive_odometry.h"
 #include "studica_control/srv/set_data.hpp"
 #include "titan.h"
-#include "VMXManager.h"
 #include "VMXPi.h"
 
 namespace studica_control {

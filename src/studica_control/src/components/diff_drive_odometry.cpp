@@ -162,4 +162,4 @@ void DiffOdometry::resetAccumulators() {
 // Register the component with class_loader.
 // This acts as a sort of entry point, allowing the component to be discoverable when its library
 // is being loaded into a running process.
-RCLCPP_COMPONENTS_REGISTER_NODE(studica_control::DiffDrive)
+RCLCPP_COMPONENTS_REGISTER_NODE(studica_control::DiffOdometry)

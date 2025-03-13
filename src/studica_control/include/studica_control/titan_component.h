@@ -6,7 +6,6 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include <std_msgs/msg/string.hpp>
-#include "VMXManager.h"
 #include "VMXPi.h" 
 
 #include "studica_control/srv/set_data.hpp"
