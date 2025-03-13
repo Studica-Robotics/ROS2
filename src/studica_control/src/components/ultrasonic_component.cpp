@@ -5,11 +5,16 @@ namespace studica_control {
 Ultrasonic::Ultrasonic(const rclcpp::NodeOptions &options) : Node("ultrasonic_", options) {}
 
 Ultrasonic::Ultrasonic(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping, VMXChannelIndex echo) 
-    : Node(name), vmx_(vmx), ping_(ping), echo_(echo) {
+    : Node(name), vmx_(vmx), ping_(ping), echo_(echo), is_publishing_(false) {
     ultrasonic_ = std::make_shared<studica_driver::Ultrasonic>(ping_, echo_, vmx_);
     service_ = this->create_service<studica_control::srv::SetData>(
         "ultrasonic_cmd",
         std::bind(&Ultrasonic::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
+    publisher_ = this->create_publisher<sensor_msgs::msg::Range>("range", 10);
+    timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(50),
+        std::bind(&Ultrasonic::publish_range, this));
+    timer_->cancel();
 }
 
 Ultrasonic::~Ultrasonic() {}
@@ -35,10 +40,48 @@ void Ultrasonic::cmd(std::string params, std::shared_ptr<studica_control::srv::S
         response->success = true;
         response->message = std::to_string(ultrasonic_->GetDistanceMM());
         ultrasonic_->Ping();
+    } else if (params == "start_publishing") {
+        if (!is_publishing_) {
+            is_publishing_ = true;
+            timer_->reset();
+            response->success = true;
+            response->message = "Ultrasonic publishing started.";
+        } else {
+            response->success = false;
+            response->message = "Ultrasonic already publishing";
+        }
+    } else if (params == "stop_publishing") {
+        if (is_publishing_) {
+            is_publishing_ = false;
+            timer_->cancel();
+            response->success = false;
+            response->message = "Ultrasonic publishing stopped.";
+        } else {
+            response->success = false;
+            response->message = "Ultrasonic publishing already stopped.";
+        }
     } else {
         response->success = false;
         response->message = "No such command '" + params + "'";
     }
+}
+
+void Ultrasonic::publish_range() {
+    if (!is_publishing_) return;
+
+    ultrasonic_->Ping();
+    double distance_mm = ultrasonic_->GetDistanceMM();
+    
+    sensor_msgs::msg::Range msg;
+    msg.header.stamp = this->get_clock()->now();
+    msg.header.frame_id = "ultrasonic_sensor";
+    msg.radiation_type = sensor_msgs::msg::Range::ULTRASOUND;
+    msg.field_of_view = 0.5;
+    msg.min_range = 0.02;
+    msg.max_range = 4.0;
+    msg.range = distance_mm / 1000.0;
+
+    publisher_->publish(msg);
 }
 
 void Ultrasonic::DisplayVMXError(VMXErrorCode vmxerr) {

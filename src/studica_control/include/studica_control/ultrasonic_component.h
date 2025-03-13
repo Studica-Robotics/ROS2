@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include "rclcpp/rclcpp.hpp"
+#include "sensor_msgs/msg/range.hpp"
 #include "std_msgs/msg/string.hpp"
 
 #include "studica_control/srv/set_data.hpp"
@@ -25,9 +26,13 @@ private:
     std::shared_ptr<studica_driver::Ultrasonic> ultrasonic_;
     std::shared_ptr<VMXPi> vmx_;
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
+    rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr publisher_;
+    rclcpp::TimerBase::SharedPtr timer_;
     std::string name_;
     VMXChannelIndex ping_;
     VMXChannelIndex echo_;
+    bool is_publishing_;
+    void publish_range();
     void DisplayVMXError(VMXErrorCode vmxerr);
 };
 
