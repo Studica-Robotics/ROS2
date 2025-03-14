@@ -74,8 +74,7 @@ private:
                 auto ip = request->initparams;
                 auto cobra_node = std::make_shared<studica_control::Cobra>(
                     vmx_, "Cobra", 
-                    ip.vref, 
-                    ip.mux_ch);
+                    ip.vref);
                 executor_->add_node(cobra_node);
                 component_map[name] = cobra_node;
 
@@ -230,7 +229,6 @@ private:
             response->message = "Invalid component type. Allowed type is 'servo'.";
         }
     }
-
 
 public:
     std::shared_ptr<VMXPi> vmx_;
