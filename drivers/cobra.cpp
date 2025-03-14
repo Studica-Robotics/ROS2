@@ -3,10 +3,10 @@ using namespace studica_driver;
 
 void Cobra::DisplayVMXError(VMXErrorCode vmxerr) {
     const char *p_err_description = GetVMXErrorString(vmxerr);
-    printf("VMXError &d: %s\n", p_err_description);
+    printf("VMXError %d: %s\n", p_err_description);
 }
 
-Cobra::Cobra(std::shared_ptr<VMXPi> vmx, int vRef) : vmx_(vmx), vRef_(vRef){
+Cobra::Cobra(std::shared_ptr<VMXPi> vmx, int vRef) : vmx_(vmx), vRef_(vRef) {
     port = 1;
     deviceAddress = 0x48;
     mode = CONFIG_MODE_CONT;
