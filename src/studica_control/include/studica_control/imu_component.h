@@ -1,11 +1,11 @@
 #ifndef IMU_COMPONENT_H
 #define IMU_COMPONENT_H
 
-#include <stdio.h>
 #include <memory>
+#include <string>
 
 #include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/string.hpp>
+#include <sensor_msgs/msg/Imu.hpp>
 
 #include "imu.h"
 #include "studica_control/srv/set_data.hpp"
@@ -19,15 +19,16 @@ public:
     explicit Imu(const rclcpp::NodeOptions &options); 
     Imu(std::shared_ptr<VMXPi> vmx);
     ~Imu();
-    std::shared_ptr<studica_driver::Imu> imu_;
-
+    
 private:
-    void cmd_callback(const std::shared_ptr<studica_control::srv::SetData::Request> request,
-                      std::shared_ptr<studica_control::srv::SetData::Response> response);
-
+    std::shared_ptr<studica_driver::Imu> imu_;
     std::shared_ptr<VMXPi> vmx_;
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
-
+    rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr publisher_;
+    rclcpp::TimerBase::SharedPtr timer_;
+    void cmd_callback(const std::shared_ptr<studica_control::srv::SetData::Request> request,
+        std::shared_ptr<studica_control::srv::SetData::Response> response);
+    void publish_data();
     void DisplayVMXError(VMXErrorCode vmxerr);
 };
 

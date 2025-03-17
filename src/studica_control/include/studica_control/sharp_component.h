@@ -2,10 +2,10 @@
 #define SHARP_COMPONENT_H
 
 #include <memory>
-#include <stdio.h>
+#include <string>
 
 #include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/string.hpp>
+#include <sensor_msgs/msg/range.hpp>
 
 #include "sharp.h"
 #include "studica_control/srv/set_data.hpp"
@@ -15,17 +15,21 @@ namespace studica_control {
     
 class Sharp : public rclcpp::Node {
 public:
-    Sharp(const std::string &name, VMXChannelIndex port, std::shared_ptr<VMXPi> vmx);
     explicit Sharp(const rclcpp::NodeOptions &options);
-    void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);
-    void DisplayVMXError(VMXErrorCode vmxerr);
+    Sharp(const std::string &name, VMXChannelIndex port, std::shared_ptr<VMXPi> vmx);
+    ~Sharp();
 
 private:
-    rclcpp::TimerBase::SharedPtr timer_;
     std::shared_ptr<studica_driver::Sharp> sharp_;
     std::shared_ptr<VMXPi> vmx_;
+    rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
+    rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr publisher_;
+    rclcpp::TimerBase::SharedPtr timer_;
     std::string name_;
     VMXChannelIndex port_;
+    void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
+    void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);
+    void publish_range();
 };
 
 } // namespace studica_control

@@ -2,20 +2,16 @@
 
 namespace studica_control {
 
-Imu::Imu(const rclcpp::NodeOptions &options) : Node("imu_", options) {
-    service_ = this->create_service<studica_control::srv::SetData>(
-        "get_imu_data",
-        std::bind(&Imu::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
+Imu::Imu(const rclcpp::NodeOptions &options) : Node("imu", options) {}
 
-    RCLCPP_INFO(this->get_logger(), "IMU component is ready. hehe");
-}
-
-Imu::Imu(std::shared_ptr<VMXPi> vmx) : rclcpp::Node("imu_component"), vmx_(vmx) {
+Imu::Imu(std::shared_ptr<VMXPi> vmx) : rclcpp::Node("imu"), vmx_(vmx) {
+    imu_ = std::make_shared<studica_driver::Imu>(vmx_);
     service_ = this->create_service<studica_control::srv::SetData>("get_imu_data",
         std::bind(&Imu::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
-
-    imu_ = std::make_shared<studica_driver::Imu>(vmx_);
-
+    publisher_ = this->create_publisher<sensor_msgs::msg::Imu>("imu", 10);
+    timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(50),
+        std::bind(&Imu::publish_data, this));
     RCLCPP_INFO(this->get_logger(), "IMU component is ready.");
 }
 
@@ -38,9 +34,30 @@ void Imu::cmd_callback(const std::shared_ptr<studica_control::srv::SetData::Requ
         RCLCPP_INFO(this->get_logger(), "Pitch: %f, Yaw: %f, Roll: %f.", pitch, yaw, roll);
     } catch (const std::exception &e) {
         response->success = false;
-        response->message = "Failed to set IMU angle: " + std::string(e.what());
-        RCLCPP_ERROR(this->get_logger(), "Failed to set IMU angle: %s", e.what());
+        response->message = "Failed to get IMU data: " + std::string(e.what());
+        RCLCPP_ERROR(this->get_logger(), "Failed to get IMU data: %s", e.what());
     }
+}
+
+void Imu::publish_data() {
+    sensor_msgs::msg::Imu msg;
+    msg.header.stamp = this->get_clock->now();
+    msg.header.frame_id = "imu_link";
+
+    msg.orientation.x = imu_->GetQuaternionX();
+    msg.orientation.y = imu_->GetQuaternionY();
+    msg.orientation.z = imu_->GetQuaternionZ();
+    msg.orientation.w = imu_->GetQuaternionW();
+
+    msg.angular_velocity.x = imu_->GetRawGyroX() * (M_PI / 180.0); // need to convert from DPS to RPS
+    msg.angular_velocity.y = imu_->GetRawGyroY() * (M_PI / 180.0);
+    msg.angular_velocity.z = imu_->GetRawGyroZ() * (M_PI / 180.0);
+
+    msg.linear_acceleration.x = imu_->GetWorldLinearAccelX() * 9.80665; // need to convert g's to m/s^2
+    msg.linear_acceleration.y = imu_->GetWorldLinearAccelY() * 9.80665;
+    msg.linear_acceleration.z = imu_->GetWorldLinearAccelZ() * 9.80665;
+
+    publisher_->publish(msg);
 }
 
 void Imu::DisplayVMXError(VMXErrorCode vmxerr) {

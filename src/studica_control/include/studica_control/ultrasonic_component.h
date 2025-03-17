@@ -2,11 +2,10 @@
 #define ULTRASONIC_COMPONENT_H
 
 #include <memory>
-#include <stdio.h>
+#include <string>
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/range.hpp"
-#include "std_msgs/msg/string.hpp"
 
 #include "studica_control/srv/set_data.hpp"
 #include "ultrasonic.h"
@@ -19,8 +18,6 @@ public:
     explicit Ultrasonic(const rclcpp::NodeOptions &options);
     Ultrasonic(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping, VMXChannelIndex echo);
     ~Ultrasonic();
-    void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
-    void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);
 
 private:
     std::shared_ptr<studica_driver::Ultrasonic> ultrasonic_;
@@ -31,7 +28,8 @@ private:
     std::string name_;
     VMXChannelIndex ping_;
     VMXChannelIndex echo_;
-    bool is_publishing_;
+    void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
+    void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);
     void publish_range();
     void DisplayVMXError(VMXErrorCode vmxerr);
 };
