@@ -5,7 +5,7 @@
 #include <string>
 
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/Imu.hpp>
+#include <sensor_msgs/msg/imu.hpp>
 
 #include "imu.h"
 #include "studica_control/srv/set_data.hpp"

@@ -41,7 +41,7 @@ void Imu::cmd_callback(const std::shared_ptr<studica_control::srv::SetData::Requ
 
 void Imu::publish_data() {
     sensor_msgs::msg::Imu msg;
-    msg.header.stamp = this->get_clock->now();
+    msg.header.stamp = this->get_clock()->now();
     msg.header.frame_id = "imu_link";
 
     msg.orientation.x = imu_->GetQuaternionX();

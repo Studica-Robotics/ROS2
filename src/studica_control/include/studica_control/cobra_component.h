@@ -5,7 +5,7 @@
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/Float32.hpp"
+#include "std_msgs/msg/float32.hpp"
 
 #include "cobra.h"
 #include "studica_control/srv/set_data.hpp"
@@ -23,6 +23,8 @@ private:
     std::shared_ptr<VMXPi> vmx_;
     std::shared_ptr<studica_driver::Cobra> cobra_;
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
+    rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr publisher_;
+    rclcpp::TimerBase::SharedPtr timer_;
     std::string name_;
     float vref_;
     void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);

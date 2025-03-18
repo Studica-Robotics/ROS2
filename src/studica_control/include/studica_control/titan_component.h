@@ -6,10 +6,10 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
-#include "VMXPi.h" 
 
 #include "studica_control/srv/set_data.hpp"
 #include "titan.h"
+#include "VMXPi.h" 
 
 namespace studica_control {
 
@@ -33,7 +33,8 @@ private:
     uint16_t motor_freq_;
     float dist_per_tick_;
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
-    rclcpp::Publisher<std_msgs::msg::Float32MultiArray> publisher_;
+    rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr publisher_;
+    rclcpp::TimerBase::SharedPtr timer_;
     void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
     void publish_distances();

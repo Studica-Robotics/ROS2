@@ -13,7 +13,7 @@ Sharp::Sharp(const std::string &name, VMXChannelIndex port, std::shared_ptr<VMXP
     publisher_ = this->create_publisher<sensor_msgs::msg::Range>("ir_range", 10);
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
-        std::bind(&Sharp::publish_, this));
+        std::bind(&Sharp::publish_range, this));
 }
 
 Sharp::~Sharp() {}
