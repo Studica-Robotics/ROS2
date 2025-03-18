@@ -95,7 +95,7 @@ float Ultrasonic::GetDistanceIN() {
 }
 
 float Ultrasonic::GetDistanceMM() {
-    uint32_t microseconds_per_mm = 58;
+    uint32_t microseconds_per_mm = 5.8;
     return get_count() / microseconds_per_mm;
 }
 
