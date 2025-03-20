@@ -9,6 +9,7 @@
 #include "studica_control/imu_component.h"
 #include "studica_control/mecanum_drive_component.h"
 #include "studica_control/servo_component.h"
+#include "studica_control/sharp_component.h"
 #include "studica_control/titan_component.h"
 #include "studica_control/ultrasonic_component.h"
 #include "studica_control/msg/initialize_params.hpp"
@@ -18,7 +19,6 @@ class ControlServer : public rclcpp::Node {
 private:
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
     std::shared_ptr<rclcpp::executors::MultiThreadedExecutor> executor_;
-    // map of names to nodes
     std::map<std::string, std::shared_ptr<rclcpp::Node>> component_map;
 
     void service_callback(
@@ -69,6 +69,22 @@ private:
                 response->success = false;
                 response->message = "Failed to create servo component: " + std::string(e.what());
             }
+        } else if (component == "sharp") {
+            try {
+                auto ip = request->initparams;
+                auto sharp_node = std::make_shared<studica_control::Sharp>("sharp", ip.port, vmx_);
+                executor_->add_node(sharp_node);
+                component_map[name] = sharp_node;
+
+                response->success = true;
+                response->message = "Sharp '" + name + "' created successfully.";
+                RCLCPP_INFO(this->get_logger(), "Created Sharp component '%s'.", name.c_str());
+            } catch (const std::exception &e) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to create differential drive component: %s", e.what());
+                response->success = false;
+                response->message = "Failed to create differential drive component: " + std::string(e.what());
+            }
+        
         } else if (component == "cobra") {
             try {
                 auto ip = request->initparams;
