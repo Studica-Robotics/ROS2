@@ -2,7 +2,7 @@
 
 namespace studica_control {
 
-DiffOdometry::DiffOdometry(const rclcpp::NodeOptions & options) : Node("diff_drive_", options) {}
+DiffOdometry::DiffOdometry(const rclcpp::NodeOptions & options) : Node("diff_odometry", options) {}
 
 DiffOdometry::DiffOdometry(size_t velocity_rolling_window_size)
 : Node("diff_odometry"),
@@ -14,6 +14,7 @@ DiffOdometry::DiffOdometry(size_t velocity_rolling_window_size)
   wheel_separation_(0.0), 
   left_wheel_prev_pos_(0.0),
   right_wheel_prev_pos_(0.0),
+  use_imu_(false),
   velocity_rolling_window_size_(velocity_rolling_window_size),
   linear_accumulator_(velocity_rolling_window_size),
   angular_accumulator_(velocity_rolling_window_size) {}
@@ -24,8 +25,15 @@ void DiffOdometry::init(const rclcpp::Time &time) {
     resetAccumulators();
     timestamp_ = time;
 
+    imu_subscriber_ = this->create_subscription<sensor_msgs::msg::Imu>("imu", 10, std::bind(&DiffOdometry::imuCallback, this, std::placeholders::_1));
     odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
     tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+}
+
+void DiffOdometry::imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg) {
+    std::lock_guard<std::mutex> lock(imu_data_mutex_);
+    imu_data_ = *msg;
+    use_imu_ = true;
 }
 
 void DiffOdometry::publishOdometry() {
@@ -37,19 +45,25 @@ void DiffOdometry::publishOdometry() {
     odom_msg.child_frame_id = "base_link";
 
     tf2::Quaternion q;
-    q.setRPY(0, 0, heading_);
 
+    if (use_imu_) {
+        std::lock_guard<std::mutex> lock(imu_data_mutex_);
+        odom_msg.pose.pose.orientation = imu_data_.orientation;
+        odom_msg.twist.twist.angular = imu_data_.angular_velocity;
+    } else {
+        q.setRPY(0, 0, heading_);
+        odom_msg.pose.pose.orientation.x = q.x();
+        odom_msg.pose.pose.orientation.y = q.y();
+        odom_msg.pose.pose.orientation.z = q.z();
+        odom_msg.pose.pose.orientation.w = q.w();
+        odom_msg.twist.twist.angular.z = angular_;
+    }
     odom_msg.pose.pose.position.x = x_;
     odom_msg.pose.pose.position.y = y_;
     odom_msg.pose.pose.position.z = 0.0;
-    odom_msg.pose.pose.orientation.x = q.x();
-    odom_msg.pose.pose.orientation.y = q.y();
-    odom_msg.pose.pose.orientation.z = q.z();
-    odom_msg.pose.pose.orientation.w = q.w();
-
+    
     odom_msg.twist.twist.linear.x = linear_;
     odom_msg.twist.twist.linear.y = 0.0;
-    odom_msg.twist.twist.angular.z = angular_;
 
     odom_publisher_->publish(odom_msg);
 
