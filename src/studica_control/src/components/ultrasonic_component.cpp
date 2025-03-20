@@ -53,7 +53,7 @@ void Ultrasonic::publish_range() {
     msg.header.stamp = this->get_clock()->now();
     msg.header.frame_id = "ultrasonic_sensor";
     msg.radiation_type = sensor_msgs::msg::Range::ULTRASOUND;
-    msg.field_of_view = 0.5;
+    msg.field_of_view = 0.26;
     msg.min_range = 0.02;
     msg.max_range = 4.0;
     msg.range = distance_mm / 1000.0;
