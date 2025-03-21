@@ -2,10 +2,11 @@
 
 namespace studica_control {
 
-MecanumDrive::MecanumDrive(const rclcpp::NodeOptions & options) : Node("mecanum_drive_", options) {}
+MecanumDrive::MecanumDrive(const rclcpp::NodeOptions & options) : Node("mecanum_drive", options) {}
 
 MecanumDrive::MecanumDrive(
-    std::shared_ptr<VMXPi> vmx, 
+    std::shared_ptr<VMXPi> vmx,
+    std::shared_ptr<studica_control::MecanumOdometry> odom,
     const std::string &name, 
     const uint8_t &canID, 
     const uint16_t &motor_freq, 
@@ -21,14 +22,15 @@ MecanumDrive::MecanumDrive(
     const bool &invert_front_right,
     const bool &invert_rear_left,
     const bool &invert_rear_right)
-    : Node("titan_"), 
-      vmx_(vmx), 
-      name_(name), 
-      canID_(canID), 
-      motor_freq_(motor_freq), 
-      ticks_per_rotation_(ticks_per_rotation), 
-      wheel_radius_(wheel_radius), 
-      wheelbase_(wheelbase), 
+    : Node("mecanum_drive"),
+      vmx_(vmx),
+      odom_(odom),
+      name_(name),
+      canID_(canID),
+      motor_freq_(motor_freq),
+      ticks_per_rotation_(ticks_per_rotation),
+      wheel_radius_(wheel_radius),
+      wheelbase_(wheelbase),
       width_(width),
       fl_(front_left),
       fr_(front_right),
@@ -58,7 +60,6 @@ MecanumDrive::MecanumDrive(
 
     titan_->Enable(true);
 
-    odom_ = std::make_unique<MecanumOdometry>();
     odom_->setWheelParams(wheelbase_, width_);
     odom_->init(this->now());
     timer_ = this->create_wall_timer(

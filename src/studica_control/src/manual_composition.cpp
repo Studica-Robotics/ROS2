@@ -91,8 +91,12 @@ private:
         } else if (component == "imu") {
             create_component<studica_control::Imu>(name, "IMU", response, vmx_);
         } else if (component == "mecanum") {
+            std::string unique_name = check_unique_name("mecanum_odom");
+            auto component = std::make_shared<studica_control::MecanumOdometry>();
+            executor_->add_node(component);
+            component_map[unique_name] = component;
             create_component<studica_control::MecanumDrive>(
-                name, "Mecanum Drive", response, vmx_, "MecanumDrive", ip.can_id, ip.motor_freq,
+                name, "Mecanum Drive", response, vmx_, component, "MecanumDrive", ip.can_id, ip.motor_freq,
                 ip.ticks_per_rotation, ip.wheel_radius, ip.wheelbase, ip.width, ip.front_left,
                 ip.front_right, ip.rear_left, ip.rear_right, ip.invert_front_left, ip.invert_front_right,
                 ip.invert_rear_left, ip.invert_rear_right);

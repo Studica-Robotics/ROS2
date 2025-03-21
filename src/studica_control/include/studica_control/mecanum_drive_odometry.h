@@ -2,11 +2,13 @@
 #define MECANUM_DRIVE_ODOMETRY_H
 
 #include <cmath>
+#include <mutex>
 
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/time.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2_ros/transform_broadcaster.h"
 
@@ -32,10 +34,17 @@ class MecanumOdometry : public rclcpp::Node {
         void setWheelParams(const double length_x, const double length_y);
 
     private:
+        void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg);
+        
         rclcpp::Node::SharedPtr node_;
+        rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_subscriber_;
         rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
         rclcpp::Time timestamp_;
         std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+
+        sensor_msgs::msg::Imu imu_data_;
+        std::mutex imu_data_mutex_;
+        bool use_imu_;
 
         double length_x_;
         double length_y_;

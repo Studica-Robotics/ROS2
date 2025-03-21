@@ -21,8 +21,10 @@ namespace studica_control {
 
 class MecanumDrive : public rclcpp::Node {
 public:
+    explicit MecanumDrive(const rclcpp::NodeOptions & options);
     MecanumDrive(
         std::shared_ptr<VMXPi> vmx,
+        std::shared_ptr<studica_control::MecanumOdometry> odom,
         const std::string &name,
         const uint8_t &canID,
         const uint16_t &motor_freq,
@@ -39,19 +41,14 @@ public:
         const bool &invert_rear_left,
         const bool &invert_rear_right
     );
-    explicit MecanumDrive(const rclcpp::NodeOptions & options);
     ~MecanumDrive();
-    void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
-    void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
-    void cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg);
-    void publish_odometry();
 
 private:
     std::shared_ptr<VMXPi> vmx_;
+    std::shared_ptr<studica_control::MecanumOdometry> odom_;
     std::shared_ptr<studica_driver::Titan> titan_;
-    std::unique_ptr<MecanumOdometry> odom_;
+    rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
     rclcpp::TimerBase::SharedPtr timer_;
-
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
 
     double length_x_;
@@ -74,7 +71,10 @@ private:
     uint8_t rl_;
     uint8_t rr_;
    
-    rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
+    void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
+    void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
+    void cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg);
+    void publish_odometry();
 };
 
 }  // namespace studica_control

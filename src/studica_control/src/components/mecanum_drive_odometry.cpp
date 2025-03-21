@@ -7,6 +7,7 @@ MecanumOdometry::MecanumOdometry(const rclcpp::NodeOptions & options) : Node("me
 MecanumOdometry::MecanumOdometry()
 : Node("mecanum_odometry"),
   timestamp_(0.0),
+  use_imu_(false),
   length_x_(0.0),
   length_y_(0.0),
   x_(0.0),
@@ -21,8 +22,15 @@ MecanumOdometry::~MecanumOdometry() {}
 
 void MecanumOdometry::init(const rclcpp::Time &time) {
     timestamp_ = time;
+    imu_subscriber_ = this->create_subscription<sensor_msgs::msg::Imu>("imu", 10, std::bind(&MecanumOdometry::imuCallback, this, std::placeholders::_1));
     odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
     tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+}
+
+void MecanumOdometry::imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg) {
+    std::lock_guard<std::mutex> lock(imu_data_mutex_);
+    imu_data_ = *msg;
+    use_imu_ = true;
 }
 
 bool MecanumOdometry::updateAndPublish(
@@ -78,16 +86,22 @@ void MecanumOdometry::publishOdometry() {
     odom_msg.child_frame_id = "base_link";
 
     tf2::Quaternion q;
-    q.setRPY(0, 0, theta_);
 
+    if (use_imu_) {
+        std::lock_guard<std::mutex> lock(imu_data_mutex_);
+        odom_msg.pose.pose.orientation = imu_data_.orientation;
+        odom_msg.twist.twist.angular = imu_data_.angular_velocity;
+    } else {
+        q.setRPY(0, 0, theta_);
+        odom_msg.pose.pose.orientation.x = q.x();
+        odom_msg.pose.pose.orientation.y = q.y();
+        odom_msg.pose.pose.orientation.z = q.z();
+        odom_msg.pose.pose.orientation.w = q.w();
+    }
     odom_msg.pose.pose.position.x = x_;
     odom_msg.pose.pose.position.y = y_;
     odom_msg.pose.pose.position.z = 0.0;
-    odom_msg.pose.pose.orientation.x = q.x();
-    odom_msg.pose.pose.orientation.y = q.y();
-    odom_msg.pose.pose.orientation.z = q.z();
-    odom_msg.pose.pose.orientation.w = q.w();
-
+    
     odom_publisher_->publish(odom_msg);
 
     geometry_msgs::msg::TransformStamped tf;
