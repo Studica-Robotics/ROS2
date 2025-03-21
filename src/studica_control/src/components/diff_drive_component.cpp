@@ -2,10 +2,11 @@
 
 namespace studica_control {
 
-DiffDrive::DiffDrive(const rclcpp::NodeOptions & options) : Node("diff_drive_", options) {}
+DiffDrive::DiffDrive(const rclcpp::NodeOptions & options) : Node("diff_drive", options) {}
 
 DiffDrive::DiffDrive(
     std::shared_ptr<VMXPi> vmx,
+    std::shared_ptr<studica_control::DiffOdometry> odom,
     const std::string &name,
     const uint8_t &canID,
     const uint16_t &motor_freq,
@@ -18,6 +19,7 @@ DiffDrive::DiffDrive(
     const bool invert_right) 
     : Node("diff_drive"),
       vmx_(vmx),
+      odom_(odom),
       name_(name),
       canID_(canID),
       motor_freq_(motor_freq),
@@ -46,11 +48,9 @@ DiffDrive::DiffDrive(
 
     titan_->Enable(true);
 
-    odom_ = std::make_unique<DiffOdometry>();
     odom_->setWheelParams(wheel_separation_);
     odom_->init(this->now());
 
-    tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
         std::bind(&DiffDrive::publish_odometry, this));
@@ -73,11 +73,11 @@ void DiffDrive::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg)
     double linear = msg->linear.x;
     double angular = msg->angular.z;
 
-    left_command_ = linear - angular * wheel_separation_ / 2.0;
-    right_command_ = linear + angular * wheel_separation_ / 2.0;
+    double left_command = linear - angular * wheel_separation_ / 2.0;
+    double right_command = linear + angular * wheel_separation_ / 2.0;
 
-    titan_->SetSpeed(left_, left_command_);
-    titan_->SetSpeed(right_, -1.0 * right_command_);
+    titan_->SetSpeed(left_, left_command);
+    titan_->SetSpeed(right_, -1.0 * right_command);
 }
 
 void DiffDrive::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {

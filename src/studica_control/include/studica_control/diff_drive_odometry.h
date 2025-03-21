@@ -3,11 +3,13 @@
 
 #include <cmath>
 #include <deque>
+#include <mutex>
 
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "rclcpp/time.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2_ros/transform_broadcaster.h"
 
@@ -28,9 +30,7 @@ public:
     double getRollingMean() const {
         if (values_.empty()) return 0.0;
         double sum = 0.0;
-        for (double value : values_) {
-            sum += value;
-        }
+        for (double value : values_) sum += value;
         return sum / values_.size();
     }
 
@@ -66,18 +66,23 @@ public:
     void setVelocityRollingWindowSize(size_t velocity_rolling_window_size);
 
 private:
+    void imuCallback(const sensor_msgs::msg::Imu::SharedPtr msg);
     void integrateRungeKutta2(double linear, double angular);
     void integrateExact(double linear, double angular);
     void resetAccumulators();
 
     rclcpp::Node::SharedPtr node_;
+    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_subscriber_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     rclcpp::Time timestamp_;
+    sensor_msgs::msg::Imu imu_data_;
+    std::mutex imu_data_mutex_;
     double x_, y_, heading_;
     double linear_, angular_;
     double wheel_separation_;
     double left_wheel_prev_pos_, right_wheel_prev_pos_;
+    bool use_imu_;
     size_t velocity_rolling_window_size_;
     RollingMeanAccumulator linear_accumulator_;
     RollingMeanAccumulator angular_accumulator_;
