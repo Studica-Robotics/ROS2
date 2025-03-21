@@ -22,6 +22,10 @@ Titan::Titan(
     service_ = this->create_service<studica_control::srv::SetData>(
         "titan_cmd",
         std::bind(&Titan::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
+    publisher_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("distances", 10);
+    timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(50),
+        std::bind(&Titan::publish_distances, this));
 }
 
 Titan::~Titan() {}
@@ -83,6 +87,17 @@ void Titan::cmd(std::string params, std::shared_ptr<studica_control::srv::SetDat
         response->success = false;
         response->message = "No such command '" + params + "'";
     }
+}
+
+void Titan::publish_distances() {
+    std_msgs::msg::Float32MultiArray msg;
+    msg.data.resize(4);
+
+    for (int i=0; i<4; i++) {
+        msg.data[i] = titan_->GetEncoderDistance(i);
+    }
+
+    publisher_->publish(msg);
 }
 
 } // namespace studica_control

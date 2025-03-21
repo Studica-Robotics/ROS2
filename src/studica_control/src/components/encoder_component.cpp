@@ -10,6 +10,11 @@ Encoder::Encoder(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannel
     service_ = this->create_service<studica_control::srv::SetData>(
         "encoder_cmd",
         std::bind(&Encoder::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
+    count_publisher_ = this->create_publisher<std_msgs::msg::Int32>("encoder_count", 10);
+    direction_publisher_ = this->create_publisher<std_msgs::msg::String>("encoder_direction", 10);
+    timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(50),
+        std::bind(&Encoder::publish_data, this));
 }
 
 Encoder::~Encoder() {}
@@ -30,6 +35,16 @@ void Encoder::cmd(std::string params, std::shared_ptr<studica_control::srv::SetD
         response->success = false;
         response->message = "No such command '" + params + "'";
     }
+}
+
+void Encoder::publish_data() {
+    std_msgs::msg::Int32 count_msg;
+    count_msg.data = encoder_->GetCount();
+    count_publisher_->publish(count_msg);
+
+    std_msgs::msg::String direction_msg;
+    direction_msg.data = encoder_->GetDirection();
+    direction_publisher_->publish(direction_msg);
 }
 
 } // namespace studica_control
