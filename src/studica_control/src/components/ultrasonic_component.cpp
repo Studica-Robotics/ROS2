@@ -2,11 +2,10 @@
 
 namespace studica_control {
 
-Ultrasonic::Ultrasonic(const rclcpp::NodeOptions &options) : Node("ultrasonic", options) {std::cout << "bruh\n";}
+Ultrasonic::Ultrasonic(const rclcpp::NodeOptions &options) : Node("ultrasonic", options) {}
 
 Ultrasonic::Ultrasonic(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping, VMXChannelIndex echo) 
     : Node(name), vmx_(vmx), ping_(ping), echo_(echo) {
-    std::cout << "yeet\n";
     ultrasonic_ = std::make_shared<studica_driver::Ultrasonic>(ping_, echo_, vmx_);
     service_ = this->create_service<studica_control::srv::SetData>(
         "ultrasonic_cmd",
