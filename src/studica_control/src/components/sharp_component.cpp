@@ -34,15 +34,18 @@ void Sharp::cmd(std::string params, std::shared_ptr<studica_control::srv::SetDat
 }
 
 void Sharp::publish_range() {
-    float distance = sharp_->GetDistance();
+    double min_range = 0.1, max_range = 0.8;
+    float distance = sharp_->GetDistance() / 100.0;
+
+    if (distance < min_range || distance > max_range) distance = INFINITY;
 
     sensor_msgs::msg::Range msg;
     msg.header.stamp = this->get_clock()->now();
     msg.header.frame_id = "sharp_sensor";
     msg.radiation_type = sensor_msgs::msg::Range::INFRARED;
     msg.field_of_view = 0.26;
-    msg.min_range = 0.1;
-    msg.max_range = 0.8;
+    msg.min_range = min_range;
+    msg.max_range = max_range;
     msg.range = distance;
 
     publisher_->publish(msg);

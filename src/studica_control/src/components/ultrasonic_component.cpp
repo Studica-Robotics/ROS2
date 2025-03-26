@@ -2,10 +2,11 @@
 
 namespace studica_control {
 
-Ultrasonic::Ultrasonic(const rclcpp::NodeOptions &options) : Node("ultrasonic_", options) {}
+Ultrasonic::Ultrasonic(const rclcpp::NodeOptions &options) : Node("ultrasonic", options) {std::cout << "bruh\n";}
 
 Ultrasonic::Ultrasonic(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping, VMXChannelIndex echo) 
     : Node(name), vmx_(vmx), ping_(ping), echo_(echo) {
+    std::cout << "yeet\n";
     ultrasonic_ = std::make_shared<studica_driver::Ultrasonic>(ping_, echo_, vmx_);
     service_ = this->create_service<studica_control::srv::SetData>(
         "ultrasonic_cmd",
@@ -46,17 +47,21 @@ void Ultrasonic::cmd(std::string params, std::shared_ptr<studica_control::srv::S
 }
 
 void Ultrasonic::publish_range() {
+    double min_range = 0.02, max_range = 4.0;
+
     ultrasonic_->Ping();
-    double distance_mm = ultrasonic_->GetDistanceMM();
+    double distance_m = ultrasonic_->GetDistanceMM() / 1000.0;
+
+    if (distance_m < min_range || distance_m > max_range) distance_m = INFINITY;
     
     sensor_msgs::msg::Range msg;
     msg.header.stamp = this->get_clock()->now();
     msg.header.frame_id = "ultrasonic_sensor";
     msg.radiation_type = sensor_msgs::msg::Range::ULTRASOUND;
     msg.field_of_view = 0.26;
-    msg.min_range = 0.02;
-    msg.max_range = 4.0;
-    msg.range = distance_mm / 1000.0;
+    msg.min_range = min_range;
+    msg.max_range = max_range;
+    msg.range = distance_m;
 
     publisher_->publish(msg);
 }
