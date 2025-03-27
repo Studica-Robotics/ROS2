@@ -36,6 +36,7 @@ include_directories( # <- #include <"">
 set(studica_control_HDRS
   include/studica_control/cobra_component.h
   include/studica_control/device.h
+  include/studica_control/dc_encoder_component.h
   include/studica_control/diff_drive_component.h
   include/studica_control/diff_drive_odometry.h
   include/studica_control/dio_component.h
@@ -64,6 +65,10 @@ set(dependencies
 add_library(cobra_component SHARED src/components/cobra_component.cpp)
 ament_target_dependencies(cobra_component ${dependencies})
 rclcpp_components_register_nodes(cobra_component "studica_control::cobra")
+
+add_library(dc_encoder_component SHARED src/components/dc_encoder_component.cpp)
+ament_target_dependencies(dc_encoder_component ${dependencies})
+rclcpp_components_register_nodes(dc_encoder_component "studica_control::DutyCycleEncoder")
 
 add_library(diff_drive_component SHARED src/components/diff_drive_component.cpp)
 ament_target_dependencies(diff_drive_component ${dependencies})
@@ -106,13 +111,14 @@ rclcpp_components_register_nodes(sharp_component "studica_control::Titan")
 
 add_library(ultrasonic_component SHARED src/components/ultrasonic_component.cpp)
 ament_target_dependencies(ultrasonic_component ${dependencies})
-rclcpp_components_register_nodes(ultrasonic_component "studica_control::ultrasonic")
+rclcpp_components_register_nodes(ultrasonic_component "studica_control::Ultrasonic")
 
 target_link_libraries(diff_drive_component diff_drive_odometry)
 target_link_libraries(mecanum_drive_component mecanum_drive_odometry)
 
 install(TARGETS 
   cobra_component
+  dc_encoder_component
   diff_drive_component
   diff_drive_odometry
   dio_component
@@ -134,6 +140,7 @@ rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_t
 add_executable(manual_composition src/manual_composition.cpp)
 target_link_libraries(manual_composition 
   cobra_component
+  dc_encoder_component
   diff_drive_component
   diff_drive_odometry
   dio_component
@@ -176,6 +183,7 @@ install(DIRECTORY
 ament_export_include_directories(include)
 ament_export_libraries(
   cobra_component
+  dc_encoder_component
   diff_drive_component
   diff_drive_odometry
   dio_component
