@@ -14,6 +14,7 @@ float32 width
 int32 can_id
 int32 motor_freq
 string servo_type
+string dio_type
 int32 port
 int32 port_a
 int32 port_b
