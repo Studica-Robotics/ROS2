@@ -7,17 +7,17 @@ DIO::DIO(const rclcpp::NodeOptions &options) : rclcpp::Node("dio", options) {}
 DIO::DIO(std::shared_ptr<VMXPi> vmx, VMXChannelIndex pin, studica_driver::PinMode pin_mode, std::string type) 
     : rclcpp::Node("dio_component"), vmx_(vmx), pin_(pin), pin_mode_(pin_mode), btn_pin(-1) {
     dio_ = std::make_shared<studica_driver::DIO>(pin_, pin_mode_, vmx_);
-    if (type == "button") {
-        btn_pin = pin_;
-        RCLCPP_INFO(this->get_logger(), "DIO button pin %d.", btn_pin);
-    }
+    
+    btn_pin = pin_;
+    RCLCPP_INFO(this->get_logger(), "DIO button pin %d.", btn_pin);
+    
     service_ = this->create_service<studica_control::srv::SetData>(
         "dio_cmd",
         std::bind(&DIO::cmd_callback, this, std::placeholders::_1, std::placeholders::_2)
     );
     publisher_ = this->create_publisher<std_msgs::msg::Bool>("dio_state", 10);
     timer_ = this->create_wall_timer(
-        std::chrono::seconds(1),
+        std::chrono::milliseconds(100),
         std::bind(&DIO::publish_dio_state, this)
     );
     RCLCPP_INFO(this->get_logger(), "DIO component is ready.");

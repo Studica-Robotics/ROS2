@@ -84,8 +84,20 @@ private:
                 ip.ticks_per_rotation, ip.wheel_radius, ip.wheel_separation, ip.left, ip.right, 
                 ip.invert_left, ip.invert_right);
         } else if (component == "dio") {
-            create_component<studica_control::DIO>(
-                name, "DIO", response, vmx_, ip.pin, studica_driver::PinMode::OUTPUT, std::string(request->params));
+            std::string dio_type_str = ip.dio_type;
+            RCLCPP_INFO(this->get_logger(), "%s", std::string(request->params).c_str());
+            if (dio_type_str == "input") {
+                create_component<studica_control::DIO>(
+                    name, "DIO", response, vmx_, ip.pin, studica_driver::PinMode::INPUT, std::string(request->params));
+            } else if (dio_type_str == "output") {
+                create_component<studica_control::DIO>(
+                    name, "DIO", response, vmx_, ip.pin, studica_driver::PinMode::OUTPUT, std::string(request->params));
+            } else {
+                RCLCPP_WARN(this->get_logger(), "Invalid dio type. Allowed values are 'input' or 'output'.");
+                response->success = false;
+                response->message = "Invalid dio type.";
+                return;
+            }
         } else if (component == "encoder") {
             create_component<studica_control::Encoder>(name, "Encoder", response, vmx_, "Encoder", ip.port_a, ip.port_b);
         } else if (component == "imu") {
