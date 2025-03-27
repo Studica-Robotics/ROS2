@@ -20,16 +20,15 @@ void Servo::SetBounds(double min, double center, double max) {
     PWM::SetBounds(min, center, max);
 }
 
-
 void Servo::SetAngle(int angle) {
     if (prev_pwm_servo_value_ != angle) {
         VMXErrorCode vmxerr;
         bool success = vmx_->io.PWMGenerator_SetDutyCycle(pwm_res_handle_, port_, Map(angle), &vmxerr);
-        prev_pwm_servo_value_ = angle;
         if (!success) { 
             printf("Failed to set duty cycle for servo on port %d\n", port_);
             DisplayVMXError(vmxerr);
         } else {
+            prev_pwm_servo_value_ = angle;
             printf("PWM Duty cycle set on port %d at %d\n", port_, angle);
         }
     }
@@ -48,3 +47,5 @@ void Servo::SetSpeed(int speed) {
         }
     }
 }
+
+float Servo::GetLastAngle() { return prev_pwm_servo_value_; }

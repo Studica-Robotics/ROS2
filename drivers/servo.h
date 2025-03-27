@@ -22,6 +22,7 @@ public:
     void SetBounds(double min, double center, double max);
     void SetAngle(int angle);
     void SetSpeed(int speed);
+    float GetLastAngle();
 
 private:
     int prev_pwm_servo_value_;
