@@ -21,6 +21,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files (srv, msg, action)
+  "msg/DutyCycleEncoderMsg.msg"
   "msg/InitializeParams.msg"
   "srv/ControlImu.srv"
   "srv/SetData.srv"

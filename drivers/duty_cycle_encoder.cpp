@@ -29,7 +29,7 @@ int DutyCycleEncoder::GetAbsolutePosition() {
     uint32_t duty_cycle_us;
     uint32_t frequency_us;
     if (vmx_->io.PWMCapture_GetCount(encoder_res_handle_, frequency_us, duty_cycle_us, &vmxerr)) {
-        return static_cast<int>(360 * (static_cast<float>(duty_cycle_us) / 1024.0f));
+        return static_cast<int>(360 * ((static_cast<float>(duty_cycle_us) - 7.0) / 1818.18f));
     }
     DisplayVMXError(vmxerr);
     return -1;

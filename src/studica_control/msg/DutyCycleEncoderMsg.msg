@@ -1,0 +1,3 @@
+int32 absolute_angle
+int32 rollover_count
+int32 total_rotation

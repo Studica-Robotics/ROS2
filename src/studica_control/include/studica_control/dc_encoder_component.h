@@ -5,6 +5,7 @@
 #include "std_msgs/msg/int32.hpp"
 
 #include "duty_cycle_encoder.h"
+#include "studica_control/msg/duty_cycle_encoder_msg.hpp"
 #include "studica_control/srv/set_data.hpp"
 #include "VMXPi.h"
 
@@ -20,7 +21,7 @@ private:
     std::shared_ptr<studica_driver::DutyCycleEncoder> duty_cycle_encoder_;
     std::shared_ptr<VMXPi> vmx_;
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
-    rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr publisher_;
+    rclcpp::Publisher<studica_control::msg::DutyCycleEncoderMsg>::SharedPtr publisher_;
     rclcpp::TimerBase::SharedPtr timer_;
     std::string name_;
     VMXChannelIndex port_;

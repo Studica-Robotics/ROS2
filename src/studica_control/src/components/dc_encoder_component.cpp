@@ -10,7 +10,7 @@ DutyCycleEncoder::DutyCycleEncoder(std::shared_ptr<VMXPi> vmx, const std::string
     service_ = this->create_service<studica_control::srv::SetData>(
         "duty_cycle_encoder_cmd",
         std::bind(&DutyCycleEncoder::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
-    publisher_ = this->create_publisher<std_msgs::msg::Int32>("encoder_count", 10);
+    publisher_ = this->create_publisher<studica_control::msg::DutyCycleEncoderMsg>("duty_cycle_encoder", 10);
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
         std::bind(&DutyCycleEncoder::publish_data, this));
@@ -24,8 +24,10 @@ void DutyCycleEncoder::cmd_callback(const std::shared_ptr<studica_control::srv::
 void DutyCycleEncoder::cmd() {}
 
 void DutyCycleEncoder::publish_data() {
-    std_msgs::msg::Int32 msg;
-    msg.data = duty_cycle_encoder_->GetTotalRotation();
+    auto msg = studica_control::msg::DutyCycleEncoderMsg();
+    msg.absolute_angle = duty_cycle_encoder_->GetAbsolutePosition();
+    msg.rollover_count = duty_cycle_encoder_->GetRolloverCount();
+    msg.total_rotation = duty_cycle_encoder_->GetTotalRotation();
     publisher_->publish(msg);
 }
 

@@ -4,6 +4,7 @@
 #include "rclcpp/rclcpp.hpp"
 
 #include "studica_control/cobra_component.h"
+#include "studica_control/dc_encoder_component.h"
 #include "studica_control/diff_drive_component.h"
 #include "studica_control/dio_component.h"
 #include "studica_control/encoder_component.h"
@@ -74,6 +75,8 @@ private:
         
         if (component == "cobra") {
             create_component<studica_control::Cobra>(name, "Cobra", response, vmx_, "Cobra", ip.vref);
+        } else if (component == "dutycycle") {
+                create_component<studica_control::DutyCycleEncoder>(name, "duty_cycle_encoder", response, vmx_, "duty_cycle_encoder", ip.port);
         } else if (component == "diffdrive") {
             std::string unique_name = check_unique_name("diff_odom");
             auto component = std::make_shared<studica_control::DiffOdometry>();
