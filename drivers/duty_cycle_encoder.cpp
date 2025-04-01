@@ -24,12 +24,18 @@ DutyCycleEncoder::~DutyCycleEncoder() {
     vmx_->io.DeallocateResource(encoder_res_handle_, &vmxerr);
 }
 
-int DutyCycleEncoder::GetAbsolutePosition() {
+double DutyCycleEncoder::GetAbsolutePosition() {
     VMXErrorCode vmxerr;
-    uint32_t duty_cycle_us;
-    uint32_t frequency_us;
-    if (vmx_->io.PWMCapture_GetCount(encoder_res_handle_, frequency_us, duty_cycle_us, &vmxerr)) {
-        return static_cast<int>(360 * ((static_cast<float>(duty_cycle_us) - 7.0) / 1818.18f));
+    uint32_t chan1_counts;
+    uint32_t chan2_counts;
+    if (vmx_->io.InputCapture_GetChannelCounts(encoder_res_handle_, chan1_counts, chan2_counts, &vmxerr)) {
+        if (chan1_counts == 0 || chan2_counts > chan1_counts) return -2.0;
+        double duty_cycle = (static_cast<double>(chan2_counts) * 360.0) / (chan1_counts - 7);
+        double cycle_to_remove = (7.0 * 360.0) / chan1_counts;
+        duty_cycle -= cycle_to_remove;
+        if (duty_cycle < 0.0) duty_cycle = 0.0;
+        if (duty_cycle > ((4095.0 * 360.0) / chan1_counts)) duty_cycle = (4095.0 * 360.0) / chan1_counts;
+        return duty_cycle;
     }
     DisplayVMXError(vmxerr);
     return -1;
@@ -45,7 +51,7 @@ int DutyCycleEncoder::GetRolloverCount() {
     return -1;
 }
 
-int DutyCycleEncoder::GetTotalRotation() {
+double DutyCycleEncoder::GetTotalRotation() {
     return GetRolloverCount() * 360 + GetAbsolutePosition();
 }
 

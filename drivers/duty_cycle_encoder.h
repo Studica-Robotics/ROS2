@@ -12,9 +12,9 @@ class DutyCycleEncoder {
 public:
     DutyCycleEncoder(VMXChannelIndex port, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
     ~DutyCycleEncoder();
-    int GetAbsolutePosition();
+    double GetAbsolutePosition();
     int GetRolloverCount();
-    int GetTotalRotation();
+    double GetTotalRotation();
 
 private:
     VMXChannelIndex port_;
