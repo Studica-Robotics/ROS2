@@ -2,23 +2,18 @@
 
 namespace studica_control {
 
-Servo::Servo(const rclcpp::NodeOptions &options) : Node("servo_", options) {
-    service_ = this->create_service<studica_control::srv::SetData>(
-        "set_servo_angle",
-        std::bind(&Servo::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
-
-    RCLCPP_INFO(this->get_logger(), "Servo component is ready.");
-}
+Servo::Servo(const rclcpp::NodeOptions &options) : Node("servo", options) {}
 
 Servo::Servo(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex port, studica_driver::ServoType type, int min, int max)
-    : rclcpp::Node("servo_component"), vmx_(vmx), name_(name), port_(port), type_(type) {
+    : rclcpp::Node(name), vmx_(vmx), name_(name), port_(port), type_(type) {
     servo_ = std::make_shared<studica_driver::Servo>(port, type_, min, max, vmx_);
-
     service_ = this->create_service<studica_control::srv::SetData>(
         "set_servo_angle",
         std::bind(&Servo::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
-
-    RCLCPP_INFO(this->get_logger(), "Servo component is ready.");
+    publisher_ = this->create_publisher<std_msgs::msg::Float32>("servo_angle", 10);
+    timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(50),
+        std::bind(&Servo::publish_angle, this));
 }
 
 Servo::~Servo() {}
@@ -37,6 +32,12 @@ void Servo::cmd_callback(const std::shared_ptr<studica_control::srv::SetData::Re
         response->message = "Failed to set servo angle: " + std::string(e.what());
         RCLCPP_ERROR(this->get_logger(), "Failed to set servo angle: %s", e.what());
     }
+}
+
+void Servo::publish_angle() {
+    std_msgs::msg::Float32 msg;
+    msg.data = servo_->GetLastAngle();
+    publisher_->publish(msg);
 }
 
 void Servo::DisplayVMXError(VMXErrorCode vmxerr) {
