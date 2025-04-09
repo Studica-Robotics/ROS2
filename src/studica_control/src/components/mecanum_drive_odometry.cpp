@@ -2,12 +2,28 @@
 
 namespace studica_control {
 
+std::shared_ptr<MecanumOdometry> MecanumOdometry::initialize(rclcpp::Node *control) {
+    control->declare_parameter<std::string>("mecanum_drive_odometry.name", "");
+    control->declare_parameter<bool>("mecanum_drive_odometry.use_imu", true);
+    control->declare_parameter<std::string>("mecanum_drive_odometry.imu_topic", "");
+    control->declare_parameter<std::string>("mecanum_drive_odometry.topic", "unknown");
+    std::string name = control->get_parameter("mecanum_drive_odometry.name").as_string();
+    bool use_imu = control->get_parameter("mecanum_drive_odometry.use_imu").as_bool();
+    std::string imu_topic = control->get_parameter("mecanum_drive_odometry.imu_topic").as_string();
+    std::string topic = control->get_parameter("mecanum_drive_odometry.topic").as_string();
+
+    auto mecanum_odom = std::make_shared<MecanumOdometry>(name, use_imu, imu_topic, topic);
+    return mecanum_odom;
+}
+
 MecanumOdometry::MecanumOdometry(const rclcpp::NodeOptions & options) : Node("mecanum_odometry", options) {}
 
-MecanumOdometry::MecanumOdometry()
-: Node("mecanum_odometry"),
+MecanumOdometry::MecanumOdometry(const std::string &name, bool use_imu, const std::string &imu_topic, const std::string &topic)
+: Node(name),
   timestamp_(0.0),
-  use_imu_(false),
+  use_imu_(use_imu),
+  imu_topic_(imu_topic),
+  topic_(topic),
   length_x_(0.0),
   length_y_(0.0),
   x_(0.0),
@@ -16,14 +32,14 @@ MecanumOdometry::MecanumOdometry()
   prev_front_left_(0.0),
   prev_front_right_(0.0),
   prev_rear_left_(0.0),
-  prev_rear_right_(0.0) {}  
+  prev_rear_right_(0.0) {}
 
 MecanumOdometry::~MecanumOdometry() {}
 
 void MecanumOdometry::init(const rclcpp::Time &time) {
     timestamp_ = time;
-    imu_subscriber_ = this->create_subscription<sensor_msgs::msg::Imu>("imu", 10, std::bind(&MecanumOdometry::imuCallback, this, std::placeholders::_1));
-    odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
+    imu_subscriber_ = this->create_subscription<sensor_msgs::msg::Imu>(imu_topic_, 10, std::bind(&MecanumOdometry::imuCallback, this, std::placeholders::_1));
+    odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>(topic_, 10);
     tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 }
 

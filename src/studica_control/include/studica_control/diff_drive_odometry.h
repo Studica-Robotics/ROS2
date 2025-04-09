@@ -45,8 +45,9 @@ private:
 
 class DiffOdometry : public rclcpp::Node {
 public:
+    static std::shared_ptr<DiffOdometry> initialize(rclcpp::Node *control);
     explicit DiffOdometry(const rclcpp::NodeOptions & options);
-    explicit DiffOdometry(size_t velocity_rolling_window_size = 10);
+    explicit DiffOdometry(const std::string &name, bool use_imu, const std::string &imu_topic, const std::string &topic, size_t velocity_rolling_window_size = 10);
     ~DiffOdometry();
 
     void init(const rclcpp::Time &time);
@@ -83,6 +84,8 @@ private:
     double wheel_separation_;
     double left_wheel_prev_pos_, right_wheel_prev_pos_;
     bool use_imu_;
+    std::string imu_topic_;
+    std::string topic_;
     size_t velocity_rolling_window_size_;
     RollingMeanAccumulator linear_accumulator_;
     RollingMeanAccumulator angular_accumulator_;

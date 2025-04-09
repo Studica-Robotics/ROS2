@@ -15,8 +15,9 @@ namespace studica_control {
 
 class Servo : public rclcpp::Node {
 public:
+    static std::vector<std::shared_ptr<rclcpp::Node>> initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx);
     explicit Servo(const rclcpp::NodeOptions &options);
-    Servo(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex port, studica_driver::ServoType type, int min = -150, int max = 150);
+    Servo(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex port, studica_driver::ServoType type, int min, int max, const std::string &topic);
     ~Servo();
 
 private:
@@ -25,7 +26,6 @@ private:
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr publisher_;
     rclcpp::TimerBase::SharedPtr timer_;
-    std::string name_;
     VMXChannelIndex port_;
     studica_driver::ServoType type_;
     void cmd_callback(const std::shared_ptr<studica_control::srv::SetData::Request> request,

@@ -22,6 +22,7 @@ find_package(tf2_ros REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files (srv, msg, action)
   "msg/DutyCycleEncoderMsg.msg"
+  "msg/EncoderMsg.msg"
   "msg/InitializeParams.msg"
   "srv/ControlImu.srv"
   "srv/SetData.srv"
@@ -178,6 +179,11 @@ install(
 
 install(DIRECTORY
   launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(DIRECTORY
+  config
   DESTINATION share/${PROJECT_NAME}
 )
 

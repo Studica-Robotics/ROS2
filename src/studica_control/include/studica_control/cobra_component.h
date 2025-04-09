@@ -15,8 +15,9 @@ namespace studica_control {
 
 class Cobra : public rclcpp::Node {
 public:
+    static std::vector<std::shared_ptr<rclcpp::Node>> initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx);
     explicit Cobra(const rclcpp::NodeOptions & options);
-    Cobra(std::shared_ptr<VMXPi> vmx, const std::string &name, const float &vref);
+    Cobra(std::shared_ptr<VMXPi> vmx, const std::string &name, const float &vref, const std::string &topic);
     ~Cobra();
 
 private:
@@ -25,7 +26,6 @@ private:
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr publisher_;
     rclcpp::TimerBase::SharedPtr timer_;
-    std::string name_;
     float vref_;
     void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response);

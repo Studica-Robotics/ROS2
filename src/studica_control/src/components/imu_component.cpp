@@ -2,13 +2,23 @@
 
 namespace studica_control {
 
+std::shared_ptr<rclcpp::Node> Imu::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
+    control->declare_parameter<std::string>("imu.name");
+    control->declare_parameter<std::string>("imu.topic");
+    std::string name = control->get_parameter("imu.name").as_string();
+    std::string topic = control->get_parameter("imu.topic").as_string();
+    
+    auto imu = std::make_shared<Imu>(vmx, name, topic);
+    return imu;
+}
+
 Imu::Imu(const rclcpp::NodeOptions &options) : Node("imu", options) {}
 
-Imu::Imu(std::shared_ptr<VMXPi> vmx) : rclcpp::Node("imu"), vmx_(vmx) {
+Imu::Imu(std::shared_ptr<VMXPi> vmx, const std::string &name, const std::string &topic) : rclcpp::Node(name), vmx_(vmx) {
     imu_ = std::make_shared<studica_driver::Imu>(vmx_);
     service_ = this->create_service<studica_control::srv::SetData>("get_imu_data",
         std::bind(&Imu::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
-    publisher_ = this->create_publisher<sensor_msgs::msg::Imu>("imu", 10);
+    publisher_ = this->create_publisher<sensor_msgs::msg::Imu>(topic, 10);
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
         std::bind(&Imu::publish_data, this));

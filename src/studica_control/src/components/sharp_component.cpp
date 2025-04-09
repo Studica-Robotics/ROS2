@@ -2,15 +2,37 @@
 
 namespace studica_control {
 
+std::vector<std::shared_ptr<rclcpp::Node>> Sharp::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
+    std::vector<std::shared_ptr<rclcpp::Node>> sharp_nodes;
+    control->declare_parameter<std::vector<std::string>>("sharp.sensors", {});
+    std::vector<std::string> sensor_ids = control->get_parameter("sharp.sensors").as_string_array();
+    for (const auto &sensor : sensor_ids) {
+        std::string port_param = "sharp." + sensor + ".port";
+        std::string topic_param = "sharp." + sensor + ".topic";
+
+        control->declare_parameter<int>(port_param, -1);
+        control->declare_parameter<std::string>(topic_param, "unknown");
+
+        int port = control->get_parameter(port_param).as_int();
+        std::string topic = control->get_parameter(topic_param).as_string();
+
+        RCLCPP_INFO(control->get_logger(), "%s -> port: %d, topic: %s", sensor.c_str(), port, topic.c_str());
+
+        auto sharp = std::make_shared<Sharp>(vmx, sensor, port, topic);
+        sharp_nodes.push_back(sharp);
+    }
+    return sharp_nodes;
+}
+
 Sharp::Sharp(const rclcpp::NodeOptions & options) : Node("sharp", options) {}
 
-Sharp::Sharp(const std::string &name, VMXChannelIndex port, std::shared_ptr<VMXPi> vmx)
-    : rclcpp::Node(name), vmx_(vmx), name_(name), port_(port) {
+Sharp::Sharp(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex port, const std::string &topic)
+    : rclcpp::Node(name), vmx_(vmx), port_(port) {
     sharp_ = std::make_shared<studica_driver::Sharp>(port_, vmx_);
     service_ = this->create_service<studica_control::srv::SetData>(
         "sharp_cmd",
         std::bind(&Sharp::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
-    publisher_ = this->create_publisher<sensor_msgs::msg::Range>("ir_range", 10);
+    publisher_ = this->create_publisher<sensor_msgs::msg::Range>(topic, 10);
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
         std::bind(&Sharp::publish_range, this));

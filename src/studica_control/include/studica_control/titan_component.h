@@ -15,20 +15,14 @@ namespace studica_control {
 
 class Titan : public rclcpp::Node {
 public:
+    static std::vector<std::shared_ptr<rclcpp::Node>> initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx);
     explicit Titan(const rclcpp::NodeOptions & options);
-    Titan(
-        std::shared_ptr<VMXPi> vmx,
-        const std::string &name,
-        const uint8_t &canID,
-        const uint16_t &motor_freq,
-        const float &ticks_per_rotation,
-        const float &wheel_radius);
+    Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID, const uint16_t &motor_freq, const std::string &topic);
     ~Titan();
 
 private:
     std::shared_ptr<studica_driver::Titan> titan_;
     std::shared_ptr<VMXPi> vmx_;
-    std::string name_;
     uint8_t canID_;
     uint16_t motor_freq_;
     float dist_per_tick_;
@@ -37,7 +31,7 @@ private:
     rclcpp::TimerBase::SharedPtr timer_;
     void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
-    void publish_distances();
+    void publish_encoders();
 };
 
 }  // namespace studica_control

@@ -18,8 +18,9 @@ namespace studica_control {
 
 class MecanumOdometry : public rclcpp::Node {
     public:
+        static std::shared_ptr<MecanumOdometry> initialize(rclcpp::Node *control);
         explicit MecanumOdometry(const rclcpp::NodeOptions & options);
-        explicit MecanumOdometry();
+        MecanumOdometry(const std::string &name, bool use_imu, const std::string &imu_topic, const std::string &topic);
         ~MecanumOdometry();
 
         void init(const rclcpp::Time &time);
@@ -45,6 +46,8 @@ class MecanumOdometry : public rclcpp::Node {
         sensor_msgs::msg::Imu imu_data_;
         std::mutex imu_data_mutex_;
         bool use_imu_;
+        std::string imu_topic_;
+        std::string topic_;
 
         double length_x_;
         double length_y_;

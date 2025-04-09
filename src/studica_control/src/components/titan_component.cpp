@@ -2,30 +2,47 @@
 
 namespace studica_control {
 
+std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
+    std::vector<std::shared_ptr<rclcpp::Node>> titan_nodes;
+    control->declare_parameter<std::vector<std::string>>("titan.sensors", {});
+    std::vector<std::string> sensor_ids = control->get_parameter("titan.sensors").as_string_array();
+    for (const auto &sensor : sensor_ids) {
+        std::string can_id_param = "titan." + sensor + ".can_id";
+        std::string motor_freq_param = "titan." + sensor + ".motor_freq";
+        std::string topic_param = "titan." + sensor + ".topic";
+
+        control->declare_parameter<int>(can_id_param, -1);
+        control->declare_parameter<int>(motor_freq_param, -1);
+        control->declare_parameter<std::string>(topic_param, "");
+
+        uint8_t can_id = control->get_parameter(can_id_param).as_int();
+        uint16_t motor_freq = control->get_parameter(motor_freq_param).as_int();
+        std::string topic = control->get_parameter(topic_param).as_string();
+
+        auto titan = std::make_shared<Titan>(vmx, sensor, can_id, motor_freq, topic);
+        titan_nodes.push_back(titan);
+    }
+    return titan_nodes;
+}
+
 Titan::Titan(const rclcpp::NodeOptions & options) : Node("titan_", options) {}
 
-Titan::Titan(
-    std::shared_ptr<VMXPi> vmx,
-    const std::string &name,
-    const uint8_t &canID,
-    const uint16_t &motor_freq,
-    const float &ticks_per_rotation,
-    const float &wheel_radius)
-    : Node("titan_"), 
-      vmx_(vmx),
-      name_(name),
-      canID_(canID),
-      motor_freq_(motor_freq) {
-
-    dist_per_tick_ = 2 * M_PI * wheel_radius / ticks_per_rotation;
-    titan_ = std::make_shared<studica_driver::Titan>(name, canID_, motor_freq_, dist_per_tick_, vmx_);
+Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID, const uint16_t &motor_freq, const std::string &topic)
+    : Node(name), vmx_(vmx), canID_(canID), motor_freq_(motor_freq) {
+    titan_ = std::make_shared<studica_driver::Titan>(canID_, motor_freq_, 1, vmx_);
     service_ = this->create_service<studica_control::srv::SetData>(
         "titan_cmd",
         std::bind(&Titan::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
-    publisher_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("distances", 10);
+    publisher_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(topic, 10);
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
-        std::bind(&Titan::publish_distances, this));
+        std::bind(&Titan::publish_encoders, this));
+
+    for (int i=0; i<4; i++) {
+        titan_->ConfigureEncoder(i, 1);
+        titan_->ResetEncoder(i);
+    }
+    titan_->Enable(true);
 }
 
 Titan::~Titan() {}
@@ -89,7 +106,7 @@ void Titan::cmd(std::string params, std::shared_ptr<studica_control::srv::SetDat
     }
 }
 
-void Titan::publish_distances() {
+void Titan::publish_encoders() {
     std_msgs::msg::Float32MultiArray msg;
     msg.data.resize(4);
 

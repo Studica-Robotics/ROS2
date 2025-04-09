@@ -15,8 +15,9 @@ namespace studica_control {
     
 class Ultrasonic : public rclcpp::Node {
 public:
+    static std::vector<std::shared_ptr<rclcpp::Node>> initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx);
     explicit Ultrasonic(const rclcpp::NodeOptions &options);
-    Ultrasonic(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping, VMXChannelIndex echo);
+    Ultrasonic(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping, VMXChannelIndex echo, const std::string &topic);
     ~Ultrasonic();
 
 private:
@@ -25,7 +26,6 @@ private:
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
     rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr publisher_;
     rclcpp::TimerBase::SharedPtr timer_;
-    std::string name_;
     VMXChannelIndex ping_;
     VMXChannelIndex echo_;
     void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);

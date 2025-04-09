@@ -2,15 +2,40 @@
 
 namespace studica_control {
 
+std::vector<std::shared_ptr<rclcpp::Node>> Ultrasonic::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
+    std::vector<std::shared_ptr<rclcpp::Node>> ultrasonic_nodes;
+    control->declare_parameter<std::vector<std::string>>("ultrasonic.sensors", {});
+    std::vector<std::string> sensor_ids = control->get_parameter("ultrasonic.sensors").as_string_array();
+    for (const auto &sensor : sensor_ids) {        
+        std::string ping_param = "ultrasonic." + sensor + ".ping";
+        std::string echo_param = "ultrasonic." + sensor + ".echo";
+        std::string topic_param = "ultrasonic." + sensor + ".topic";
+
+        control->declare_parameter<int>(ping_param, -1);
+        control->declare_parameter<int>(echo_param, -1);
+        control->declare_parameter<std::string>(topic_param, "unknown");
+
+        int ping = control->get_parameter(ping_param).as_int();
+        int echo = control->get_parameter(echo_param).as_int();
+        std::string topic = control->get_parameter(topic_param).as_string();
+
+        RCLCPP_INFO(control->get_logger(), "%s -> ping: %d, echo: %d, topic: %s", sensor.c_str(), ping, echo, topic.c_str());
+
+        auto ultrasonic = std::make_shared<Ultrasonic>(vmx, sensor, ping, echo, topic);
+        ultrasonic_nodes.push_back(ultrasonic);
+    }
+    return ultrasonic_nodes;
+}
+
 Ultrasonic::Ultrasonic(const rclcpp::NodeOptions &options) : Node("ultrasonic", options) {}
 
-Ultrasonic::Ultrasonic(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping, VMXChannelIndex echo) 
+Ultrasonic::Ultrasonic(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex ping, VMXChannelIndex echo, const std::string &topic) 
     : Node(name), vmx_(vmx), ping_(ping), echo_(echo) {
     ultrasonic_ = std::make_shared<studica_driver::Ultrasonic>(ping_, echo_, vmx_);
     service_ = this->create_service<studica_control::srv::SetData>(
         "ultrasonic_cmd",
         std::bind(&Ultrasonic::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
-    publisher_ = this->create_publisher<sensor_msgs::msg::Range>("ultrasonic_range", 10);
+    publisher_ = this->create_publisher<sensor_msgs::msg::Range>(topic, 10);
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
         std::bind(&Ultrasonic::publish_range, this));

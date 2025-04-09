@@ -1,0 +1,2 @@
+int32 encoder_count
+string encoder_direction

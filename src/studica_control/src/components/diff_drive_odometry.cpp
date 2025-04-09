@@ -2,10 +2,25 @@
 
 namespace studica_control {
 
+std::shared_ptr<DiffOdometry> DiffOdometry::initialize(rclcpp::Node *control){
+    control->declare_parameter<std::string>("diff_drive_odometry.name", "");
+    control->declare_parameter<bool>("diff_drive_odometry.use_imu", true);
+    control->declare_parameter<std::string>("diff_drive_odometry.imu_topic", "");
+    control->declare_parameter<std::string>("diff_drive_odometry.topic", "unknown");
+
+    std::string name = control->get_parameter("diff_drive_odometry.name").as_string();
+    bool use_imu = control->get_parameter("diff_drive_odometry.use_imu").as_bool();
+    std::string imu_topic = control->get_parameter("diff_drive_odometry.imu_topic").as_string();
+    std::string topic = control->get_parameter("diff_drive_odometry.topic").as_string();
+
+    auto diff_odom = std::make_shared<DiffOdometry>(name, use_imu, imu_topic, topic, 10);
+    return diff_odom;
+}
+
 DiffOdometry::DiffOdometry(const rclcpp::NodeOptions & options) : Node("diff_odometry", options) {}
 
-DiffOdometry::DiffOdometry(size_t velocity_rolling_window_size)
-: Node("diff_odometry"),
+DiffOdometry::DiffOdometry(const std::string &name, bool use_imu, const std::string &imu_topic, const std::string &topic, size_t velocity_rolling_window_size)
+: Node(name),
   timestamp_(0.0), 
   x_(0.0), y_(0.0), 
   heading_(0.0), 
@@ -14,7 +29,9 @@ DiffOdometry::DiffOdometry(size_t velocity_rolling_window_size)
   wheel_separation_(0.0), 
   left_wheel_prev_pos_(0.0),
   right_wheel_prev_pos_(0.0),
-  use_imu_(false),
+  use_imu_(use_imu),
+  imu_topic_(imu_topic),
+  topic_(topic),
   velocity_rolling_window_size_(velocity_rolling_window_size),
   linear_accumulator_(velocity_rolling_window_size),
   angular_accumulator_(velocity_rolling_window_size) {}
@@ -25,8 +42,8 @@ void DiffOdometry::init(const rclcpp::Time &time) {
     resetAccumulators();
     timestamp_ = time;
 
-    imu_subscriber_ = this->create_subscription<sensor_msgs::msg::Imu>("imu", 10, std::bind(&DiffOdometry::imuCallback, this, std::placeholders::_1));
-    odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
+    imu_subscriber_ = this->create_subscription<sensor_msgs::msg::Imu>(imu_topic_, 10, std::bind(&DiffOdometry::imuCallback, this, std::placeholders::_1));
+    odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>(topic_, 10);
     tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 }
 

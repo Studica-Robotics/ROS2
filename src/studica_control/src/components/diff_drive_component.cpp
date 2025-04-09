@@ -2,26 +2,54 @@
 
 namespace studica_control {
 
+std::shared_ptr<rclcpp::Node> DiffDrive::initialize(rclcpp::Node *control, std::shared_ptr<DiffOdometry> odom, std::shared_ptr<VMXPi> vmx) {
+    control->declare_parameter<std::string>("diff_drive_component.name", "");
+    control->declare_parameter<int>("diff_drive_component.can_id", -1);
+    control->declare_parameter<int>("diff_drive_component.motor_freq", -1);
+    control->declare_parameter<int>("diff_drive_component.ticks_per_rotation", -1);
+    control->declare_parameter<int>("diff_drive_component.left_port", -1);
+    control->declare_parameter<int>("diff_drive_component.right_port", -1);
+    control->declare_parameter<bool>("diff_drive_component.invert_left", false);
+    control->declare_parameter<bool>("diff_drive_component.invert_right", false);
+    control->declare_parameter<float>("diff_drive_component.wheel_radius", -1.0);
+    control->declare_parameter<float>("diff_drive_component.wheel_separation", -1.0);
+
+    std::string name = control->get_parameter("diff_drive_component.name").as_string();
+    int can_id = control->get_parameter("diff_drive_component.can_id").as_int();
+    int motor_freq = control->get_parameter("diff_drive_component.motor_freq").as_int();
+    int ticks_per_rotation = control->get_parameter("diff_drive_component.ticks_per_rotation").as_int();
+    int left = control->get_parameter("diff_drive_component.left_port").as_int();
+    int right = control->get_parameter("diff_drive_component.right_port").as_int();
+    bool invert_left = control->get_parameter("diff_drive_component.invert_left").as_bool();
+    bool invert_right = control->get_parameter("diff_drive_component.invert_right").as_bool();
+    float wheel_radius = control->get_parameter("diff_drive_component.wheel_radius").get_value<float>();
+    float wheel_separation = control->get_parameter("diff_drive_component.wheel_separation").get_value<float>();
+
+    RCLCPP_INFO(control->get_logger(), "%s -> left: %d, right: %d", name.c_str(), left, right);
+
+    auto diff_drive_node = std::make_shared<DiffDrive>(vmx, odom, name, can_id, motor_freq, ticks_per_rotation, wheel_radius, wheel_separation, left, right, invert_left, invert_right);
+    return diff_drive_node;
+}
+
 DiffDrive::DiffDrive(const rclcpp::NodeOptions & options) : Node("diff_drive", options) {}
 
 DiffDrive::DiffDrive(
     std::shared_ptr<VMXPi> vmx,
     std::shared_ptr<studica_control::DiffOdometry> odom,
     const std::string &name,
-    const uint8_t &canID,
+    const uint8_t &can_id,
     const uint16_t &motor_freq,
-    const float &ticks_per_rotation,
+    const uint16_t &ticks_per_rotation,
     const float &wheel_radius,
     const float &wheel_separation,
     const uint8_t left,
     const uint8_t right,
     const bool invert_left,
     const bool invert_right) 
-    : Node("diff_drive"),
+    : Node(name),
       vmx_(vmx),
       odom_(odom),
-      name_(name),
-      canID_(canID),
+      can_id_(can_id),
       motor_freq_(motor_freq),
       ticks_per_rotation_(ticks_per_rotation),
       wheel_radius_(wheel_radius),
@@ -31,7 +59,7 @@ DiffDrive::DiffDrive(
 
     dist_per_tick_ = 2 * M_PI * wheel_radius_ / ticks_per_rotation_;
 
-    titan_ = std::make_shared<studica_driver::Titan>(name, canID_, motor_freq_, dist_per_tick_, vmx_);
+    titan_ = std::make_shared<studica_driver::Titan>(can_id_, motor_freq_, dist_per_tick_, vmx_);
 
     service_ = this->create_service<studica_control::srv::SetData>(
         "titan_cmd",

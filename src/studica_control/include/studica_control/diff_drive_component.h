@@ -21,6 +21,7 @@ namespace studica_control {
 
 class DiffDrive : public rclcpp::Node {
 public:
+    static std::shared_ptr<rclcpp::Node> initialize(rclcpp::Node *control, std::shared_ptr<DiffOdometry> odom, std::shared_ptr<VMXPi> vmx);
     explicit DiffDrive(const rclcpp::NodeOptions & options);
     DiffDrive(
         std::shared_ptr<VMXPi> vmx,
@@ -28,7 +29,7 @@ public:
         const std::string &name,
         const uint8_t &canID,
         const uint16_t &motor_freq,
-        const float &ticks_per_rotation,
+        const uint16_t &ticks_per_rotation,
         const float &wheel_radius,
         const float &wheel_separation,
         const uint8_t left,
@@ -47,8 +48,7 @@ private:
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
 
-    std::string name_;
-    uint8_t canID_;
+    uint8_t can_id_;
     uint16_t motor_freq_;
     float ticks_per_rotation_;
     float dist_per_tick_;

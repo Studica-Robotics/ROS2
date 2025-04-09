@@ -2,15 +2,59 @@
 
 namespace studica_control {
 
+std::vector<std::shared_ptr<rclcpp::Node>> Servo::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
+    std::vector<std::shared_ptr<rclcpp::Node>> servo_nodes;
+    control->declare_parameter<std::vector<std::string>>("servo.sensors", {});
+    std::vector<std::string> sensor_ids = control->get_parameter("servo.sensors").as_string_array();
+    for (const auto &sensor : sensor_ids) {
+        std::string port_param = "servo." + sensor + ".port";
+        std::string type_param = "servo." + sensor + ".type";
+        std::string topic_param = "servo." + sensor + ".topic";
+
+        control->declare_parameter<int>(port_param, -1);
+        control->declare_parameter<std::string>(type_param, "");
+        control->declare_parameter<std::string>(topic_param, "unknown");
+
+        int port = control->get_parameter(port_param).as_int();
+        std::string type = control->get_parameter(type_param).as_string();
+        std::string topic = control->get_parameter(topic_param).as_string();
+
+        studica_driver::ServoType servo_type;
+        int min_angle = 0, max_angle = 0;
+
+        if (type == "standard") {
+            servo_type = studica_driver::ServoType::Standard;
+            min_angle = -150;
+            max_angle = 150;
+        } else if (type == "continuous") {
+            servo_type = studica_driver::ServoType::Continuous;
+            min_angle = -100;
+            max_angle = 100;
+        } else if (type == "linear") {
+            servo_type = studica_driver::ServoType::Linear;
+            min_angle = 0;
+            max_angle = 100;
+        } else {
+            RCLCPP_ERROR(control->get_logger(), "Invalid servo type. Allowed values are 'standard', 'continuous', or 'linear'.");
+        }
+
+        RCLCPP_INFO(control->get_logger(), "%s -> port: %d, type: %s, topic: %s", sensor.c_str(), port, type.c_str(), topic.c_str());
+
+        auto servo = std::make_shared<Servo>(vmx, sensor, port, servo_type, min_angle, max_angle, topic);
+        servo_nodes.push_back(servo);
+    }
+    return servo_nodes;
+}
+
 Servo::Servo(const rclcpp::NodeOptions &options) : Node("servo", options) {}
 
-Servo::Servo(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex port, studica_driver::ServoType type, int min, int max)
-    : rclcpp::Node(name), vmx_(vmx), name_(name), port_(port), type_(type) {
+Servo::Servo(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex port, studica_driver::ServoType type, int min, int max, const std::string &topic)
+    : rclcpp::Node(name), vmx_(vmx), port_(port), type_(type) {
     servo_ = std::make_shared<studica_driver::Servo>(port, type_, min, max, vmx_);
     service_ = this->create_service<studica_control::srv::SetData>(
         "set_servo_angle",
         std::bind(&Servo::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
-    publisher_ = this->create_publisher<std_msgs::msg::Float32>("servo_angle", 10);
+    publisher_ = this->create_publisher<std_msgs::msg::Float32>(topic, 10);
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
         std::bind(&Servo::publish_angle, this));
@@ -20,7 +64,6 @@ Servo::~Servo() {}
 
 void Servo::cmd_callback(const std::shared_ptr<studica_control::srv::SetData::Request> request,
                          std::shared_ptr<studica_control::srv::SetData::Response> response) {
-    if (request->name != name_) return;
     try {
         int param_angle = std::stoi(request->params);
         servo_->SetAngle(param_angle);

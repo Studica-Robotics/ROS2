@@ -2,13 +2,50 @@
 
 namespace studica_control {
 
+std::shared_ptr<rclcpp::Node> MecanumDrive::initialize(rclcpp::Node *control, std::shared_ptr<MecanumOdometry> odom, std::shared_ptr<VMXPi> vmx) {
+    control->declare_parameter<int>("mecanum_drive_component.can_id", -1);
+    control->declare_parameter<int>("mecanum_drive_component.motor_freq", -1);
+    control->declare_parameter<int>("mecanum_drive_component.ticks_per_rotation", -1);
+    control->declare_parameter<float>("mecanum_drive_component.wheel_radius", -1.0);
+    control->declare_parameter<float>("mecanum_drive_component.wheelbase", -1.0);
+    control->declare_parameter<float>("mecanum_drive_component.width", -1.0);
+    control->declare_parameter<int>("mecanum_drive_component.front_left", -1);
+    control->declare_parameter<int>("mecanum_drive_component.front_right", -1);
+    control->declare_parameter<int>("mecanum_drive_component.rear_left", -1);
+    control->declare_parameter<int>("mecanum_drive_component.rear_right", -1);
+    control->declare_parameter<bool>("mecanum_drive_component.invert_front_left", false);
+    control->declare_parameter<bool>("mecanum_drive_component.invert_front_right", false);
+    control->declare_parameter<bool>("mecanum_drive_component.invert_rear_left", false);
+    control->declare_parameter<bool>("mecanum_drive_component.invert_rear_right", false);
+    control->declare_parameter<std::string>("mecanum_drive_component.topic", "");
+    
+    int can_id = control->get_parameter("mecanum_drive_component.can_id").as_int();
+    int motor_freq = control->get_parameter("mecanum_drive_component.motor_freq").as_int();
+    int ticks_per_rotation = control->get_parameter("mecanum_drive_component.ticks_per_rotation").as_int();
+    float wheel_radius = control->get_parameter("mecanum_drive_component.wheel_radius").get_value<float>();
+    float wheelbase = control->get_parameter("mecanum_drive_component.wheelbase").get_value<float>();
+    float width = control->get_parameter("mecanum_drive_component.width").get_value<float>();
+    int fl = control->get_parameter("mecanum_drive_component.front_left").as_int();
+    int fr = control->get_parameter("mecanum_drive_component.front_right").as_int();
+    int rl = control->get_parameter("mecanum_drive_component.rear_left").as_int();
+    int rr = control->get_parameter("mecanum_drive_component.rear_right").as_int();
+    bool invert_fl = control->get_parameter("mecanum_drive_component.invert_front_left").as_bool();
+    bool invert_fr = control->get_parameter("mecanum_drive_component.invert_front_right").as_bool();
+    bool invert_rl = control->get_parameter("mecanum_drive_component.invert_rear_left").as_bool();
+    bool invert_rr = control->get_parameter("mecanum_drive_component.invert_rear_right").as_bool();
+    std::string topic = control->get_parameter("mecanum_drive_component.topic").as_string();
+
+    auto mecanum_drive = std::make_shared<MecanumDrive>(vmx, odom, topic, can_id, motor_freq, ticks_per_rotation, wheel_radius, wheelbase, width, fl, fr, rl, rr, invert_fl, invert_fr, invert_rl, invert_rr);
+    return mecanum_drive;
+}
+
 MecanumDrive::MecanumDrive(const rclcpp::NodeOptions & options) : Node("mecanum_drive", options) {}
 
 MecanumDrive::MecanumDrive(
     std::shared_ptr<VMXPi> vmx,
     std::shared_ptr<studica_control::MecanumOdometry> odom,
     const std::string &name, 
-    const uint8_t &canID, 
+    const uint8_t &can_id, 
     const uint16_t &motor_freq, 
     const float &ticks_per_rotation, 
     const float &wheel_radius, 
@@ -26,7 +63,7 @@ MecanumDrive::MecanumDrive(
       vmx_(vmx),
       odom_(odom),
       name_(name),
-      canID_(canID),
+      can_id_(can_id),
       motor_freq_(motor_freq),
       ticks_per_rotation_(ticks_per_rotation),
       wheel_radius_(wheel_radius),
@@ -38,7 +75,7 @@ MecanumDrive::MecanumDrive(
       rr_(rear_right) {
 
     dist_per_tick_ = 2 * M_PI * wheel_radius_ / ticks_per_rotation_;
-    titan_ = std::make_shared<studica_driver::Titan>(name, canID_, motor_freq_, dist_per_tick_, vmx_);
+    titan_ = std::make_shared<studica_driver::Titan>(can_id_, motor_freq_, dist_per_tick_, vmx_);
     service_ = this->create_service<studica_control::srv::SetData>(
         "titan_cmd",
         std::bind(&MecanumDrive::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));

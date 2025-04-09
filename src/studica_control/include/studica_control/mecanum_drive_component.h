@@ -21,12 +21,13 @@ namespace studica_control {
 
 class MecanumDrive : public rclcpp::Node {
 public:
+    static std::shared_ptr<rclcpp::Node> initialize(rclcpp::Node *control, std::shared_ptr<MecanumOdometry> odom, std::shared_ptr<VMXPi> vmx);
     explicit MecanumDrive(const rclcpp::NodeOptions & options);
     MecanumDrive(
         std::shared_ptr<VMXPi> vmx,
         std::shared_ptr<studica_control::MecanumOdometry> odom,
         const std::string &name,
-        const uint8_t &canID,
+        const uint8_t &can_id,
         const uint16_t &motor_freq,
         const float &ticks_per_rotation,
         const float &wheel_radius,
@@ -59,7 +60,7 @@ private:
     double theta_ = 0.0;
 
     std::string name_;
-    uint8_t canID_;
+    uint8_t can_id_;
     uint16_t motor_freq_;
     float ticks_per_rotation_;
     float dist_per_tick_;

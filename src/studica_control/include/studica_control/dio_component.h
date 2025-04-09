@@ -15,15 +15,16 @@ namespace studica_control {
 
 class DIO : public rclcpp::Node {
 public:
+    static std::vector<std::shared_ptr<rclcpp::Node>> initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx);
     explicit DIO(const rclcpp::NodeOptions &options);
-    DIO(std::shared_ptr<VMXPi> vmx, VMXChannelIndex pin, studica_driver::PinMode pin_mode, std::string type);
+    DIO(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex pin, studica_driver::PinMode pin_mode, const std::string &topic);
     ~DIO();
 
 private:
     std::shared_ptr<studica_driver::DIO> dio_; 
     std::shared_ptr<VMXPi> vmx_;                                       
-    VMXChannelIndex pin_; // Pin index for the DIO component
-    studica_driver::PinMode pin_mode_; // Pin mode for the DIO component
+    VMXChannelIndex pin_;
+    studica_driver::PinMode pin_mode_;
     int btn_pin;                                    
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr publisher_;
