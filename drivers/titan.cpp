@@ -3,7 +3,7 @@
 using namespace studica_driver;
 
  
-Titan::Titan(const std::string &name, const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, std::shared_ptr<VMXPi> vmx)
+Titan::Titan(const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, std::shared_ptr<VMXPi> vmx)
     : vmx_(vmx), canID_(canID), motorFreq_(motorFreq), distPerTick_(distPerTick)
 {
     try
