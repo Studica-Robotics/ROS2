@@ -47,7 +47,6 @@ int Encoder::GetCount()
     VMXErrorCode vmxerr;
 
     if (vmx_->io.Encoder_GetCount(encoder_res_handle_, counter, &vmxerr)) {
-        printf("Encoder count: %d\n", counter);
         return counter;
     } else {
         printf("Error retrieving Encoder count.\n");
