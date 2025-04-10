@@ -1,3 +1,20 @@
+# This parameter list is used to configure sensors for the Studica Robotics ROS2 control server.
+# 
+# To enable a sensor type, set "enabled: true" under its section.
+# If the sensor type (e.g., cobra, duty_cycle) has a "sensors" list, you can use multiple sensors by uniquely naming them.
+# Then, for each named sensor, add a section underneath with its specific parameters (e.g., port, topic).
+#
+# Example (ultrasonic):
+#   sensors: ["ultrasonic1", "ultrasonic2"]
+#   ultrasonic1:
+#     ping: 8
+#     echo: 9
+#     topic: "range_1"
+#   ultrasonic2:
+#     ping: 10
+#     echo: 11
+#     topic: "range_2"
+#
 
 control_server:
   ros__parameters:
@@ -43,7 +60,7 @@ control_server:
         topic: "dio_state"
     
     encoder:
-      enabled: true
+      enabled: false
       sensors: ["encoder"]
       encoder:
         port_a: 8
@@ -83,7 +100,7 @@ control_server:
       enabled: false
       sensors: ["servo"]
       servo:
-        port: 8
+        port: 14
         type: "standard" # "standard", "continuous", or "linear"
         topic: "servo_angle"
 
