@@ -13,7 +13,7 @@ This guide provides an overview of the components and libraries used in Apollo C
     * Navigation node. Sends `/cmd_vel` topic and listens to odometry data to move your robot and correct paths. Calculates paths to a target position listening to `/map` (either loaded or live-mapped by SLAM). Has localization features. 
 * **rosbridge**
     * Relays ROS2 network through a port, allowing a web-based front-end to recieve and send data. Used in Apollo-Cloud alongside `roslib.js`. I also recommend https://app.foxglove.dev/ + rosbridge as an alternative to RVIZ.
-    * Must run if using frontend.
+    * Must run if using frontend to communicate with a ROS2 node.
 * **RVIZ**
     * Should be included with ROS2 install. Used to view map, odometry, camera feed etc. Very laggy sometimes, NEVER run on raspberry pi.
     * `ros2 run rviz2 rviz2`
