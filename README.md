@@ -168,8 +168,6 @@ To use differential or mecanum drive odometry independent of their drive control
 
 #### Known Issues
 
-Cobra component currently not working. Only prints 0.
-
 When running lidar and explore scripts, sometimes their respective install scripts aren't sourced properly. Manually source these if necessary:
 
 ``` bash
