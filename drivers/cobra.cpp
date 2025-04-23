@@ -3,13 +3,13 @@ using namespace studica_driver;
 
 void Cobra::DisplayVMXError(VMXErrorCode vmxerr) {
     const char *p_err_description = GetVMXErrorString(vmxerr);
-    printf("VMXError %d: %s\n", p_err_description);
+    printf("VMXError: %s\n", p_err_description);
 }
 
 Cobra::Cobra(std::shared_ptr<VMXPi> vmx, int vRef) : vmx_(vmx), vRef_(vRef) {
     port = 1;
     deviceAddress = 0x48;
-    mode = CONFIG_MODE_CONT;
+    mode = CONFIG_MODE_SINGLE;
     gain = CONFIG_PGA_2;
     sampleRate = CONFIG_RATE_1600HZ;
     multiplierVolts = 1.0F;
@@ -17,7 +17,7 @@ Cobra::Cobra(std::shared_ptr<VMXPi> vmx, int vRef) : vmx_(vmx), vRef_(vRef) {
     i2c_ = std::make_shared<I2C>(vmx_);
 
     try {
-        if(!i2c_->isOpen()) {
+        if (!i2c_->isOpen()) {
             printf("Error:  Unable to open VMX via I2C.\n");
             printf("\n");
             printf("        - Is pigpio (or the system resources it requires) in use by another process?\n");
@@ -37,23 +37,24 @@ int Cobra::GetRawValue(uint8_t channel) {
 float Cobra::GetVoltage(uint8_t channel) {
     float raw = GetSingle(channel);
     float mV = vRef_/0x800;
-    return raw * mV;
+    return raw * mV / 16;
 }
-
 
 void Cobra::Delay(double seconds) {
     std::this_thread::sleep_for(std::chrono::milliseconds((int64_t)(seconds * 1000)));
 }
 
-int Cobra::ReadRegister(uint8_t location) {
-    uint8_t buffer[2];
-    uint8_t data[1];
-    data[0] = POINTER_CONVERT;
-    i2c_->WriteI2C(deviceAddress, location, data, 1);
-    Delay(DELAY);
-    i2c_->ReadI2C(deviceAddress, location, buffer, 2);
-    return (int)((buffer[0]<<8) & 0xFF00) | (buffer[1] & 0xFF);
+int Cobra::ReadRegister(uint8_t reg) {
+    uint8_t tx_buf[1] = { reg };
+    uint8_t rx_buf[2] = { 0 };
+
+    if (!i2c_->i2cTransaction(deviceAddress, tx_buf, 1, rx_buf, 2)) {
+        return -1;
+    }
+
+    return (rx_buf[0] << 8) | rx_buf[1];
 }
+
 
 bool Cobra::IsConnected() {
     uint8_t partID = 0;
@@ -71,31 +72,47 @@ bool Cobra::IsConnected() {
 
 int Cobra::GetSingle(uint8_t channel) {
     if (channel > 3) {
-        return 0;
-    }
-    
-    int config = CONFIG_OS_SINGLE | mode | sampleRate;
-    config |= gain;
-    
-    switch (channel) {
-        case(0):
-            config |= CONFIG_MUX_SINGLE_0;
-            break;
-        case(1):
-            config |= CONFIG_MUX_SINGLE_1;
-            break;
-        case(2):
-            config |= CONFIG_MUX_SINGLE_2;
-            break;
-        case(3):
-            config |= CONFIG_MUX_SINGLE_3;
-            break;
+        std::cout << "Invalid channel: " << (int)channel << std::endl;
+        return -1;
     }
 
-    uint8_t raw[2];
-    raw[0] = (uint8_t) (config>>8);
-    raw[1] = (uint8_t) (config & 0xFF);
-    i2c_->WriteI2C(deviceAddress, POINTER_CONVERT, raw, 2);
-    Delay(DELAY);
-    return ReadRegister(POINTER_CONVERT)>>4;
+    int mux;
+    switch (channel) {
+        case 0: mux = CONFIG_MUX_SINGLE_0; break;
+        case 1: mux = CONFIG_MUX_SINGLE_1; break;
+        case 2: mux = CONFIG_MUX_SINGLE_2; break;
+        case 3: mux = CONFIG_MUX_SINGLE_3; break;
+        default: mux = CONFIG_MUX_SINGLE_0; break;  
+    }
+
+    uint16_t config = CONFIG_OS_SINGLE     |
+                      mux                  | 
+                      CONFIG_PGA_2         |
+                      CONFIG_MODE_SINGLE   | 
+                      CONFIG_RATE_1600HZ   | 
+                      CONFIG_CQUE_NONE;      
+
+    uint8_t write_buf[3];
+    write_buf[0] = POINTER_CONFIG;
+    write_buf[1] = (config >> 8) & 0xFF;
+    write_buf[2] = config & 0xFF;
+
+    if (!i2c_->i2cTransaction(deviceAddress, write_buf, 3, nullptr, 0)) {
+        std::cout << "[GetSingle] Failed to write config!" << std::endl;
+        return -1;
+    }
+
+    Delay(DELAY);  
+
+    uint8_t pointer_buf[1] = { POINTER_CONVERT };
+    if (!i2c_->i2cTransaction(deviceAddress, pointer_buf, 1, nullptr, 0)) {
+        return -1;
+    }
+
+    uint8_t result_buf[2] = {0};
+    if (!i2c_->i2cTransaction(deviceAddress, nullptr, 0, result_buf, 2)) {
+        return -1;
+    }
+
+    return (result_buf[0] << 8) | result_buf[1];
 }
