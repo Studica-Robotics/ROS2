@@ -1,16 +1,26 @@
+"""
+This launches manual composition AND the required transforms for SLAM and NAV2. 
+Run the Lidar separately.
+"""
+
 from launch import LaunchDescription
 from launch.actions import ExecuteProcess
 from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
+import os
+import yaml
 
 def generate_launch_description():
-    declared_arguments = []
+
+    pkg_share = get_package_share_directory('studica_control')
+    params_file = os.path.join(pkg_share, 'config', 'params.yaml')
     
-    # Your robot control node
     manual_composition = Node(
         package='studica_control',
         executable='manual_composition',
-        name='manual_composition',
-        output='screen'
+        name='control_server',
+        output='screen',
+        parameters=[params_file]
     )
     
     base_tf = ExecuteProcess(
@@ -33,4 +43,4 @@ def generate_launch_description():
         laser_tf
     ]
 
-    return LaunchDescription(declared_arguments + nodes)
+    return LaunchDescription(nodes)
