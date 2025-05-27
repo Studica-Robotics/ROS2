@@ -35,7 +35,7 @@ def generate_launch_description():
     
     laser_tf = ExecuteProcess(
         cmd=[[
-            'ros2 run tf2_ros static_transform_publisher 0 0 0 3.14159 0 0 base_link laser_frame'
+            'ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 base_link laser_frame'
         ]],
         shell=True
     )
