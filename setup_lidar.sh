@@ -13,7 +13,7 @@ mkdir -p lidar
 cd lidar 
 LIDAR_DIR=$(pwd)
 
-ORDERED_LIDAR_KEYS=(1 2 3 4 5 6 7 8 9 10 11)
+ORDERED_LIDAR_KEYS=(1 2 3 4 5 6 7 8 9 10 11 12)
 declare -A LIDAR_MODELS=(
     [1]="No LiDAR"
     [2]="G1"
