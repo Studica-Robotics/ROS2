@@ -22,10 +22,11 @@ declare -A LIDAR_MODELS=(
     [5]="GS2"
     [6]="TEA"
     [7]="TG"
-    [8]="TminiPro"
-    [9]="X2"
-    [10]="X4"
-    [11]="X4-Pro"
+    [8]="Tmini"
+    [9]="Tmini-Plus-SH"
+    [10]="X2"
+    [11]="X4"
+    [12]="X4-Pro"
 )
 
 echo "Select your YDLidar model:"
