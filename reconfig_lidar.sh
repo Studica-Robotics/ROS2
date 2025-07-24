@@ -6,9 +6,8 @@ cd ros_dependencies/lidar || { echo "lidar directory not found, please make sure
 
 LIDAR_DIR=$(pwd)
 
-ORDERED_LIDAR_KEYS=(1 2 3 4 5 6 7 8 9 10 11 12)
+ORDERED_LIDAR_KEYS=(2 3 4 5 6 7 8 9 10 11 12)
 declare -A LIDAR_MODELS=(
-    [1]="No LiDAR"
     [2]="G1"
     [3]="G2"
     [4]="G6"
@@ -26,6 +25,8 @@ echo "Select your YDLidar model:"
 for key in "${ORDERED_LIDAR_KEYS[@]}"; do
     echo "[$key] ${LIDAR_MODELS[$key]}"
 done
+
+lidar_choice="0"
 
 while [ -z "${LIDAR_MODELS[$lidar_choice]}" ]; do
     read -p "Enter the number corresponding to your LiDAR model: " lidar_choice
