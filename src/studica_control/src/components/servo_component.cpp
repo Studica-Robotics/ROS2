@@ -52,7 +52,7 @@ Servo::Servo(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelInde
     : rclcpp::Node(name), vmx_(vmx), port_(port), type_(type) {
     servo_ = std::make_shared<studica_driver::Servo>(port, type_, min, max, vmx_);
     service_ = this->create_service<studica_control::srv::SetData>(
-        "set_servo_angle",
+        name + "/set_servo_angle",
         std::bind(&Servo::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
     publisher_ = this->create_publisher<std_msgs::msg::Float32>(topic, 10);
     timer_ = this->create_wall_timer(
