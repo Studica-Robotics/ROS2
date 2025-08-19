@@ -35,7 +35,7 @@ while getopts ":hlce" opt; do
 done
 
 if [ -z "$ROS_DISTRO" ]; then
-    export ROS_DISTRO=humble
+    export ROS_DISTRO=jazzy
 fi
 
 ROS_SETUP_LINE=". /opt/ros/$ROS_DISTRO/setup.bash"
@@ -112,7 +112,7 @@ sudo apt update
 
 echo "Configuring Cyclone DDS..."
 DDS_SETUP_LINE="export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp"
-sudo apt install -y ros-humble-rmw-cyclonedds-cpp
+sudo apt install -y ros-jazzy-rmw-cyclonedds-cpp
 if ! grep -Fxq "$DDS_SETUP_LINE" ~/.bashrc; then
     echo "$DDS_SETUP_LINE" >> ~/.bashrc
     echo "DDS Configuration done."
