@@ -5,10 +5,9 @@ def launch_ros2_nodes_and_services():
     environment_commands = """
     cd /home/vmx/ROS2/
     . /opt/ros/humble/setup.bash
-    . /home/vmx/ROS2/src/studica_control/install/setup.bash
+    . install/setup.bash
     export LD_LIBRARY_PATH=/usr/local/lib/studica_drivers:$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/studica_control
-    source src/studica_control/install/setup.bash
     """
 
     #Nodes
