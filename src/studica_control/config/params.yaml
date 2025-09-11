@@ -33,7 +33,7 @@ control_server:
         topic: "duty_cycle_encoder"
 
     diff_drive_component:
-      enabled: true
+      enabled: false
       name: "diff_drive_controller"
       can_id: 42
       motor_freq: 15600
@@ -75,10 +75,10 @@ control_server:
       angular_scale: 1.0
       deadzone: 0.1
       turbo_multiplier: 1.5
-      axis_linear_x: "left_stick_y"      # Left stick vertical (forward/back)
-      axis_linear_y: "left_stick_x"      # Left stick horizontal (strafe)
-      axis_angular_z: "right_stick_x"    # Right stick horizontal (rotation)
-      button_turbo: "right_bumper"       # R1 button
+      axis_linear_x: 1      # Left stick vertical (forward/back)
+      axis_linear_y: 0      # Left stick horizontal (strafe)
+      axis_angular_z: 2     # Right stick horizontal (rotation)
+      button_turbo: 5       # R1 button
 
     imu:
       enabled: true
@@ -86,7 +86,7 @@ control_server:
       topic: "imu"
 
     mecanum_drive_component:
-      enabled: false
+      enabled: true
       name: "mecanum_drive_controller"
       can_id: 42
       motor_freq: 15600

@@ -40,11 +40,11 @@ private:
     double linear_y_;
     double angular_z_;
     
-    // Button/axis mappings (configurable) - semantic names for game_controller_node
-    std::string axis_linear_x_;
-    std::string axis_linear_y_;
-    std::string axis_angular_z_;
-    std::string button_turbo_;
+    // Button/axis mappings (configurable) - PS4 controller indices
+    int axis_linear_x_;
+    int axis_linear_y_;
+    int axis_angular_z_;
+    int button_turbo_;
     
     bool turbo_mode_;
     double turbo_multiplier_;
