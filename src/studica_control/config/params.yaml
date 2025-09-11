@@ -52,7 +52,7 @@ control_server:
       topic: "odom"
 
     dio:
-      enabled: false
+      enabled: true
       sensors: ["dio"]
       dio:
         pin: 15

@@ -231,9 +231,9 @@ void MecanumDrive::cmd(std::string params, std::shared_ptr<studica_control::srv:
 
 void MecanumDrive::publish_odometry() {
     double front_left = fl_enc_dist_;
-    double front_right = fr_enc_dist_; // temp fix for reverse
+    double front_right = fr_enc_dist_; 
     double rear_left = rl_enc_dist_; 
-    double rear_right = rr_enc_dist_; // temp fix
+    double rear_right = rr_enc_dist_; 
 
     auto current_time = this->now();
 

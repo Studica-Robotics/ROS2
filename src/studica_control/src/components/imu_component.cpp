@@ -16,6 +16,7 @@ Imu::Imu(const rclcpp::NodeOptions &options) : Node("imu", options) {}
 
 Imu::Imu(std::shared_ptr<VMXPi> vmx, const std::string &name, const std::string &topic) : rclcpp::Node(name), vmx_(vmx) {
     imu_ = std::make_shared<studica_driver::Imu>(vmx_);
+    imu_->ZeroYaw();
     service_ = this->create_service<studica_control::srv::SetData>("get_imu_data",
         std::bind(&Imu::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
     publisher_ = this->create_publisher<sensor_msgs::msg::Imu>(topic, 10);

@@ -81,10 +81,10 @@ private:
     uint8_t fr_;
     uint8_t rl_;
     uint8_t rr_;
-    uint8_t fl_enc_dist_;
-    uint8_t fr_enc_dist_;
-    uint8_t rl_enc_dist_;
-    uint8_t rr_enc_dist_;
+    double fl_enc_dist_;
+    double fr_enc_dist_;
+    double rl_enc_dist_;
+    double rr_enc_dist_;
     
    
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
