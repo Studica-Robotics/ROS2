@@ -24,21 +24,21 @@ GamepadController::GamepadController(const std::string &name, const std::string 
     this->declare_parameter<double>("angular_scale", 1.0);
     this->declare_parameter<double>("deadzone", 0.1);
     this->declare_parameter<double>("turbo_multiplier", 1.5);
-    // PS4 Controller semantic mappings (game_controller_node)
-    this->declare_parameter<std::string>("axis_linear_x", "left_stick_y");      // Left stick vertical
-    this->declare_parameter<std::string>("axis_linear_y", "left_stick_x");      // Left stick horizontal  
-    this->declare_parameter<std::string>("axis_angular_z", "right_stick_x");    // Right stick horizontal
-    this->declare_parameter<std::string>("button_turbo", "right_bumper");       // R1 button
+    // PS4 Controller indices (game_controller_node standard mapping)
+    this->declare_parameter<int>("axis_linear_x", 1);      // Left stick vertical
+    this->declare_parameter<int>("axis_linear_y", 0);      // Left stick horizontal  
+    this->declare_parameter<int>("axis_angular_z", 2);     // Right stick horizontal
+    this->declare_parameter<int>("button_turbo", 5);       // R1 button
     
     // Get parameters
     linear_scale_ = this->get_parameter("linear_scale").as_double();
     angular_scale_ = this->get_parameter("angular_scale").as_double();
     deadzone_ = this->get_parameter("deadzone").as_double();
     turbo_multiplier_ = this->get_parameter("turbo_multiplier").as_double();
-    axis_linear_x_ = this->get_parameter("axis_linear_x").as_string();
-    axis_linear_y_ = this->get_parameter("axis_linear_y").as_string();
-    axis_angular_z_ = this->get_parameter("axis_angular_z").as_string();
-    button_turbo_ = this->get_parameter("button_turbo").as_string();
+    axis_linear_x_ = this->get_parameter("axis_linear_x").as_int();
+    axis_linear_y_ = this->get_parameter("axis_linear_y").as_int();
+    axis_angular_z_ = this->get_parameter("axis_angular_z").as_int();
+    button_turbo_ = this->get_parameter("button_turbo").as_int();
     
     // Create subscription to joy topic
     joy_subscription_ = this->create_subscription<sensor_msgs::msg::Joy>(
@@ -53,35 +53,25 @@ GamepadController::GamepadController(const std::string &name, const std::string 
         std::bind(&GamepadController::publish_twist, this));
     
     RCLCPP_INFO(this->get_logger(), "Gamepad controller initialized. Publishing to: %s", cmd_vel_topic.c_str());
-    RCLCPP_INFO(this->get_logger(), "PS4 Controls: %s/%s = movement, %s = rotation, %s = turbo", 
-                axis_linear_x_.c_str(), axis_linear_y_.c_str(), axis_angular_z_.c_str(), button_turbo_.c_str());
+    RCLCPP_INFO(this->get_logger(), "PS4 Controls: axis[%d/%d] = movement, axis[%d] = rotation, button[%d] = turbo", 
+                axis_linear_x_, axis_linear_y_, axis_angular_z_, button_turbo_);
 }
 
 GamepadController::~GamepadController() {}
 
 void GamepadController::joy_callback(const sensor_msgs::msg::Joy::SharedPtr msg) {
-    // Helper function to get axis value by name from Joy message
-    auto get_axis_value = [&](const std::string& axis_name) -> double {
-        // For game_controller_node, we need to map semantic names to indices
-        // This is a simplified mapping for PS4 controller
-        if (axis_name == "left_stick_x") return msg->axes.size() > 0 ? msg->axes[0] : 0.0;
-        if (axis_name == "left_stick_y") return msg->axes.size() > 1 ? msg->axes[1] : 0.0;
-        if (axis_name == "right_stick_x") return msg->axes.size() > 2 ? msg->axes[2] : 0.0;
-        if (axis_name == "right_stick_y") return msg->axes.size() > 3 ? msg->axes[3] : 0.0;
-        return 0.0;
-    };
+    // Check if we have enough axes and buttons
+    if (msg->axes.size() <= std::max({axis_linear_x_, axis_linear_y_, axis_angular_z_}) ||
+        msg->buttons.size() <= button_turbo_) {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                             "PS4 controller doesn't have enough axes/buttons");
+        return;
+    }
     
-    auto get_button_value = [&](const std::string& button_name) -> bool {
-        // Simplified mapping for PS4 controller buttons
-        if (button_name == "right_bumper") return msg->buttons.size() > 5 ? msg->buttons[5] : false;
-        if (button_name == "left_bumper") return msg->buttons.size() > 4 ? msg->buttons[4] : false;
-        return false;
-    };
-    
-    // Get raw axis values using semantic names
-    double raw_linear_x = get_axis_value(axis_linear_x_);
-    double raw_linear_y = get_axis_value(axis_linear_y_);
-    double raw_angular_z = get_axis_value(axis_angular_z_);
+    // Get raw axis values using PS4 controller indices
+    double raw_linear_x = msg->axes[axis_linear_x_];
+    double raw_linear_y = msg->axes[axis_linear_y_];
+    double raw_angular_z = msg->axes[axis_angular_z_];
     
     // Apply deadzone
     auto apply_deadzone = [this](double value) {
@@ -92,8 +82,8 @@ void GamepadController::joy_callback(const sensor_msgs::msg::Joy::SharedPtr msg)
     linear_y_ = apply_deadzone(raw_linear_y);
     angular_z_ = apply_deadzone(raw_angular_z);
     
-    // Check turbo button using semantic name
-    turbo_mode_ = get_button_value(button_turbo_);
+    // Check turbo button
+    turbo_mode_ = (msg->buttons[button_turbo_] == 1);
     
     // Debug output (throttled)
     RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
