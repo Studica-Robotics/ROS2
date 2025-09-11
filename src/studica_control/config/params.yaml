@@ -67,6 +67,19 @@ control_server:
         port_b: 9
         topic: "encoder"
 
+    gamepad:
+      enabled: true
+      name: "gamepad_controller"
+      cmd_vel_topic: "cmd_vel"
+      linear_scale: 0.7
+      angular_scale: 1.0
+      deadzone: 0.1
+      turbo_multiplier: 1.5
+      axis_linear_x: "left_stick_y"      # Left stick vertical (forward/back)
+      axis_linear_y: "left_stick_x"      # Left stick horizontal (strafe)
+      axis_angular_z: "right_stick_x"    # Right stick horizontal (rotation)
+      button_turbo: "right_bumper"       # R1 button
+
     imu:
       enabled: true
       name: "imu"

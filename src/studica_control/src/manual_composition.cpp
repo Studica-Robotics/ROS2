@@ -9,6 +9,7 @@
 #include "studica_control/diff_drive_component.h"
 #include "studica_control/dio_component.h"
 #include "studica_control/encoder_component.h"
+#include "studica_control/gamepad_component.h"
 #include "studica_control/imu_component.h"
 #include "studica_control/mecanum_drive_component.h"
 #include "studica_control/servo_component.h"
@@ -30,6 +31,7 @@ public:
         this->declare_parameter<bool>("diff_drive_component.enabled", false);
         this->declare_parameter<bool>("dio.enabled", false);
         this->declare_parameter<bool>("encoder.enabled", false);
+        this->declare_parameter<bool>("gamepad.enabled", false);
         this->declare_parameter<bool>("imu.enabled", false);
         this->declare_parameter<bool>("mecanum_drive_component.enabled", false);
         this->declare_parameter<bool>("servo.enabled", false);
@@ -42,6 +44,7 @@ public:
         bool diff_drive_enabled = this->get_parameter("diff_drive_component.enabled").as_bool();
         bool dio_enabled = this->get_parameter("dio.enabled").as_bool();
         bool encoder_enabled = this->get_parameter("encoder.enabled").as_bool();
+        bool gamepad_enabled = this->get_parameter("gamepad.enabled").as_bool();
         bool imu_enabled = this->get_parameter("imu.enabled").as_bool();
         bool mecanum_drive_enabled = this->get_parameter("mecanum_drive_component.enabled").as_bool();
         bool servo_enabled = this->get_parameter("servo.enabled").as_bool();
@@ -79,6 +82,11 @@ public:
         if (encoder_enabled) {
             auto encoder_nodes = studica_control::Encoder::initialize(this, vmx_);
             component_nodes.insert(component_nodes.end(), encoder_nodes.begin(), encoder_nodes.end());
+        }
+
+        if (gamepad_enabled) {
+            auto gamepad_node = studica_control::GamepadController::initialize(this);
+            component_nodes.push_back(gamepad_node);
         }
 
         if (imu_enabled) {
