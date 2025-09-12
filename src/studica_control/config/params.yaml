@@ -16,126 +16,124 @@
 #     topic: "range_2"
 #
 
-control_server:
-  ros__parameters:
-    cobra:
-      enabled: false
-      sensors: ["cobra"]
-      cobra:
-        vref: 5.0
-        topic: "cobra"
-      
-    duty_cycle:
-      enabled: false
-      sensors: ["duty_cycle"]
-      duty_cycle:
-        port: 8
-        topic: "duty_cycle_encoder"
+cobra:
+  enabled: false
+  sensors: ["cobra"]
+  cobra:
+    vref: 5.0
+    topic: "cobra"
+  
+duty_cycle:
+  enabled: false
+  sensors: ["duty_cycle"]
+  duty_cycle:
+    port: 8
+    topic: "duty_cycle_encoder"
 
-    diff_drive_component:
-      enabled: false
-      name: "diff_drive_controller"
-      can_id: 42
-      motor_freq: 15600
-      ticks_per_rotation: 1470
-      left_port: 2
-      right_port: 3
-      invert_left: false
-      invert_right: false
-      wheel_radius: 0.05 # in metres
-      wheel_separation: 0.28 # in metres
-    
-    diff_drive_odometry:
-      name: "differential_odom"
-      use_imu: false
-      imu_topic: "imu"
-      topic: "odom"
+diff_drive_component:
+  enabled: false
+  name: "diff_drive_controller"
+  can_id: 42
+  motor_freq: 15600
+  ticks_per_rotation: 1470
+  left_port: 2
+  right_port: 3
+  invert_left: false
+  invert_right: false
+  wheel_radius: 0.05 # in metres
+  wheel_separation: 0.28 # in metres
 
-    dio:
-      enabled: false
-      sensors: ["dio"]
-      dio:
-        pin: 15
-        type: "output" # "input" or "output"
-        topic: "dio_state"
-    
-    encoder:
-      enabled: false
-      sensors: ["encoder"]
-      encoder:
-        port_a: 8
-        port_b: 9
-        topic: "encoder"
+diff_drive_odometry:
+  name: "differential_odom"
+  use_imu: false
+  imu_topic: "imu"
+  topic: "odom"
 
-    gamepad:
-      enabled: true
-      name: "gamepad_controller"
-      cmd_vel_topic: "cmd_vel"
-      linear_scale: 0.7
-      angular_scale: 1.0
-      deadzone: 0.1
-      turbo_multiplier: 1.5
-      axis_linear_x: 1      # Left stick vertical (forward/back)
-      axis_linear_y: 0      # Left stick horizontal (strafe)
-      axis_angular_z: 3     # Right stick horizontal (rotation)
-      button_turbo: 5       # R1 button
+dio:
+  enabled: false
+  sensors: ["dio"]
+  dio:
+    pin: 15
+    type: "output" # "input" or "output"
+    topic: "dio_state"
 
-    imu:
-      enabled: true
-      name: "imu"
-      topic: "imu"
+encoder:
+  enabled: false
+  sensors: ["encoder"]
+  encoder:
+    port_a: 8
+    port_b: 9
+    topic: "encoder"
 
-    mecanum_drive_component:
-      enabled: true
-      name: "mecanum_drive_controller"
-      can_id: 42
-      motor_freq: 15600
-      ticks_per_rotation: 1470
-      wheel_radius: 0.05 # in metres
-      wheelbase: 0.28 # in metres
-      width: 0.3 # in metres
-      front_left: 2
-      front_right: 1
-      rear_left: 0
-      rear_right: 3
-      invert_front_left: false
-      invert_front_right: false
-      invert_rear_left: false
-      invert_rear_right: false
+gamepad:
+  enabled: true
+  name: "gamepad_controller"
+  cmd_vel_topic: "cmd_vel"
+  linear_scale: 0.7
+  angular_scale: 1.0
+  deadzone: 0.1
+  turbo_multiplier: 1.5
+  axis_linear_x: 1      # Left stick vertical (forward/back)
+  axis_linear_y: 0      # Left stick horizontal (strafe)
+  axis_angular_z: 3     # Right stick horizontal (rotation)
+  button_turbo: 5       # R1 button
 
-    mecanum_drive_odometry:
-      name: "mecanum_odom"
-      use_imu: true
-      imu_topic: "imu"
-      topic: "odom"
+imu:
+  enabled: true
+  name: "imu"
+  topic: "imu"
 
-    servo:
-      enabled: false
-      sensors: ["servo"]
-      servo:
-        port: 14
-        type: "standard" # "standard", "continuous", or "linear"
-        topic: "servo_angle"
+mecanum_drive_component:
+  enabled: true
+  name: "mecanum_drive_controller"
+  can_id: 42
+  motor_freq: 15600
+  ticks_per_rotation: 1470
+  wheel_radius: 0.05 # in metres
+  wheelbase: 0.28 # in metres
+  width: 0.3 # in metres
+  front_left: 2
+  front_right: 1
+  rear_left: 0
+  rear_right: 3
+  invert_front_left: false
+  invert_front_right: false
+  invert_rear_left: false
+  invert_rear_right: false
 
-    sharp:
-      enabled: false
-      sensors: ["sharp"]
-      sharp:
-        port: 22
-        topic: "ir_range"
+mecanum_drive_odometry:
+  name: "mecanum_odom"
+  use_imu: true
+  imu_topic: "imu"
+  topic: "odom"
 
-    titan:
-      enabled: true
-      sensors: ["titan"]
-      titan:
-        can_id: 42
-        motor_freq: 15600
-        topic: "titan_encoders"
+servo:
+  enabled: false
+  sensors: ["servo"]
+  servo:
+    port: 14
+    type: "standard" # "standard", "continuous", or "linear"
+    topic: "servo_angle"
 
-    ultrasonic:
-      enabled: false
-      sensors: ["ultrasonic"]
-      ultrasonic:
-        ping: 10
-        echo: 11
-        topic: "ultrasonic_range"
+sharp:
+  enabled: false
+  sensors: ["sharp"]
+  sharp:
+    port: 22
+    topic: "ir_range"
+
+titan:
+  enabled: true
+  sensors: ["titan"]
+  titan:
+    can_id: 42
+    motor_freq: 15600
+    topic: "titan_encoders"
+
+ultrasonic:
+  enabled: false
+  sensors: ["ultrasonic"]
+  ultrasonic:
+    ping: 10
+    echo: 11
+    topic: "ultrasonic_range"

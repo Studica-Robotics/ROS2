@@ -61,8 +61,8 @@ GamepadController::~GamepadController() {}
 
 void GamepadController::joy_callback(const sensor_msgs::msg::Joy::SharedPtr msg) {
     // Check if we have enough axes and buttons
-    if (msg->axes.size() <= std::max({axis_linear_x_, axis_linear_y_, axis_angular_z_}) ||
-        msg->buttons.size() <= button_turbo_) {
+    if (msg->axes.size() <= static_cast<size_t>(std::max({axis_linear_x_, axis_linear_y_, axis_angular_z_})) ||
+        msg->buttons.size() <= static_cast<size_t>(button_turbo_)) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
                              "PS4 controller doesn't have enough axes/buttons");
         return;
