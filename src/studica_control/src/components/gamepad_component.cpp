@@ -2,33 +2,25 @@
 
 namespace studica_control {
 
-std::shared_ptr<rclcpp::Node> GamepadController::initialize(rclcpp::Node *control) {
-    control->declare_parameter<std::string>("gamepad.name", "gamepad_controller");
-    control->declare_parameter<std::string>("gamepad.cmd_vel_topic", "cmd_vel");
-    
-    std::string name = control->get_parameter("gamepad.name").as_string();
-    std::string cmd_vel_topic = control->get_parameter("gamepad.cmd_vel_topic").as_string();
-    
-    auto gamepad = std::make_shared<GamepadController>(name, cmd_vel_topic);
-    return gamepad;
+std::shared_ptr<rclcpp::Node> GamepadController::initialize(rclcpp::Node * /*control*/) {
+    // The GamepadController is now a composable node and will be initialized by the component manager.
+    // The constructor will handle parameter declaration and setup.
+    return std::make_shared<GamepadController>(rclcpp::NodeOptions());
 }
 
 GamepadController::GamepadController(const rclcpp::NodeOptions &options) 
-    : Node("gamepad_controller", options) {}
-
-GamepadController::GamepadController(const std::string &name, const std::string &cmd_vel_topic) 
-    : rclcpp::Node(name), linear_x_(0.0), linear_y_(0.0), angular_z_(0.0), turbo_mode_(false) {
+    : Node("gamepad_controller", options), linear_x_(0.0), linear_y_(0.0), angular_z_(0.0), turbo_mode_(false) {
     
-    // Declare parameters with defaults
+    // Declare parameters with default values
+    this->declare_parameter<std::string>("cmd_vel_topic", "cmd_vel");
     this->declare_parameter<double>("linear_scale", 0.7);
     this->declare_parameter<double>("angular_scale", 1.0);
     this->declare_parameter<double>("deadzone", 0.1);
     this->declare_parameter<double>("turbo_multiplier", 1.5);
-    // PS4 Controller indices (game_controller_node standard mapping)
-    this->declare_parameter<int>("axis_linear_x", 1);      // Left stick vertical
-    this->declare_parameter<int>("axis_linear_y", 0);      // Left stick horizontal  
-    this->declare_parameter<int>("axis_angular_z", 3);     // Right stick horizontal
-    this->declare_parameter<int>("button_turbo", 5);       // R1 button
+    this->declare_parameter<int>("axis_linear_x", 1);
+    this->declare_parameter<int>("axis_linear_y", 0);
+    this->declare_parameter<int>("axis_angular_z", 2);
+    this->declare_parameter<int>("button_turbo", 5);
     
     // Get parameters
     linear_scale_ = this->get_parameter("linear_scale").as_double();
@@ -44,6 +36,9 @@ GamepadController::GamepadController(const std::string &name, const std::string 
     joy_subscription_ = this->create_subscription<sensor_msgs::msg::Joy>(
         "joy", 10, std::bind(&GamepadController::joy_callback, this, std::placeholders::_1));
     
+    // Get topic name from parameters
+    std::string cmd_vel_topic = this->get_parameter("cmd_vel_topic").as_string();
+
     // Create publisher for cmd_vel
     cmd_vel_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>(cmd_vel_topic, 10);
     
@@ -61,8 +56,8 @@ GamepadController::~GamepadController() {}
 
 void GamepadController::joy_callback(const sensor_msgs::msg::Joy::SharedPtr msg) {
     // Check if we have enough axes and buttons
-    if (msg->axes.size() <= static_cast<size_t>(std::max({axis_linear_x_, axis_linear_y_, axis_angular_z_})) ||
-        msg->buttons.size() <= static_cast<size_t>(button_turbo_)) {
+    if (msg->axes.size() <= std::max({axis_linear_x_, axis_linear_y_, axis_angular_z_}) ||
+        msg->buttons.size() <= button_turbo_) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
                              "PS4 controller doesn't have enough axes/buttons");
         return;
