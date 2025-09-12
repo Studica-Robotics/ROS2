@@ -19,16 +19,15 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
 GamepadController::GamepadController(const std::string &name, const std::string &cmd_vel_topic) 
     : rclcpp::Node(name), linear_x_(0.0), linear_y_(0.0), angular_z_(0.0), turbo_mode_(false) {
     
-    // Declare parameters with defaults
-    this->declare_parameter<double>("linear_scale", 0.7);
-    this->declare_parameter<double>("angular_scale", 1.0);
-    this->declare_parameter<double>("deadzone", 0.1);
-    this->declare_parameter<double>("turbo_multiplier", 1.5);
-    // PS4 Controller indices (game_controller_node standard mapping)
-    this->declare_parameter<int>("axis_linear_x", 1);      // Left stick vertical
-    this->declare_parameter<int>("axis_linear_y", 0);      // Left stick horizontal  
-    this->declare_parameter<int>("axis_angular_z", 2);     // Right stick horizontal
-    this->declare_parameter<int>("button_turbo", 5);       // R1 button
+    // Declare parameters (no defaults - must be provided in params.yaml)
+    this->declare_parameter<double>("linear_scale");
+    this->declare_parameter<double>("angular_scale");
+    this->declare_parameter<double>("deadzone");
+    this->declare_parameter<double>("turbo_multiplier");
+    this->declare_parameter<int>("axis_linear_x");
+    this->declare_parameter<int>("axis_linear_y");
+    this->declare_parameter<int>("axis_angular_z");
+    this->declare_parameter<int>("button_turbo");
     
     // Get parameters
     linear_scale_ = this->get_parameter("linear_scale").as_double();
