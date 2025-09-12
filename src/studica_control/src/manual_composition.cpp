@@ -52,6 +52,9 @@ public:
         bool titan_enabled = this->get_parameter("titan.enabled").as_bool();
         bool ultrasonic_enabled = this->get_parameter("ultrasonic.enabled").as_bool();
 
+        RCLCPP_INFO(this->get_logger(), "Gamepad Enabled: %s", gamepad_enabled ? "true" : "false");
+        RCLCPP_INFO(this->get_logger(), "Mecanum Drive Enabled: %s", mecanum_drive_enabled ? "true" : "false");
+
         if (diff_drive_enabled && mecanum_drive_enabled) {
             RCLCPP_ERROR(this->get_logger(), "Cannot initialize both differential and mecanum drive controllers. Make sure only one of them is enabled.");
             return false;
@@ -85,7 +88,7 @@ public:
         }
 
         if (gamepad_enabled) {
-            auto gamepad_node = studica_control::GamepadController::initialize(this);
+            auto gamepad_node = studica_control::GamepadController::initialize(nullptr);
             component_nodes.push_back(gamepad_node);
         }
 
