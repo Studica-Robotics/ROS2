@@ -77,7 +77,7 @@ control_server:
       turbo_multiplier: 1.5
       axis_linear_x: 1      # Left stick vertical (forward/back)
       axis_linear_y: 0      # Left stick horizontal (strafe)
-      axis_angular_z: 2     # Right stick horizontal (rotation)
+      axis_angular_z: 3     # Right stick horizontal (rotation)
       button_turbo: 5       # R1 button
 
     imu:
