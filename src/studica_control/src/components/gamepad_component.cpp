@@ -17,9 +17,9 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
     this->declare_parameter<double>("angular_scale", 1.0);
     this->declare_parameter<double>("deadzone", 0.1);
     this->declare_parameter<double>("turbo_multiplier", 1.5);
-    this->declare_parameter<int>("axis_linear_x", 1);
-    this->declare_parameter<int>("axis_linear_y", 0);
-    this->declare_parameter<int>("axis_angular_z", 2);
+    this->declare_parameter<int>("axis_linear_x", 2);
+    this->declare_parameter<int>("axis_linear_y", 1);
+    this->declare_parameter<int>("axis_angular_z", 0);
     this->declare_parameter<int>("button_turbo", 5);
     
     // Get parameters
@@ -99,13 +99,13 @@ void GamepadController::publish_twist() {
     }
     
     // Set twist values
-    twist_msg.linear.x = linear_x_ * current_linear_scale;
+    twist_msg.linear.x = -linear_x_ * current_linear_scale;
     twist_msg.linear.y = linear_y_ * current_linear_scale;
     twist_msg.linear.z = 0.0;
     
     twist_msg.angular.x = 0.0;
     twist_msg.angular.y = 0.0;
-    twist_msg.angular.z = angular_z_ * current_angular_scale;
+    twist_msg.angular.z = -angular_z_ * current_angular_scale;
     
     // Publish the message
     cmd_vel_publisher_->publish(twist_msg);

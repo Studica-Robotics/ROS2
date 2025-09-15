@@ -8,6 +8,7 @@ bin/
 lib/
 lidar/
 camera/
+maps/
 m-explore-ros2/
 msg_gen/
 srv_gen/
