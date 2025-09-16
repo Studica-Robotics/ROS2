@@ -11,6 +11,7 @@
 #include "sensor_msgs/msg/imu.hpp"
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2_ros/transform_broadcaster.h"
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 # define PLANAR_POINT_DIM 3
 
@@ -55,6 +56,7 @@ class MecanumOdometry : public rclcpp::Node {
         double x_;
         double y_;
         double theta_;
+        double prev_imu_yaw_;
         
         double prev_front_left_;
         double prev_front_right_;

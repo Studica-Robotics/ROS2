@@ -62,6 +62,10 @@ MecanumDrive::MecanumDrive(
     : Node("mecanum_drive"),
       vmx_(vmx),
       odom_(odom),
+      fl_inverted_(invert_front_left),
+      fr_inverted_(invert_front_right),
+      rl_inverted_(invert_rear_left),
+      rr_inverted_(invert_rear_right),
       name_(name),
       can_id_(can_id),
       motor_freq_(motor_freq),
@@ -108,6 +112,48 @@ MecanumDrive::MecanumDrive(
         10,
         std::bind(&MecanumDrive::cmd_vel_callback, this, std::placeholders::_1)
     );
+    fl_enc_sub_ = this->create_subscription<studica_control::msg::EncoderMsg>(
+        "fl_enc",
+        10,
+        std::bind(&MecanumDrive::fl_enc_callback, this, std::placeholders::_1)
+    );
+    fr_enc_sub_ = this->create_subscription<studica_control::msg::EncoderMsg>(
+        "fr_enc",
+        10,
+        std::bind(&MecanumDrive::fr_enc_callback, this, std::placeholders::_1)
+    );
+    rl_enc_sub_ = this->create_subscription<studica_control::msg::EncoderMsg>(
+        "rl_enc",
+        10,
+        std::bind(&MecanumDrive::rl_enc_callback, this, std::placeholders::_1)
+    );
+    rr_enc_sub_ = this->create_subscription<studica_control::msg::EncoderMsg>(
+        "rr_enc",
+        10,
+        std::bind(&MecanumDrive::rr_enc_callback, this, std::placeholders::_1)
+    );
+}
+
+double MecanumDrive::enc_distance(const studica_control::msg::EncoderMsg::SharedPtr msg, bool inverted) {
+    double distance = msg->encoder_count * dist_per_tick_;
+    if (inverted) {
+        distance *= -1;
+    }
+    return distance;
+}
+
+void MecanumDrive::fl_enc_callback(const studica_control::msg::EncoderMsg::SharedPtr msg) {
+
+    fl_enc_dist_ = enc_distance(msg, fl_inverted_);
+}
+void MecanumDrive::fr_enc_callback(const studica_control::msg::EncoderMsg::SharedPtr msg) {
+    fr_enc_dist_ = enc_distance(msg, fr_inverted_);
+}
+void MecanumDrive::rl_enc_callback(const studica_control::msg::EncoderMsg::SharedPtr msg) {
+    rl_enc_dist_ = enc_distance(msg, rl_inverted_);
+}
+void MecanumDrive::rr_enc_callback(const studica_control::msg::EncoderMsg::SharedPtr msg) {
+    rr_enc_dist_ = enc_distance(msg, rr_inverted_);
 }
 
 MecanumDrive::~MecanumDrive() {}
@@ -184,10 +230,10 @@ void MecanumDrive::cmd(std::string params, std::shared_ptr<studica_control::srv:
 }
 
 void MecanumDrive::publish_odometry() {
-    double front_left = titan_->GetEncoderDistance(fl_);
-    double front_right = titan_->GetEncoderDistance(fr_);
-    double rear_left = titan_->GetEncoderDistance(rl_);
-    double rear_right = titan_->GetEncoderDistance(rr_);
+    double front_left = fl_enc_dist_;
+    double front_right = fr_enc_dist_; 
+    double rear_left = rl_enc_dist_; 
+    double rear_right = rr_enc_dist_; 
 
     auto current_time = this->now();
 

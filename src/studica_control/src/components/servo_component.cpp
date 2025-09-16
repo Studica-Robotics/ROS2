@@ -4,7 +4,7 @@ namespace studica_control {
 
 std::vector<std::shared_ptr<rclcpp::Node>> Servo::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
     std::vector<std::shared_ptr<rclcpp::Node>> servo_nodes;
-    control->declare_parameter<std::vector<std::string>>("servo.sensors", {});
+    control->declare_parameter<std::vector<std::string>>("servo.sensors", std::vector<std::string>{});
     std::vector<std::string> sensor_ids = control->get_parameter("servo.sensors").as_string_array();
     for (const auto &sensor : sensor_ids) {
         std::string port_param = "servo." + sensor + ".port";

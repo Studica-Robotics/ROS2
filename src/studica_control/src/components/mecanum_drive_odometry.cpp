@@ -1,4 +1,6 @@
 #include "studica_control/mecanum_drive_odometry.h"
+#include <tf2/LinearMath/Matrix3x3.h>
+#include <tf2/utils.hpp>
 
 namespace studica_control {
 
@@ -68,9 +70,23 @@ bool MecanumOdometry::updateAndPublish(
 
     double delta_x = 0.25 * (delta_front_left + delta_front_right + delta_rear_left + delta_rear_right);
     double delta_y = 0.25 * (-delta_front_left + delta_front_right + delta_rear_left - delta_rear_right);
-    double delta_theta = (-delta_front_left + delta_front_right - delta_rear_left + delta_rear_right) / (2.0 * (length_x_ + length_y_));
-
-    double avg_theta = theta_ + delta_theta / 2.0;
+    double delta_theta;
+    double avg_theta;
+    
+    if (use_imu_) {
+        std::lock_guard<std::mutex> lk(imu_data_mutex_);
+      // extract yaw from IMU quaternion
+        double imu_yaw = tf2::getYaw(imu_data_.orientation);
+        // shortest angular difference
+        double raw = imu_yaw - prev_imu_yaw_;
+        delta_theta = std::atan2(std::sin(raw), std::cos(raw));
+        // mid‐point heading
+        avg_theta    = prev_imu_yaw_ + delta_theta * 0.5;
+        prev_imu_yaw_ = imu_yaw;
+    } else {
+        delta_theta = (-delta_front_left + delta_front_right - delta_rear_left + delta_rear_right) / (2.0 * (length_x_ + length_y_));
+        avg_theta = theta_ + delta_theta / 2.0;
+    }   
 
     double cos_theta = cos(avg_theta);
     double sin_theta = sin(avg_theta);
