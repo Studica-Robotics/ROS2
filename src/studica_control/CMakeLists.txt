@@ -16,6 +16,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(rosidl_typesupport_c REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -44,6 +45,7 @@ set(studica_control_HDRS
   include/studica_control/diff_drive_odometry.h
   include/studica_control/dio_component.h
   include/studica_control/encoder_component.h
+  include/studica_control/gamepad_component.h
   include/studica_control/imu_component.h
   include/studica_control/mecanum_drive_component.h
   include/studica_control/servo_component.h
@@ -54,6 +56,7 @@ set(studica_control_HDRS
 
 set(dependencies 
   "ament_index_cpp" 
+  "geometry_msgs"
   "nav_msgs"
   "rclcpp" 
   "rclcpp_action"
@@ -90,6 +93,10 @@ add_library(encoder_component SHARED src/components/encoder_component.cpp)
 ament_target_dependencies(encoder_component ${dependencies})
 rclcpp_components_register_nodes(encoder_component "studica_control::encoder")
 
+add_library(gamepad_component SHARED src/components/gamepad_component.cpp)
+ament_target_dependencies(gamepad_component ${dependencies})
+rclcpp_components_register_nodes(gamepad_component "studica_control::GamepadController")
+
 add_library(imu_component SHARED src/components/imu_component.cpp)
 ament_target_dependencies(imu_component ${dependencies})
 rclcpp_components_register_nodes(imu_component "studica_control::imu")
@@ -111,7 +118,7 @@ rclcpp_components_register_nodes(sharp_component "studica_control::sharp")
 
 add_library(titan_component SHARED src/components/titan_component.cpp)
 ament_target_dependencies(titan_component ${dependencies})
-rclcpp_components_register_nodes(sharp_component "studica_control::Titan")
+rclcpp_components_register_nodes(titan_component "studica_control::Titan")
 
 add_library(ultrasonic_component SHARED src/components/ultrasonic_component.cpp)
 ament_target_dependencies(ultrasonic_component ${dependencies})
@@ -127,6 +134,7 @@ install(TARGETS
   diff_drive_odometry
   dio_component
   encoder_component
+  gamepad_component
   imu_component
   mecanum_drive_component
   mecanum_drive_odometry
@@ -149,6 +157,7 @@ target_link_libraries(manual_composition
   diff_drive_odometry
   dio_component
   encoder_component
+  gamepad_component
   imu_component
   mecanum_drive_component
   mecanum_drive_odometry
@@ -197,6 +206,7 @@ ament_export_libraries(
   diff_drive_odometry
   dio_component
   encoder_component
+  gamepad_component
   imu_component
   mecanum_drive_component
   servo_component

@@ -13,7 +13,7 @@ mkdir -p lidar
 cd lidar 
 LIDAR_DIR=$(pwd)
 
-ORDERED_LIDAR_KEYS=(1 2 3 4 5 6 7 8 9 10 11)
+ORDERED_LIDAR_KEYS=(1 2 3 4 5 6 7 8 9 10 11 12)
 declare -A LIDAR_MODELS=(
     [1]="No LiDAR"
     [2]="G1"
@@ -22,10 +22,11 @@ declare -A LIDAR_MODELS=(
     [5]="GS2"
     [6]="TEA"
     [7]="TG"
-    [8]="TminiPro"
-    [9]="X2"
-    [10]="X4"
-    [11]="X4-Pro"
+    [8]="Tmini"
+    [9]="Tmini-Plus-SH"
+    [10]="X2"
+    [11]="X4"
+    [12]="X4-Pro"
 )
 
 echo "Select your YDLidar model:"

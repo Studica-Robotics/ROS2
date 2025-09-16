@@ -5,14 +5,13 @@ def launch_ros2_nodes_and_services():
     environment_commands = """
     cd /home/vmx/ROS2/
     . /opt/ros/humble/setup.bash
-    . /home/vmx/ROS2/src/studica_control/install/setup.bash
+    . install/setup.bash
     export LD_LIBRARY_PATH=/usr/local/lib/studica_drivers:$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/studica_control
-    source src/studica_control/install/setup.bash
     """
 
     #Nodes
-    joy_node_command = f"{environment_commands}\nros2 run joy joy_node"
+    joy_node_command = f"{environment_commands}\nros2 run joy game_controller_node"
     rosbridge_command = f"{environment_commands}\nros2 launch rosbridge_server rosbridge_websocket_launch.xml"
     orbbec_camera_command = f"{environment_commands}\nros2 launch orbbec_camera gemini_e.launch.py"
     slam_toolbox_command = f"{environment_commands}\nros2 launch slam_toolbox online_sync_launch.py"

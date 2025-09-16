@@ -78,6 +78,20 @@ control_server:
         port_a: 6
         port_b: 7
         topic: "rl_enc"
+
+    gamepad:
+      enabled: true
+      name: "gamepad_controller"
+      cmd_vel_topic: "cmd_vel"
+      linear_scale: 0.7
+      angular_scale: 1.0
+      deadzone: 0.1
+      turbo_multiplier: 1.5
+      axis_linear_x: 1      # Left stick vertical (forward/back)
+      axis_linear_y: 0      # Left stick horizontal (strafe)
+      axis_angular_z: 2     # Right stick horizontal (rotation)
+      button_turbo: 5       # R1 button
+
     imu:
       enabled: true
       name: "imu"

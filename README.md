@@ -140,7 +140,7 @@ Example for servo component:
 
 To change the angle of your servo, use the following command:
 ``` bash  
-ros2 service call /set_servo_angle studica_control/srv/SetData "{params: '45'}"
+ros2 service call /<servo_name>/set_servo_angle studica_control/srv/SetData "{params: '45'}"
 ```
 
 Example for DIO component:
