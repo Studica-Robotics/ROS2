@@ -28,7 +28,7 @@ Imu::Imu(std::shared_ptr<VMXPi> vmx, const std::string &name, const std::string 
 
 Imu::~Imu() {}
 
-void Imu::cmd_callback(const std::shared_ptr<studica_control::srv::SetData::Request> request,
+void Imu::cmd_callback(const std::shared_ptr<studica_control::srv::SetData::Request> /* request */,
                        std::shared_ptr<studica_control::srv::SetData::Response> response) {
     if (imu_) RCLCPP_INFO(this->get_logger(), "IMU is available. Type: %s", typeid(*imu_).name());
     else RCLCPP_WARN(this->get_logger(), "IMU is not available.");

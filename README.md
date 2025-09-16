@@ -65,6 +65,17 @@ ros2 topic echo <topic-name>
 ```
 You should now be able to view the published data for that component! There is oftentimes a lot of data streaming at a very high rate, so use a ROS2 visualizer such as RViz or Foxglove. This will make it much easier to view your data more intuitively.
 
+### 4. Foxglove
+To visualize data with foxglove, we can:
+
+``` bash
+source install/setup.bash 
+```
+Then:
+``` bash
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml
+```
+Now, go to foxglove and select localhost:8765
 ## 🤖 Example – How to get robot moving 
 
 ### 1. Enable a drive controller component

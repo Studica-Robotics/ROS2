@@ -57,13 +57,19 @@ def generate_launch_description():
         output='screen'
     )
 
+    joy_node = ExecuteProcess(
+        cmd=['ros2', 'run', 'joy', 'game_controller_node'],
+        output='screen'
+    )
+
     nodes = [
         foxglove,
         manual_composition,
         base_tf,
         # laser_tf,
         lidar,
-        # slam,
+        slam,
+        joy_node,
     ]
 
     return LaunchDescription(nodes)

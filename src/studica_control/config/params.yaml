@@ -87,9 +87,9 @@ control_server:
       angular_scale: 1.0
       deadzone: 0.1
       turbo_multiplier: 1.5
-      axis_linear_x: 1      # Left stick vertical (forward/back)
-      axis_linear_y: 0      # Left stick horizontal (strafe)
-      axis_angular_z: 2     # Right stick horizontal (rotation)
+      axis_linear_x: 2      # Left stick vertical (forward/back)
+      axis_linear_y: 1      # Left stick horizontal (strafe)
+      axis_angular_z: 0     # Right stick horizontal (rotation)
       button_turbo: 5       # R1 button
 
     imu:
