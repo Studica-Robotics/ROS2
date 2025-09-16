@@ -49,7 +49,7 @@ source install/setup.bash
 ```
 Now the robot is ready to be launched:
 ``` bash
-ros2 launch studica_control studica_launch.py
+ros2 launch studica_control <LAUNCH_FILE.py>
 ```
 
 ### 3. View data
@@ -187,3 +187,53 @@ When running lidar and explore scripts, sometimes their respective install scrip
 ```
 
 Nav2 Issue - https://robotics.stackexchange.com/questions/114875/ros2-running-nav2-and-odom-frame-is-moving-excessively-causing-navigation-to-fa
+
+## Pick your launch file
+before running any launch file, make sure to build the ROS2 package and source the install folder.
+
+### Studica_launch.py
+- default launch
+- basic function in manual_composition.cpp (lidar, gamepad & keyboard control, blocky control)
+
+### mapping2_launch.py
+- launch file for mapping
+- dual lidar
+- 4 Transform Publishers
+- Laser Scan Merger
+- Foxglove visualization
+drive the robot around to map the surronding and use the following command to save the map:
+
+``` bash
+ros2 service call /slam_toolbox/save_map slam_toolbox/srv/SaveMap "{name: {data: '/home/vmx/ROS2/maps/YOUR_MAP'}}"
+```
+
+alternate methods:
+
+``` bash
+ros2 run nav2_map_server map_saver_cli -f /home/vmx/ROS2/maps/YOUR_MAP
+```
+
+``` bash
+rviz2 -d `ros2 pkg prefix slam_toolbox`/share/slam_toolbox/rviz/YOUR_MAP.rviz
+```
+
+### office_mapping_launch.py
+- Specialized launch file for office environment mapping
+- SLAM toolbox integration with custom parameters (office_mapper_params.yaml)
+- includes every feature of mapping2_launch.py(except gamepad control)
+
+### nav2_launch.py
+- Comprehensive navigation setup with dual LiDAR support
+- Nav2 localization and navigation
+- 2 Transform Publishers
+- ROS bridge for web interfaces
+- includes every feature of mapping2_launch.py(except gamepad control)
+- Map Loading
+
+### tf_launch.py
+- Minimal launch file for transforms and manual composition
+- Base transform publishers
+- Modular design for use with external LiDAR launches
+- 2 Transform Publishers
+- Transform Publishers
+
