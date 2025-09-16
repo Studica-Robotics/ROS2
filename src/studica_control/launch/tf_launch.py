@@ -40,7 +40,7 @@ def generate_launch_description():
     nodes = [
         manual_composition,
         base_tf,
-        laser_tf
+        # laser_tf
     ]
 
     return LaunchDescription(nodes)

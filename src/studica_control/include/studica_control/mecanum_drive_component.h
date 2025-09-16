@@ -11,6 +11,7 @@
 #include "std_msgs/msg/string.hpp"
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2_ros/transform_broadcaster.h"
+#include "studica_control/msg/encoder_msg.hpp"
 
 #include "mecanum_drive_odometry.h"
 #include "studica_control/srv/set_data.hpp"
@@ -51,6 +52,15 @@ private:
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
+    rclcpp::Subscription<studica_control::msg::EncoderMsg>::SharedPtr fl_enc_sub_;
+    rclcpp::Subscription<studica_control::msg::EncoderMsg>::SharedPtr fr_enc_sub_;
+    rclcpp::Subscription<studica_control::msg::EncoderMsg>::SharedPtr rl_enc_sub_;
+    rclcpp::Subscription<studica_control::msg::EncoderMsg>::SharedPtr rr_enc_sub_;
+
+    bool fl_inverted_;
+    bool fr_inverted_;
+    bool rl_inverted_;
+    bool rr_inverted_;
 
     double length_x_;
     double length_y_;
@@ -71,11 +81,22 @@ private:
     uint8_t fr_;
     uint8_t rl_;
     uint8_t rr_;
+    double fl_enc_dist_;
+    double fr_enc_dist_;
+    double rl_enc_dist_;
+    double rr_enc_dist_;
+    
    
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
     void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
     void cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg);
     void publish_odometry();
+
+    double enc_distance(const studica_control::msg::EncoderMsg::SharedPtr msg, bool inverted);
+    void fl_enc_callback(const studica_control::msg::EncoderMsg::SharedPtr msg);
+    void fr_enc_callback(const studica_control::msg::EncoderMsg::SharedPtr msg);
+    void rl_enc_callback(const studica_control::msg::EncoderMsg::SharedPtr msg);
+    void rr_enc_callback(const studica_control::msg::EncoderMsg::SharedPtr msg);
 };
 
 }  // namespace studica_control

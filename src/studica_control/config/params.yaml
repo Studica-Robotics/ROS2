@@ -37,9 +37,9 @@ control_server:
       name: "diff_drive_controller"
       can_id: 42
       motor_freq: 15600
-      ticks_per_rotation: 1470
-      left_port: 2
-      right_port: 3
+      ticks_per_rotation: 1464
+      left_port: 3
+      right_port: 1
       invert_left: false
       invert_right: false
       wheel_radius: 0.05 # in metres
@@ -52,7 +52,7 @@ control_server:
       topic: "odom"
 
     dio:
-      enabled: false
+      enabled: true
       sensors: ["dio"]
       dio:
         pin: 15
@@ -61,11 +61,23 @@ control_server:
     
     encoder:
       enabled: true
-      sensors: ["encoder"]
-      encoder:
-        port_a: 8
-        port_b: 9
-        topic: "encoder"
+      sensors: ["rear_right", "front_right", "front_left", "rear_left"]
+      rear_right:
+        port_a: 0
+        port_b: 1
+        topic: "rr_enc"
+      front_right:
+        port_a: 2
+        port_b: 3
+        topic: "fr_enc"
+      front_left:
+        port_a: 4
+        port_b: 5
+        topic: "fl_enc"
+      rear_left:
+        port_a: 6
+        port_b: 7
+        topic: "rl_enc"
 
     gamepad:
       enabled: true
@@ -90,18 +102,18 @@ control_server:
       name: "mecanum_drive_controller"
       can_id: 42
       motor_freq: 15600
-      ticks_per_rotation: 1470
+      ticks_per_rotation: 1464
       wheel_radius: 0.05 # in metres
       wheelbase: 0.28 # in metres
       width: 0.3 # in metres
       front_left: 2
-      front_right: 1
-      rear_left: 0
-      rear_right: 3
+      front_right: 0
+      rear_left: 3
+      rear_right: 1
       invert_front_left: false
-      invert_front_right: false
+      invert_front_right: true
       invert_rear_left: false
-      invert_rear_right: false
+      invert_rear_right: true
 
     mecanum_drive_odometry:
       name: "mecanum_odom"

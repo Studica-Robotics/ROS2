@@ -25,6 +25,12 @@ def generate_launch_description():
         output='screen',
         parameters=[params_file]
     )
+    foxglove = Node(
+        package='foxglove_bridge',
+        executable='foxglove_bridge',
+        name='foxglove_bridge',
+        output='screen'
+    )
 
     base_tf = ExecuteProcess(
         cmd=[[
@@ -35,9 +41,10 @@ def generate_launch_description():
     
     laser_tf = ExecuteProcess(
         cmd=[[
-            'ros2 run tf2_ros static_transform_publisher 0 0 0 3.14159 0 0 base_link laser_frame'
+            'ros2 run tf2_ros static_transform_publisher --x 0.144 --y 0 --z 0 --qx 0 --qy 0 --qz 0.7071 --qw -0.7071 --frame-id base_link --child-frame-id laser_frame'
         ]],
         shell=True
+
     )
 
     lidar = ExecuteProcess(
@@ -56,9 +63,10 @@ def generate_launch_description():
     )
 
     nodes = [
+        foxglove,
         manual_composition,
         base_tf,
-        laser_tf,
+        # laser_tf,
         lidar,
         slam,
         joy_node,
