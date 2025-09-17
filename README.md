@@ -235,5 +235,4 @@ rviz2 -d `ros2 pkg prefix slam_toolbox`/share/slam_toolbox/rviz/YOUR_MAP.rviz
 - Base transform publishers
 - Modular design for use with external LiDAR launches
 - 2 Transform Publishers
-- Transform Publishers
 
