@@ -201,6 +201,7 @@ before running any launch file, make sure to build the ROS2 package and source t
 - 4 Transform Publishers
 - Laser Scan Merger
 - Foxglove visualization
+
 drive the robot around to map the surronding and use the following command to save the map:
 
 ``` bash
