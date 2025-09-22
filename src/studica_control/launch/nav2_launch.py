@@ -101,7 +101,7 @@ def generate_launch_description():
     )
 
     nav_localization = ExecuteProcess(
-        cmd=['ros2', 'launch', 'nav2_bringup', 'localization_launch.py', 'map:=/home/vmx/ROS2/office.yaml', 'use_sim_time:=false', 'params_file:=/home/vmx/ROS2/nav2_params.yaml'],
+        cmd=['ros2', 'launch', 'nav2_bringup', 'localization_launch.py', 'map:=/home/vmx/ROS2/office.yaml', 'use_sim_time:=false', 'params_file:=/home/vmx/ROS2/nav2_params/nav2_params.yaml'],
         output='screen'
     )
     nav_bringup = ExecuteProcess(
@@ -111,7 +111,7 @@ def generate_launch_description():
 
     navigation = ExecuteProcess(
         cmd=['ros2', 'launch', 'nav2_bringup', 'navigation_launch.py', 'use_sim_time:=false', 
-             'params_file:=/home/vmx/ROS2/nav2_params.yaml'
+             'params_file:=/home/vmx/ROS2/nav2_params/nav2_params.yaml'
              ],
         output='screen'
     )
