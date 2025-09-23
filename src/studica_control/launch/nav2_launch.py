@@ -12,8 +12,6 @@ from launch.substitutions import LaunchConfiguration
 
 
 import os
-import time
-import yaml
 
 def generate_launch_description():
     pkg_share = get_package_share_directory('studica_control')
@@ -29,13 +27,6 @@ def generate_launch_description():
         default_value=os.path.join(pkg_share, 'config', 'ydlidar_r.yaml'),
         description='Parameters file for YDLidar #2')
 
-    foxglove = Node(
-        package='foxglove_bridge',
-        executable='foxglove_bridge',
-        name='foxglove_bridge',
-        output='screen'
-    )
- 
     manual_composition = Node(
         package='studica_control',
         executable='manual_composition',
@@ -51,13 +42,6 @@ def generate_launch_description():
         shell=True
     )
     
-    laser_tf = ExecuteProcess(
-        cmd=[[
-            'ros2 run tf2_ros static_transform_publisher --x 0.144 --y 0 --z 0 --qx 0 --qy 0 --qz 0.7071 --qw -0.7071 --frame-id base_link --child-frame-id laser_frame'
-        ]],
-        shell=True
-
-    )
 
     lidar1 = LifecycleNode(
         package='ydlidar_ros2_driver',
@@ -70,12 +54,6 @@ def generate_launch_description():
         namespace='/'
     )
 
-    tf1 = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='tf_laser1',
-        arguments=['0.144', '0', '0.02', '0', '0', '0', '1', 'base_link', 'laser1_frame']
-    )
 
     lidar2 = LifecycleNode(
             package='ydlidar_ros2_driver',
@@ -88,12 +66,6 @@ def generate_launch_description():
             namespace='',
     )
 
-    tf2 = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='tf_laser2',
-        arguments=['-0.144', '0', '0.02', '0', '0', '1', '0', 'base_link', 'laser2_frame']
-    )
 
     merge= ExecuteProcess(
         cmd=['ros2', 'launch', 'ros2_laser_scan_merger', 'merge_2_scan.launch.py'],
@@ -104,10 +76,6 @@ def generate_launch_description():
         cmd=['ros2', 'launch', 'nav2_bringup', 'localization_launch.py', 'map:=/home/vmx/ROS2/office.yaml', 'use_sim_time:=false', 'params_file:=/home/vmx/ROS2/nav2_params/nav2_params.yaml'],
         output='screen'
     )
-    nav_bringup = ExecuteProcess(
-        cmd=['ros2', 'launch', 'nav2_bringup', 'bringup_launch.py', 'map:=/home/vmx/ROS2/my_slam_map.yaml'],
-        output='screen'
-    )
 
     navigation = ExecuteProcess(
         cmd=['ros2', 'launch', 'nav2_bringup', 'navigation_launch.py', 'use_sim_time:=false', 
@@ -116,10 +84,6 @@ def generate_launch_description():
         output='screen'
     )
 
-    slam = ExecuteProcess(
-        cmd=['ros2', 'launch', 'slam_toolbox', 'online_sync_launch.py'],
-        output='screen'
-    )
     
     ros_bridge = ExecuteProcess(
         cmd=['ros2', 'launch', 'rosbridge_server', 'rosbridge_websocket_launch.xml']
