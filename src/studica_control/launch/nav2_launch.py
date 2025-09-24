@@ -3,21 +3,17 @@ Autonomous mapping launch script using LiDAR and SLAM.
 The robot will generate a map as you drive it around. Use: ros2 run teleop_twist_keyboard teleop_twist_keyboard
 To save the map, open a new, privledged terminal and run: ros2 service call /slam_toolbox/save_map slam_toolbox/srv/SaveMap
 """
+# studica_launch.py is no longer included and must be launched separately.
 
 from launch import LaunchDescription
-from launch_ros.actions import Node, LifecycleNode
-from ament_index_python.packages import get_package_share_directory
 from launch.actions import ExecuteProcess, DeclareLaunchArgument, LogInfo
 from launch.substitutions import LaunchConfiguration
-
-
+from launch_ros.actions import Node, LifecycleNode
+from ament_index_python.packages import get_package_share_directory
 import os
-import time
-import yaml
 
 def generate_launch_description():
     pkg_share = get_package_share_directory('studica_control')
-    params_file = os.path.join(pkg_share, 'config', 'params.yaml')
     lidar_1_file = LaunchConfiguration('params_file1')
     lidar_2_file = LaunchConfiguration('params_file2')
     params1_arg = DeclareLaunchArgument(
@@ -29,20 +25,6 @@ def generate_launch_description():
         default_value=os.path.join(pkg_share, 'config', 'ydlidar_r.yaml'),
         description='Parameters file for YDLidar #2')
 
-    foxglove = Node(
-        package='foxglove_bridge',
-        executable='foxglove_bridge',
-        name='foxglove_bridge',
-        output='screen'
-    )
- 
-    manual_composition = Node(
-        package='studica_control',
-        executable='manual_composition',
-        name='control_server',
-        output='screen',
-        parameters=[params_file]
-    )
 
     base_tf = ExecuteProcess(
         cmd=[[
@@ -120,10 +102,6 @@ def generate_launch_description():
         cmd=['ros2', 'launch', 'slam_toolbox', 'online_sync_launch.py'],
         output='screen'
     )
-    
-    ros_bridge = ExecuteProcess(
-        cmd=['ros2', 'launch', 'rosbridge_server', 'rosbridge_websocket_launch.xml']
-    )
 
     tf3 = Node(
         package='tf2_ros',
@@ -140,9 +118,6 @@ def generate_launch_description():
         params2_arg,
         LogInfo(msg=['Using YDLidar #1 params: ', LaunchConfiguration('params_file1')]),
         LogInfo(msg=['Using YDLidar #2 params: ', LaunchConfiguration('params_file2')]),
-        # foxglove,
-        ros_bridge,
-        manual_composition,
         base_tf,
         # laser_tf,
         # tf1,

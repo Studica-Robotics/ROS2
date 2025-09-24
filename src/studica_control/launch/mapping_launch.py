@@ -32,13 +32,6 @@ def generate_launch_description():
         output='screen'
     )
 
-    base_tf = ExecuteProcess(
-        cmd=[[
-            'ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 base_footprint base_link'
-        ]],
-        shell=True
-    )
-    
     laser_tf = ExecuteProcess(
         cmd=[[
             'ros2 run tf2_ros static_transform_publisher --x 0.144 --y 0 --z 0 --qx 0 --qy 0 --qz 0.7071 --qw -0.7071 --frame-id base_link --child-frame-id laser_frame'
@@ -46,6 +39,14 @@ def generate_launch_description():
         shell=True
 
     )
+
+    base_tf = ExecuteProcess(
+        cmd=[[
+            'ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 base_footprint base_link'
+        ]],
+        shell=True
+    )
+    
 
     lidar = ExecuteProcess(
         cmd=['ros2', 'launch', 'ydlidar_ros2_driver', 'ydlidar_launch.py'],
