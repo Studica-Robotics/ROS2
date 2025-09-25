@@ -1,5 +1,6 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from launch.actions import ExecuteProcess
 from ament_index_python.packages import get_package_share_directory
 import os
 
@@ -16,5 +17,10 @@ def generate_launch_description():
         parameters=[params_file]
     )
 
-    nodes = [manual_composition]
+    rosbridge_server = ExecuteProcess(
+        cmd=['ros2', 'launch', 'rosbridge_server', 'rosbridge_websocket_launch.xml'],
+        output='screen'
+    )
+
+    nodes = [manual_composition, rosbridge_server]
     return LaunchDescription(nodes)
