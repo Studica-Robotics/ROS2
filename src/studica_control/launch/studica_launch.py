@@ -17,5 +17,10 @@ def generate_launch_description():
         parameters=[params_file]
     )
 
-    nodes = [manual_composition]
+    rosbridge_server = ExecuteProcess(
+        cmd=['ros2', 'launch', 'rosbridge_server', 'rosbridge_websocket_launch.xml'],
+        output='screen'
+    )
+
+    nodes = [manual_composition, rosbridge_server]
     return LaunchDescription(nodes)
