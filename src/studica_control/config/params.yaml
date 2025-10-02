@@ -60,7 +60,7 @@ control_server:
         topic: "dio_state"
     
     encoder:
-      enabled: true
+      enabled: false
       sensors: ["rear_right", "front_right", "front_left", "rear_left"]
       rear_right:
         port_a: 0
