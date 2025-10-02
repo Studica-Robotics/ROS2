@@ -7,10 +7,14 @@ std::shared_ptr<rclcpp::Node> DiffDrive::initialize(rclcpp::Node *control, std::
     control->declare_parameter<int>("diff_drive_component.can_id", -1);
     control->declare_parameter<int>("diff_drive_component.motor_freq", -1);
     control->declare_parameter<int>("diff_drive_component.ticks_per_rotation", -1);
-    control->declare_parameter<int>("diff_drive_component.left_port", -1);
-    control->declare_parameter<int>("diff_drive_component.right_port", -1);
-    control->declare_parameter<bool>("diff_drive_component.invert_left", false);
-    control->declare_parameter<bool>("diff_drive_component.invert_right", false);
+    control->declare_parameter<int>("diff_drive_component.front_left", -1);
+    control->declare_parameter<int>("diff_drive_component.front_right", -1);
+    control->declare_parameter<int>("diff_drive_component.rear_left", -1);
+    control->declare_parameter<int>("diff_drive_component.rear_right", -1);
+    control->declare_parameter<bool>("diff_drive_component.invert_front_left", false);
+    control->declare_parameter<bool>("diff_drive_component.invert_front_right", false);
+    control->declare_parameter<bool>("diff_drive_component.invert_rear_left", false);
+    control->declare_parameter<bool>("diff_drive_component.invert_rear_right", false);
     control->declare_parameter<float>("diff_drive_component.wheel_radius", -1.0);
     control->declare_parameter<float>("diff_drive_component.wheel_separation", -1.0);
 
@@ -18,16 +22,20 @@ std::shared_ptr<rclcpp::Node> DiffDrive::initialize(rclcpp::Node *control, std::
     int can_id = control->get_parameter("diff_drive_component.can_id").as_int();
     int motor_freq = control->get_parameter("diff_drive_component.motor_freq").as_int();
     int ticks_per_rotation = control->get_parameter("diff_drive_component.ticks_per_rotation").as_int();
-    int left = control->get_parameter("diff_drive_component.left_port").as_int();
-    int right = control->get_parameter("diff_drive_component.right_port").as_int();
-    bool invert_left = control->get_parameter("diff_drive_component.invert_left").as_bool();
-    bool invert_right = control->get_parameter("diff_drive_component.invert_right").as_bool();
+    int front_left = control->get_parameter("diff_drive_component.front_left").as_int();
+    int front_right = control->get_parameter("diff_drive_component.front_right").as_int();
+    int rear_left = control->get_parameter("diff_drive_component.rear_left").as_int();
+    int rear_right = control->get_parameter("diff_drive_component.rear_right").as_int();
+    bool invert_front_left = control->get_parameter("diff_drive_component.invert_front_left").as_bool();
+    bool invert_front_right = control->get_parameter("diff_drive_component.invert_front_right").as_bool();
+    bool invert_rear_left = control->get_parameter("diff_drive_component.invert_rear_left").as_bool();
+    bool invert_rear_right = control->get_parameter("diff_drive_component.invert_rear_right").as_bool();
     float wheel_radius = control->get_parameter("diff_drive_component.wheel_radius").get_value<float>();
     float wheel_separation = control->get_parameter("diff_drive_component.wheel_separation").get_value<float>();
 
-    RCLCPP_INFO(control->get_logger(), "%s -> left: %d, right: %d", name.c_str(), left, right);
+    RCLCPP_INFO(control->get_logger(), "%s -> FL: %d, FR: %d, RL: %d, RR: %d", name.c_str(), front_left, front_right, rear_left, rear_right);
 
-    auto diff_drive_node = std::make_shared<DiffDrive>(vmx, odom, name, can_id, motor_freq, ticks_per_rotation, wheel_radius, wheel_separation, left, right, invert_left, invert_right);
+    auto diff_drive_node = std::make_shared<DiffDrive>(vmx, odom, name, can_id, motor_freq, ticks_per_rotation, wheel_radius, wheel_separation, front_left, front_right, rear_left, rear_right, invert_front_left, invert_front_right, invert_rear_left, invert_rear_right);
     return diff_drive_node;
 }
 
@@ -42,10 +50,14 @@ DiffDrive::DiffDrive(
     const uint16_t &ticks_per_rotation,
     const float &wheel_radius,
     const float &wheel_separation,
-    const uint8_t left,
-    const uint8_t right,
-    const bool invert_left,
-    const bool invert_right) 
+    const uint8_t front_left,
+    const uint8_t front_right,
+    const uint8_t rear_left,
+    const uint8_t rear_right,
+    const bool invert_front_left,
+    const bool invert_front_right,
+    const bool invert_rear_left,
+    const bool invert_rear_right) 
     : Node(name),
       vmx_(vmx),
       odom_(odom),
@@ -54,8 +66,10 @@ DiffDrive::DiffDrive(
       ticks_per_rotation_(ticks_per_rotation),
       wheel_radius_(wheel_radius),
       wheel_separation_(wheel_separation),
-      left_(left),
-      right_(right) {
+      front_left_(front_left),
+      front_right_(front_right),
+      rear_left_(rear_left),
+      rear_right_(rear_right) {
 
     dist_per_tick_ = 2 * M_PI * wheel_radius_ / ticks_per_rotation_;
 
@@ -65,14 +79,23 @@ DiffDrive::DiffDrive(
         "titan_cmd",
         std::bind(&DiffDrive::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
 
-    titan_->ConfigureEncoder(left_, dist_per_tick_);
-    titan_->ConfigureEncoder(right_, dist_per_tick_);
+    // Configure encoders for all 4 motors
+    titan_->ConfigureEncoder(front_left_, dist_per_tick_);
+    titan_->ConfigureEncoder(front_right_, dist_per_tick_);
+    titan_->ConfigureEncoder(rear_left_, dist_per_tick_);
+    titan_->ConfigureEncoder(rear_right_, dist_per_tick_);
 
-    titan_->ResetEncoder(left_);
-    titan_->ResetEncoder(right_);
+    // Reset encoders for all 4 motors
+    titan_->ResetEncoder(front_left_);
+    titan_->ResetEncoder(front_right_);
+    titan_->ResetEncoder(rear_left_);
+    titan_->ResetEncoder(rear_right_);
 
-    if (invert_left) titan_->InvertMotor(left_);
-    if (invert_right) titan_->InvertMotor(right_);
+    // Apply motor inversions
+    if (invert_front_left) titan_->InvertMotor(front_left_);
+    if (invert_front_right) titan_->InvertMotor(front_right_);
+    if (invert_rear_left) titan_->InvertMotor(rear_left_);
+    if (invert_rear_right) titan_->InvertMotor(rear_right_);
 
     titan_->Enable(true);
 
@@ -101,11 +124,17 @@ void DiffDrive::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg)
     double linear = msg->linear.x;
     double angular = msg->angular.z;
 
+    // For differential drive with 4 motors, left side = front_left + rear_left, right side = front_right + rear_right
     double left_command = linear - angular * wheel_separation_ / 2.0;
     double right_command = linear + angular * wheel_separation_ / 2.0;
 
-    titan_->SetSpeed(left_, left_command);
-    titan_->SetSpeed(right_, -1.0 * right_command);
+    // Set speeds for left side motors (front_left and rear_left)
+    titan_->SetSpeed(front_left_, left_command);
+    titan_->SetSpeed(rear_left_, left_command);
+    
+    // Set speeds for right side motors (front_right and rear_right) - negated for proper differential drive
+    titan_->SetSpeed(front_right_, -1.0 * right_command);
+    titan_->SetSpeed(rear_right_, -1.0 * right_command);
 }
 
 void DiffDrive::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response) {
@@ -159,8 +188,11 @@ void DiffDrive::cmd(std::string params, std::shared_ptr<studica_control::srv::Se
 }
 
 void DiffDrive::publish_odometry() {
-    double left_encoder = titan_->GetEncoderDistance(left_);
-    double right_encoder = -1.0 * titan_->GetEncoderDistance(right_);
+    // Average the left side motors (front_left and rear_left)
+    double left_encoder = (titan_->GetEncoderDistance(front_left_) + titan_->GetEncoderDistance(rear_left_)) / 2.0;
+    
+    // Average the right side motors (front_right and rear_right) and negate for proper differential drive
+    double right_encoder = -1.0 * (titan_->GetEncoderDistance(front_right_) + titan_->GetEncoderDistance(rear_right_)) / 2.0;
 
     auto current_time = this->now();
 
