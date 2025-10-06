@@ -4,7 +4,7 @@ namespace studica_control {
 
 std::vector<std::shared_ptr<rclcpp::Node>> DutyCycleEncoder::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
     std::vector<std::shared_ptr<rclcpp::Node>> dc_nodes;
-    control->declare_parameter<std::vector<std::string>>("duty_cycle.sensors", {});
+    control->declare_parameter<std::vector<std::string>>("duty_cycle.sensors", std::vector<std::string>{});
     std::vector<std::string> sensor_ids = control->get_parameter("duty_cycle.sensors").as_string_array();
     
     for (const auto &sensor : sensor_ids) {

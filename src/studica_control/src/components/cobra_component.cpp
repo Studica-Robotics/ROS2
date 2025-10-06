@@ -4,7 +4,7 @@ namespace studica_control {
 
 std::vector<std::shared_ptr<rclcpp::Node>> Cobra::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
     std::vector<std::shared_ptr<rclcpp::Node>> cobra_nodes;
-    control->declare_parameter<std::vector<std::string>>("cobra.sensors", {});
+    control->declare_parameter<std::vector<std::string>>("cobra.sensors", std::vector<std::string>{});
     std::vector<std::string> sensor_ids = control->get_parameter("cobra.sensors").as_string_array();
     for (const auto &sensor : sensor_ids) {
         std::string vref_param = "cobra." + sensor + ".vref";

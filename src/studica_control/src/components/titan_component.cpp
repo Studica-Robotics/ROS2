@@ -4,7 +4,7 @@ namespace studica_control {
 
 std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
     std::vector<std::shared_ptr<rclcpp::Node>> titan_nodes;
-    control->declare_parameter<std::vector<std::string>>("titan.sensors", {});
+    control->declare_parameter<std::vector<std::string>>("titan.sensors", std::vector<std::string>{});
     std::vector<std::string> sensor_ids = control->get_parameter("titan.sensors").as_string_array();
     for (const auto &sensor : sensor_ids) {
         std::string can_id_param = "titan." + sensor + ".can_id";

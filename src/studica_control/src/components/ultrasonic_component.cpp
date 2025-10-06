@@ -4,7 +4,7 @@ namespace studica_control {
 
 std::vector<std::shared_ptr<rclcpp::Node>> Ultrasonic::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
     std::vector<std::shared_ptr<rclcpp::Node>> ultrasonic_nodes;
-    control->declare_parameter<std::vector<std::string>>("ultrasonic.sensors", {});
+    control->declare_parameter<std::vector<std::string>>("ultrasonic.sensors", std::vector<std::string>{});
     std::vector<std::string> sensor_ids = control->get_parameter("ultrasonic.sensors").as_string_array();
     for (const auto &sensor : sensor_ids) {        
         std::string ping_param = "ultrasonic." + sensor + ".ping";

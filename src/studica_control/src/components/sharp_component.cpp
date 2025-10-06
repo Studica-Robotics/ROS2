@@ -4,7 +4,7 @@ namespace studica_control {
 
 std::vector<std::shared_ptr<rclcpp::Node>> Sharp::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
     std::vector<std::shared_ptr<rclcpp::Node>> sharp_nodes;
-    control->declare_parameter<std::vector<std::string>>("sharp.sensors", {});
+    control->declare_parameter<std::vector<std::string>>("sharp.sensors", std::vector<std::string>{});
     std::vector<std::string> sensor_ids = control->get_parameter("sharp.sensors").as_string_array();
     for (const auto &sensor : sensor_ids) {
         std::string port_param = "sharp." + sensor + ".port";

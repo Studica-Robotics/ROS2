@@ -4,7 +4,7 @@ namespace studica_control {
 
 std::vector<std::shared_ptr<rclcpp::Node>> DIO::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
     std::vector<std::shared_ptr<rclcpp::Node>> dio_nodes;
-    control->declare_parameter<std::vector<std::string>>("dio.sensors", {});
+    control->declare_parameter<std::vector<std::string>>("dio.sensors", std::vector<std::string>{});
     std::vector<std::string> sensor_ids = control->get_parameter("dio.sensors").as_string_array();
     for (const auto &sensor : sensor_ids) {
         std::string pin_param = "dio." + sensor + ".pin";

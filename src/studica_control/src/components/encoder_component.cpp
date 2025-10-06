@@ -4,7 +4,7 @@ namespace studica_control {
 
 std::vector<std::shared_ptr<rclcpp::Node>> Encoder::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
     std::vector<std::shared_ptr<rclcpp::Node>> encoder_nodes;
-    control->declare_parameter<std::vector<std::string>>("encoder.sensors", {});
+    control->declare_parameter<std::vector<std::string>>("encoder.sensors", std::vector<std::string>{});
     std::vector<std::string> sensor_ids = control->get_parameter("encoder.sensors").as_string_array();
     for (const auto &sensor : sensor_ids) {
         std::string port_a_param = "encoder." + sensor + ".port_a";
