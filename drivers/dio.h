@@ -17,11 +17,13 @@ public:
     void Set(bool value);
     bool Get();
     void Toggle();
+    bool IsInitialized() const { return initialized_; }
 private:
     VMXChannelIndex channel_;
     PinMode mode_;
     std::shared_ptr<VMXPi> vmx_;
-    VMXResourceHandle dio_res_handle_;
+    VMXResourceHandle dio_res_handle_ = 0; // ensure deterministic value if activation fails
+    bool initialized_ = false;
     void DisplayVMXError(VMXErrorCode vmxerr);
 };
 
