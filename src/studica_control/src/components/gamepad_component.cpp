@@ -99,13 +99,13 @@ void GamepadController::publish_twist() {
     }
     
     // Set twist values
-    twist_msg.linear.x = -linear_x_ * current_linear_scale;
+    twist_msg.linear.x = linear_x_ * current_linear_scale;
     twist_msg.linear.y = linear_y_ * current_linear_scale;
     twist_msg.linear.z = 0.0;
     
     twist_msg.angular.x = 0.0;
     twist_msg.angular.y = 0.0;
-    twist_msg.angular.z = -angular_z_ * current_angular_scale;
+    twist_msg.angular.z = angular_z_ * current_angular_scale;
     
     // Publish the message
     cmd_vel_publisher_->publish(twist_msg);
