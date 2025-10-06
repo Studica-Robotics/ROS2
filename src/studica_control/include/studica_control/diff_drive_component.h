@@ -32,14 +32,10 @@ public:
         const uint16_t &ticks_per_rotation,
         const float &wheel_radius,
         const float &wheel_separation,
-        const uint8_t front_left,
-        const uint8_t front_right,
-        const uint8_t rear_left,
-        const uint8_t rear_right,
-        const bool invert_front_left,
-        const bool invert_front_right,
-        const bool invert_rear_left,
-        const bool invert_rear_right
+        const uint8_t left,
+        const uint8_t right,
+        const bool invert_left,
+        const bool invert_right
     );
     ~DiffDrive();
 
@@ -58,10 +54,8 @@ private:
     float dist_per_tick_;
     float wheel_radius_;
     float wheel_separation_;
-    uint8_t front_left_;
-    uint8_t front_right_;
-    uint8_t rear_left_;
-    uint8_t rear_right_;
+    uint8_t left_;
+    uint8_t right_;
     
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
     void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request, std::shared_ptr<studica_control::srv::SetData::Response> response);
