@@ -4,6 +4,11 @@ using namespace studica_driver;
 
 DIO::DIO(VMXChannelIndex channel, PinMode mode, std::shared_ptr<VMXPi> vmx) 
     : channel_(channel), mode_(mode), vmx_(vmx) {
+    if (!vmx_ || !vmx_->IsOpen()) {
+        printf("VMX HAL unavailable; skipping DIO initialisation on port %d\n", channel_);
+        return;
+    }
+
     VMXErrorCode vmxerr;
     if (mode == PinMode::OUTPUT) {
         DIOConfig dio_config;

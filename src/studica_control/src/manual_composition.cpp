@@ -22,6 +22,12 @@ class ControlServer : public rclcpp::Node {
 public:
     ControlServer() : Node("control_server") {
         vmx_ = std::make_shared<VMXPi>(true, 50);
+        vmx_ready_ = vmx_ && vmx_->IsOpen();
+
+        if (!vmx_ready_) {
+            RCLCPP_FATAL(this->get_logger(), "Unable to initialize VMX-pi hardware; pigpio may be unavailable or in use.");
+        }
+
         executor_ = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
     }
 
@@ -38,6 +44,11 @@ public:
         this->declare_parameter<bool>("sharp.enabled", false);
         this->declare_parameter<bool>("titan.enabled", false);
         this->declare_parameter<bool>("ultrasonic.enabled", false);
+
+        if (!vmx_ready_) {
+            RCLCPP_ERROR(this->get_logger(), "VMX-pi connection failed during startup. Aborting component initialization.");
+            return false;
+        }
 
         bool cobra_enabled = this->get_parameter("cobra.enabled").as_bool();
         bool duty_cycle_enabled = this->get_parameter("duty_cycle.enabled").as_bool();
@@ -137,6 +148,7 @@ private:
     std::shared_ptr<VMXPi> vmx_;
     std::shared_ptr<rclcpp::executors::MultiThreadedExecutor> executor_;
     std::vector<std::shared_ptr<rclcpp::Node>> component_nodes;
+    bool vmx_ready_ = false;
 };
 
 int main(int argc, char *argv[]) {
