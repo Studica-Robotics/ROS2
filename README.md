@@ -41,7 +41,7 @@ Once everything is configured, launch the robot:
 
 First, build the ROS2 package with the following command:
 ``` bash
-colcon build --packages-select studica_control
+colcon build --executor sequential --packages-select studica_control
 ```
 Everytime the package is built, make sure to source the install folder:
 ``` bash
