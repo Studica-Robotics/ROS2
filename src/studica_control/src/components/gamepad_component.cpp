@@ -36,9 +36,11 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
     joy_subscription_ = this->create_subscription<sensor_msgs::msg::Joy>(
         "joy", 10, std::bind(&GamepadController::joy_callback, this, std::placeholders::_1));
 
-    // Subscribe to gamepad button mapping topic [/gamepad_buttons]
+    // Subscribe to gamepad button mapping topic [/gamepad_buttons] with Transient Local QoS
+    // to ensure we receive the last published mapping even if we subscribe late.
+    rclcpp::QoS buttons_qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local();
     gamepad_button_subscription_ = this->create_subscription<std_msgs::msg::Int32MultiArray>(
-        "/gamepad_buttons", 10,
+        "/gamepad_buttons", buttons_qos,
         std::bind(&GamepadController::gamepad_button_callback, this, std::placeholders::_1));
     
     // Get topic name from parameters
