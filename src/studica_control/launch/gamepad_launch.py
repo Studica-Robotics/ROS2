@@ -8,11 +8,11 @@ def generate_launch_description():
     pkg_share = get_package_share_directory('studica_control')
     params_file = os.path.join(pkg_share, 'config', 'params.yaml')
 
-    # Run the external gamepad_controller_node provided by the joy package
+    # Run the standard joystick driver node provided by the joy package
     gamepad_node = Node(
         package='joy',
-        executable='gamepad_controller_node',
-        name='gamepad_controller',
+        executable='joy_node',
+        name='joy',
         output='screen',
         parameters=[params_file]
     )
