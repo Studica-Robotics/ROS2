@@ -17,9 +17,9 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
     this->declare_parameter<double>("angular_scale", 1.0);
     this->declare_parameter<double>("deadzone", 0.1);
     this->declare_parameter<double>("turbo_multiplier", 1.5);
-    this->declare_parameter<int>("axis_linear_x", 1);
-    this->declare_parameter<int>("axis_linear_y", 0);
-    this->declare_parameter<int>("axis_angular_z", 2);
+    this->declare_parameter<int>("axis_linear_x", -1);
+    this->declare_parameter<int>("axis_linear_y", -1);
+    this->declare_parameter<int>("axis_angular_z", -1);
     this->declare_parameter<int>("button_turbo", 5);
     
     // Get parameters
@@ -35,6 +35,11 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
     // Create subscription to joy topic
     joy_subscription_ = this->create_subscription<sensor_msgs::msg::Joy>(
         "joy", 10, std::bind(&GamepadController::joy_callback, this, std::placeholders::_1));
+
+    // Subscribe to gamepad button mapping topic [/gamepad_buttons]
+    gamepad_button_subscription_ = this->create_subscription<std_msgs::msg::Int32MultiArray>(
+        "/gamepad_buttons", 10,
+        std::bind(&GamepadController::gamepad_button_callback, this, std::placeholders::_1));
     
     // Get topic name from parameters
     std::string cmd_vel_topic = this->get_parameter("cmd_vel_topic").as_string();
@@ -50,13 +55,63 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
     RCLCPP_INFO(this->get_logger(), "Gamepad controller initialized. Publishing to: %s", cmd_vel_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "PS4 Controls: axis[%d/%d] = movement, axis[%d] = rotation, button[%d] = turbo", 
                 axis_linear_x_, axis_linear_y_, axis_angular_z_, button_turbo_);
+    if (axis_linear_x_ < 0 || axis_linear_y_ < 0 || axis_angular_z_ < 0) {
+        RCLCPP_WARN(this->get_logger(),
+                    "Axis mappings are unset (=-1). Waiting for /gamepad_buttons to initialize [x,y,z].");
+    }
+    RCLCPP_INFO(this->get_logger(), "Listening for axis remap on /gamepad_buttons [Int32MultiArray: x,y,z]");
 }
 
 GamepadController::~GamepadController() {}
 
+void GamepadController::gamepad_button_callback(const std_msgs::msg::Int32MultiArray::SharedPtr msg) {
+    // Expecting an array of exactly 3 integers: [x_axis_index, y_axis_index, z_axis_index]
+    if (msg->data.size() < 3) {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                             "Received /gamepad_buttons with %zu elements; expected 3 [x,y,z]",
+                             msg->data.size());
+        return;
+    }
+
+    int new_axis_x = msg->data[0];
+    int new_axis_y = msg->data[1];
+    int new_axis_z = msg->data[2];
+
+    if (new_axis_x < 0 || new_axis_y < 0 || new_axis_z < 0) {
+        RCLCPP_WARN(this->get_logger(),
+                    "Ignoring /gamepad_buttons remap with negative index: [%d,%d,%d]",
+                    new_axis_x, new_axis_y, new_axis_z);
+        return;
+    }
+
+    // Update parameters so changes are visible externally (dynamic)
+    this->set_parameter(rclcpp::Parameter("axis_linear_x", new_axis_x));
+    this->set_parameter(rclcpp::Parameter("axis_linear_y", new_axis_y));
+    this->set_parameter(rclcpp::Parameter("axis_angular_z", new_axis_z));
+
+    // Update local cached values used by callbacks
+    axis_linear_x_ = new_axis_x;
+    axis_linear_y_ = new_axis_y;
+    axis_angular_z_ = new_axis_z;
+
+    RCLCPP_INFO(this->get_logger(),
+                "Updated gamepad axis mapping via /gamepad_buttons -> X:%d Y:%d Z:%d",
+                axis_linear_x_, axis_linear_y_, axis_angular_z_);
+}
+
 void GamepadController::joy_callback(const sensor_msgs::msg::Joy::SharedPtr msg) {
+    // Ensure axis mapping has been provided
+    if (axis_linear_x_ < 0 || axis_linear_y_ < 0 || axis_angular_z_ < 0) {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                             "Axis mappings not set. Awaiting /gamepad_buttons [x,y,z].");
+        return;
+    }
+
     // Check if we have enough axes and buttons
-    if (msg->axes.size() <= static_cast<size_t>(std::max({axis_linear_x_, axis_linear_y_, axis_angular_z_})) ||
+    const size_t axes_sz = msg->axes.size();
+    if (static_cast<size_t>(axis_linear_x_) >= axes_sz ||
+        static_cast<size_t>(axis_linear_y_) >= axes_sz ||
+        static_cast<size_t>(axis_angular_z_) >= axes_sz ||
         msg->buttons.size() <= static_cast<size_t>(button_turbo_)) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
                              "PS4 controller doesn't have enough axes/buttons");
