@@ -8,6 +8,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joy.hpp"
 #include "geometry_msgs/msg/twist.hpp"
+#include "std_msgs/msg/int32_multi_array.hpp"
 
 namespace studica_control {
 
@@ -21,10 +22,12 @@ public:
 
 private:
     void joy_callback(const sensor_msgs::msg::Joy::SharedPtr msg);
+    void gamepad_button_callback(const std_msgs::msg::Int32MultiArray::SharedPtr msg);
     void publish_twist();
 
     // Subscriptions and Publishers
     rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_subscription_;
+    rclcpp::Subscription<std_msgs::msg::Int32MultiArray>::SharedPtr gamepad_button_subscription_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_publisher_;
     
     // Timer for continuous publishing

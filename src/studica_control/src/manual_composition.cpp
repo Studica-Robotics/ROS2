@@ -37,7 +37,7 @@ public:
         this->declare_parameter<bool>("diff_drive_component.enabled", false);
         this->declare_parameter<bool>("dio.enabled", false);
         this->declare_parameter<bool>("encoder.enabled", false);
-        this->declare_parameter<bool>("gamepad.enabled", false);
+        //this->declare_parameter<bool>("gamepad.enabled", false);
         this->declare_parameter<bool>("imu.enabled", false);
         this->declare_parameter<bool>("mecanum_drive_component.enabled", false);
         this->declare_parameter<bool>("servo.enabled", false);
