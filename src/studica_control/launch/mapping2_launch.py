@@ -24,6 +24,9 @@ def generate_launch_description():
         'params_file2',
         default_value=os.path.join(pkg_share, 'config', 'ydlidar_r.yaml'),
         description='Parameters file for YDLidar #2')
+    
+    # Path to SLAM toolbox mapper params
+    mapper_params_file = os.path.join(os.path.dirname(pkg_share), '..', '..', '..', 'nav2_params', 'mapper_params_online_sync.yaml')
 
     base_tf = ExecuteProcess(
         cmd=[[
@@ -77,7 +80,8 @@ def generate_launch_description():
     )
 
     slam = ExecuteProcess(
-        cmd=['ros2', 'launch', 'slam_toolbox', 'online_sync_launch.py'],
+        cmd=['ros2', 'launch', 'slam_toolbox', 'online_sync_launch.py',
+             f'params_file:={mapper_params_file}'],
         output='screen'
     )
 
