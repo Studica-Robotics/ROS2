@@ -111,7 +111,7 @@ void Titan::publish_encoders() {
     msg.data.resize(4);
 
     for (int i=0; i<4; i++) {
-        msg.data[i] = titan_->GetEncoderDistance(i);
+        msg.data[i] = static_cast<float>(titan_->GetEncoderCount(i));
     }
 
     publisher_->publish(msg);
