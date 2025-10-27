@@ -84,7 +84,7 @@ DiffDrive::DiffDrive(
         std::bind(&DiffDrive::publish_odometry, this));
 
     cmd_vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
-        "cmd_vel",
+        "/cmd_vel",
         10,
         std::bind(&DiffDrive::cmd_vel_callback, this, std::placeholders::_1)
     );

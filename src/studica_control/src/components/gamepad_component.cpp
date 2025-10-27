@@ -13,14 +13,14 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
     
     // Declare parameters with default values
     this->declare_parameter<std::string>("cmd_vel_topic", "cmd_vel");
-    this->declare_parameter<double>("linear_scale", 0.7);
-    this->declare_parameter<double>("angular_scale", 1.0);
-    this->declare_parameter<double>("deadzone", 0.1);
-    this->declare_parameter<double>("turbo_multiplier", 1.5);
+    this->declare_parameter<double>("linear_scale", -1);
+    this->declare_parameter<double>("angular_scale", -1);
+    this->declare_parameter<double>("deadzone", -1);
+    this->declare_parameter<double>("turbo_multiplier", -1);
     this->declare_parameter<int>("axis_linear_x", -1);
     this->declare_parameter<int>("axis_linear_y", -1);
     this->declare_parameter<int>("axis_angular_z", -1);
-    this->declare_parameter<int>("button_turbo", 5);
+    this->declare_parameter<int>("button_turbo", -1);
     
     // Get parameters
     linear_scale_ = this->get_parameter("linear_scale").as_double();

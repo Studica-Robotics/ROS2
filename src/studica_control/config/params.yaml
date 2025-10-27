@@ -82,7 +82,7 @@ control_server:
     gamepad:
       enabled: true
       name: "gamepad_controller"
-      cmd_vel_topic: "cmd_vel"
+      cmd_vel_topic: "/cmd_vel"
       linear_scale: 0.7
       angular_scale: 1.0
       deadzone: 0.1
