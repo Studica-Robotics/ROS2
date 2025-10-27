@@ -33,17 +33,22 @@ control_server:
         topic: "duty_cycle_encoder"
 
     diff_drive_component:
-      enabled: false
+      enabled: true
       name: "diff_drive_controller"
       can_id: 42
       motor_freq: 15600
       ticks_per_rotation: 1464
-      left_port: 3
-      right_port: 1
-      invert_left: false
-      invert_right: false
       wheel_radius: 0.05 # in metres
-      wheel_separation: 0.28 # in metres
+      wheelbase: 0.28 # in metres
+      width: 0.3 # in metres
+      front_left: 2
+      front_right: 0
+      rear_left: 3
+      rear_right: 1
+      invert_front_left: false
+      invert_front_right: true
+      invert_rear_left: false
+      invert_rear_right: true
     
     diff_drive_odometry:
       name: "differential_odom"
