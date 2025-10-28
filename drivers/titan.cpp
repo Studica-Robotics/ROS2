@@ -269,7 +269,12 @@ double Titan::GetEncoderDistance(uint8_t motor)
     if (motor == 0)
     {
         Titan::Read(ENCODER_0_COUNT, data);
-        ticks = static_cast<int32_t>(data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24));
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
         if (invertEncoder0)
         {
             ticks *= -1;
@@ -279,7 +284,12 @@ double Titan::GetEncoderDistance(uint8_t motor)
     if (motor == 1)
     {
         Titan::Read(ENCODER_1_COUNT, data);
-        ticks = static_cast<int32_t>(data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24));
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
         if (invertEncoder1)
         {
             ticks *= -1;
@@ -289,7 +299,12 @@ double Titan::GetEncoderDistance(uint8_t motor)
     if (motor == 2)
     {
         Titan::Read(ENCODER_2_COUNT, data);
-        ticks = static_cast<int32_t>(data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24));
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
         if (invertEncoder2)
         {
             ticks *= -1;
@@ -299,7 +314,12 @@ double Titan::GetEncoderDistance(uint8_t motor)
     if (motor == 3)
     {
         Titan::Read(ENCODER_3_COUNT, data);
-        ticks = static_cast<int32_t>(data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24));
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
         if (invertEncoder3)
         {
             ticks *= -1;
@@ -317,7 +337,12 @@ int32_t Titan::GetEncoderCount(uint8_t motor)
     {
         Titan::Read(ENCODER_0_COUNT, data);
  
-        ticks = static_cast<int32_t>(data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24));
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
         if (invertEncoder0)
         {
             ticks *= -1;
@@ -326,7 +351,12 @@ int32_t Titan::GetEncoderCount(uint8_t motor)
     if (motor == 1)
     {
         Titan::Read(ENCODER_1_COUNT, data);
-        ticks = static_cast<int32_t>(data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24));
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
         if (invertEncoder1)
         {
             ticks *= -1;
@@ -335,7 +365,12 @@ int32_t Titan::GetEncoderCount(uint8_t motor)
     if (motor == 2)
     {
         Titan::Read(ENCODER_2_COUNT, data);
-        ticks = static_cast<int32_t>(data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24));
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
         if (invertEncoder2)
         {
             ticks *= -1;
@@ -344,7 +379,12 @@ int32_t Titan::GetEncoderCount(uint8_t motor)
     if (motor == 3)
     {
         Titan::Read(ENCODER_3_COUNT, data);
-        ticks = static_cast<int32_t>(data[0] + (data[1] << 8) + (data[2] << 16) + (data[3] << 24));
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
         if (invertEncoder3)
         {
             ticks *= -1;

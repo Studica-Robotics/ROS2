@@ -197,6 +197,14 @@ void DiffDrive::publish_odometry() {
     double left_encoder = (fl_encoder + rl_encoder) / 2.0;
     double right_encoder = (fr_encoder + rr_encoder) / 2.0;
 
+    // Debug logging to diagnose encoder wrapping issue
+    static int log_counter = 0;
+    if (log_counter++ % 20 == 0) {  // Log every 20 calls (~1 second at 50ms intervals)
+        RCLCPP_INFO(this->get_logger(), 
+            "Encoders - FL: %.3f, FR: %.3f, RL: %.3f, RR: %.3f | Avg L: %.3f, R: %.3f", 
+            fl_encoder, fr_encoder, rl_encoder, rr_encoder, left_encoder, right_encoder);
+    }
+
     auto current_time = this->now();
 
     odom_->updateAndPublish(left_encoder, right_encoder, current_time);
