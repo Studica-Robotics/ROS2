@@ -218,8 +218,8 @@ ros2 run nav2_map_server map_saver_cli -f /home/vmx/ROS2/maps/YOUR_MAP
 rviz2 -d `ros2 pkg prefix slam_toolbox`/share/slam_toolbox/rviz/YOUR_MAP.rviz
 ```
 
-### office_mapping_launch.py
-- Specialized launch file for office environment mapping
+### indoor_mapping_launch.py
+- Specialized launch file for indoor environment mapping
 - SLAM toolbox integration with custom parameters (office_mapper_params.yaml)
 - includes every feature of mapping2_launch.py(except gamepad control)
 
