@@ -85,15 +85,30 @@ def generate_launch_description():
         output='screen'
     )
 
-    merge= ExecuteProcess(
-        cmd=['ros2', 'launch', 'ros2_laser_scan_merger', 'merge_2_scan.launch.py'],
-        output='screen'
+    # Merge /scan1 and /scan2 into /scan for SLAM
+    merge = Node(
+        package='ira_laser_tools',
+        executable='laserscan_multi_merger',
+        name='laser_merger',
+        output='screen',
+        parameters=[{
+            'destination_frame': 'base_link',
+            'cloud_destination_topic': '/merged_cloud',
+            'scan_destination_topic': '/scan',
+            'laserscan_topics': '/scan1 /scan2',
+            'angle_min': -3.14159,
+            'angle_max': 3.14159,
+            'angle_increment': 0.00872665,  # ~0.5 degrees
+            'scan_time': 0.1,
+            'range_min': 0.12,
+            'range_max': 20.0,
+        }]
     )
 
     tf3 = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
-        name='tf_laser2',
+        name='tf_laser_merged',
         arguments=['0', '0', '0.02', '0', '0', '0', '1', 'base_link', 'laser']
     )
 
