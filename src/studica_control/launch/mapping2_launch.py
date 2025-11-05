@@ -85,23 +85,17 @@ def generate_launch_description():
         output='screen'
     )
 
-    # Merge /scan1 and /scan2 into /scan for SLAM
+    # Merge /scan1 and /scan2 into /scan using ros2_laser_scan_merger
     merge = Node(
-        package='ira_laser_tools',
-        executable='laserscan_multi_merger',
+        package='ros2_laser_scan_merger',
+        executable='laserscan_merger',
         name='laser_merger',
         output='screen',
         parameters=[{
-            'destination_frame': 'base_link',
-            'cloud_destination_topic': '/merged_cloud',
-            'scan_destination_topic': '/scan',
-            'laserscan_topics': '/scan1 /scan2',
-            'angle_min': -3.14159,
-            'angle_max': 3.14159,
-            'angle_increment': 0.00872665,  # ~0.5 degrees
-            'scan_time': 0.1,
-            'range_min': 0.12,
-            'range_max': 20.0,
+            'output_frame': 'base_link',
+            'scan_topic_1': '/scan1',
+            'scan_topic_2': '/scan2',
+            'output_topic': '/scan',
         }]
     )
 
