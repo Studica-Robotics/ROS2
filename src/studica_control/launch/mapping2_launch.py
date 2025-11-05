@@ -85,18 +85,11 @@ def generate_launch_description():
         output='screen'
     )
 
-    # Merge /scan1 and /scan2 into /scan using ros2_laser_scan_merger
-    merge = Node(
-        package='ros2_laser_scan_merger',
-        executable='laserscan_merger',
-        name='laser_merger',
-        output='screen',
-        parameters=[{
-            'output_frame': 'base_link',
-            'scan_topic_1': '/scan1',
-            'scan_topic_2': '/scan2',
-            'output_topic': '/scan',
-        }]
+    # Merge /scan1 and /scan2 into /scan using the package's launch file
+    # This avoids depending on a specific executable name
+    merge = ExecuteProcess(
+        cmd=['ros2', 'launch', 'ros2_laser_scan_merger', 'merge_2_scan.launch.py'],
+        output='screen'
     )
 
     tf3 = Node(
