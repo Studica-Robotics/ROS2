@@ -35,13 +35,12 @@ def generate_launch_description():
         shell=True
     )
     
-    laser_tf = ExecuteProcess(
-        cmd=[[
-            'ros2 run tf2_ros static_transform_publisher --x 0.144 --y 0 --z 0 --qx 0 --qy 0 --qz 0.7071 --qw -0.7071 --frame-id base_link --child-frame-id laser_frame'
-        ]],
-        shell=True
-
-    )
+    #laser_tf = ExecuteProcess(
+    #    cmd=[[
+    #       'ros2 run tf2_ros static_transform_publisher --x 0.144 --y 0 --z 0 --qx 0 --qy 0 --qz 0.7071 --qw -0.7071 --frame-id base_link --child-frame-id laser_frame'
+    #    ]],
+    #    shell=True
+    #)
 
     lidar1 = LifecycleNode(
         package='ydlidar_ros2_driver',
@@ -106,7 +105,7 @@ def generate_launch_description():
         LogInfo(msg=['Using YDLidar #1 params: ', LaunchConfiguration('params_file1')]),
         LogInfo(msg=['Using YDLidar #2 params: ', LaunchConfiguration('params_file2')]),
         base_tf,
-        laser_tf,
+    #   laser_tf,
         tf1,
         lidar1,
         tf2,
