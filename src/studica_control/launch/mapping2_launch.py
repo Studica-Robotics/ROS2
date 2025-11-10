@@ -134,24 +134,13 @@ def generate_launch_description():
     # )
 
     # Merge LiDAR scans only: /scan1 + /scan2 -> /merged_scan
+    merger_params_file = os.path.join(pkg_share, 'config', 'merger_params.yaml')
     merger = Node(
         package='ros2_laser_scan_merger',
         executable='ros2_laser_scan_merger',
         name='ros2_laser_scan_merger',
         output='screen',
-        parameters=[{
-            'destination_frame': 'laser',
-            'scan_destination_topic': '/merged_scan',
-            'laserscan_topics': '/scan1 /scan2',  # Only 2 LiDARs
-            'clouds_destination_topic': '/merged_cloud',
-            'min_merge_time_diff': 0.0,
-            'angle_min': -3.14159,
-            'angle_max': 3.14159,
-            'angle_increment': 0.00872665,
-            'scan_time': 0.1,
-            'range_min': 0.35,
-            'range_max': 10.0,
-        }],
+        parameters=[merger_params_file],
         condition=IfCondition(use_merger)
     )
 
