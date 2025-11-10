@@ -102,38 +102,38 @@ def generate_launch_description():
         ]
     )
 
-    # Launch Orbbec depth camera
-    camera = ExecuteProcess(
-        cmd=['ros2', 'launch', 'orbbec_camera', 'gemini_e.launch.py'],
-        output='screen'
-    )
+    # Launch Orbbec depth camera (DISABLED - USB issues)
+    # camera = ExecuteProcess(
+    #     cmd=['ros2', 'launch', 'orbbec_camera', 'gemini_e.launch.py'],
+    #     output='screen'
+    # )
 
-    # Convert depth camera pointcloud to laserscan
-    pointcloud_to_scan = Node(
-        package='pointcloud_to_laserscan',
-        executable='pointcloud_to_laserscan_node',
-        name='pointcloud_to_laserscan',
-        remappings=[
-            ('cloud_in', '/camera/depth/points'),
-            ('scan', '/camera/scan')  # Avoid conflict with merger output
-        ],
-        parameters=[{
-            'target_frame': 'laser',
-            'transform_tolerance': 0.01,
-            'min_height': -0.5,
-            'max_height': 2.0,
-            'angle_min': -1.5708,
-            'angle_max': 1.5708,
-            'angle_increment': 0.0087,
-            'scan_time': 0.1,
-            'range_min': 0.35,
-            'range_max': 10.0,
-            'use_inf': True,
-        }],
-        condition=IfCondition(use_merger)
-    )
+    # Convert depth camera pointcloud to laserscan (DISABLED - camera disabled)
+    # pointcloud_to_scan = Node(
+    #     package='pointcloud_to_laserscan',
+    #     executable='pointcloud_to_laserscan_node',
+    #     name='pointcloud_to_laserscan',
+    #     remappings=[
+    #         ('cloud_in', '/camera/depth/points'),
+    #         ('scan', '/camera/scan')  # Avoid conflict with merger output
+    #     ],
+    #     parameters=[{
+    #         'target_frame': 'laser',
+    #         'transform_tolerance': 0.01,
+    #         'min_height': -0.5,
+    #         'max_height': 2.0,
+    #         'angle_min': -1.5708,
+    #         'angle_max': 1.5708,
+    #         'angle_increment': 0.0087,
+    #         'scan_time': 0.1,
+    #         'range_min': 0.35,
+    #         'range_max': 10.0,
+    #         'use_inf': True,
+    #     }],
+    #     condition=IfCondition(use_merger)
+    # )
 
-    # Merge all three scans: /scan1, /scan2, /camera/scan -> /merged_scan
+    # Merge LiDAR scans only: /scan1 + /scan2 -> /merged_scan
     merger = Node(
         package='ros2_laser_scan_merger',
         executable='ros2_laser_scan_merger',
@@ -142,7 +142,7 @@ def generate_launch_description():
         parameters=[{
             'destination_frame': 'laser',
             'scan_destination_topic': '/merged_scan',
-            'laserscan_topics': '/scan1 /scan2 /camera/scan',
+            'laserscan_topics': '/scan1 /scan2',  # Only 2 LiDARs
             'clouds_destination_topic': '/merged_cloud',
             'min_merge_time_diff': 0.0,
             'angle_min': -3.14159,
@@ -177,9 +177,9 @@ def generate_launch_description():
         lidar1,
         tf2,
         lidar2,
-        camera,
-        pointcloud_to_scan,  # Convert depth to scan
-        merger,              # Merge all 3 scans
+        # camera,              # DISABLED - USB issues
+        # pointcloud_to_scan,  # DISABLED - camera disabled
+        merger,                # Merge 2 LiDAR scans
         tf3,
         slam,
     ]
