@@ -30,11 +30,11 @@ def generate_launch_description():
     use_merger_arg = DeclareLaunchArgument(
         'use_merger',
         default_value='true',
-        description='Start ros2_laser_scan_merger and publish /scan from /scan1 + /scan2')
+        description='Start ros2_laser_scan_merger and publish /merged_scan from /scan1 + /scan2 + depth camera')
     scan_topic_arg = DeclareLaunchArgument(
         'scan_topic',
-        default_value='/scan',
-        description='LaserScan topic for slam_toolbox to subscribe to (e.g., /scan or /scan1)')
+        default_value='/merged_scan',
+        description='LaserScan topic for slam_toolbox to subscribe to (e.g., /merged_scan, /scan1, or /scan2)')
     
     # Path to SLAM toolbox mapper params
     mapper_params_file = os.path.join(os.path.dirname(pkg_share), '..', '..', '..', 'nav2_params', 'mapper_params_online_sync.yaml')
@@ -108,9 +108,11 @@ def generate_launch_description():
         output='screen'
     )
 
-    # Merge /scan1, /scan2, and depth camera /scan into single /scan topic
+    # Merge /scan1, /scan2, and depth camera /scan into /merged_scan
+    # This avoids topic conflict (merger reading/writing same topic)
     merge = ExecuteProcess(
-        cmd=['ros2', 'launch', 'ros2_laser_scan_merger', 'merge_2_scan.launch.py'],
+        cmd=['ros2', 'launch', 'ros2_laser_scan_merger', 'merge_2_scan.launch.py', 
+             'scan_destination_topic:=/merged_scan'],
         output='screen',
         condition=IfCondition(use_merger)
     )
