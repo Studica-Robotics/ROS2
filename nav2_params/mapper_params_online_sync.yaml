@@ -29,6 +29,7 @@ slam_toolbox:
     transform_publish_period: 0.02 #if 0 never publishes odometry
     map_update_interval: 2.0
     resolution: 0.04
+    scan_queue_size: 20  # increased for merging multiple scan sources
     min_laser_range: 0.0 #for rastering images
     max_laser_range: 20.0 #for rastering images
     minimum_time_interval: 0.5
