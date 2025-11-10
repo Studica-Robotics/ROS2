@@ -39,11 +39,12 @@ def generate_launch_description():
     # Path to SLAM toolbox mapper params
     mapper_params_file = os.path.join(os.path.dirname(pkg_share), '..', '..', '..', 'nav2_params', 'mapper_params_online_sync.yaml')
 
-    base_tf = ExecuteProcess(
-        cmd=[[
-            'ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 base_footprint base_link'
-        ]],
-        shell=True
+    # Publish base_footprint -> base_link as a managed Node (cleaner shutdown than ExecuteProcess)
+    base_tf = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='tf_base_link',
+        arguments=['0', '0', '0', '0', '0', '0', 'base_footprint', 'base_link']
     )
     
     #laser_tf = ExecuteProcess(
