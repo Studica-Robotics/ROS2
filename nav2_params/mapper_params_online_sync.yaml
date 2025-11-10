@@ -33,8 +33,8 @@ slam_toolbox:
     min_laser_range: 0.0 #for rastering images
     max_laser_range: 20.0 #for rastering images
     minimum_time_interval: 0.5
-    transform_timeout: 0.3  # increase from 0.2 for slower systems
-    tf_buffer_duration: 30.
+    transform_timeout: 0.5  # increase for timing tolerance
+    tf_buffer_duration: 60.  # larger buffer to handle delayed scans
     stack_size_to_use: 40000000 #// program needs a larger stack size to serialize large maps
     enable_interactive_mode: true
 
