@@ -29,13 +29,11 @@ slam_toolbox:
     transform_publish_period: 0.02 #if 0 never publishes odometry
     map_update_interval: 2.0
     resolution: 0.04
-    scan_queue_size: 30  # increase to prevent 'queue is full' drops
     min_laser_range: 0.0 #for rastering images
     max_laser_range: 20.0 #for rastering images
     minimum_time_interval: 0.5
-    transform_timeout: 1.0  # increased further for timing tolerance
-    tf_buffer_duration: 60.  # larger buffer to handle delayed scans
-    max_scan_time_offset: -1.0  # disable scan timestamp validation (accept all timestamps)
+    transform_timeout: 0.2
+    tf_buffer_duration: 30.
     stack_size_to_use: 40000000 #// program needs a larger stack size to serialize large maps
     enable_interactive_mode: true
 

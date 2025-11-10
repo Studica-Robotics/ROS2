@@ -102,8 +102,13 @@ def generate_launch_description():
         ]
     )
 
-    # Merge /scan1 and /scan2 into /scan using the package's launch file
-    # This avoids depending on a specific executable name
+    # Launch Orbbec depth camera
+    camera = ExecuteProcess(
+        cmd=['ros2', 'launch', 'orbbec_camera', 'gemini_e.launch.py'],
+        output='screen'
+    )
+
+    # Merge /scan1, /scan2, and depth camera /scan into single /scan topic
     merge = ExecuteProcess(
         cmd=['ros2', 'launch', 'ros2_laser_scan_merger', 'merge_2_scan.launch.py'],
         output='screen',
@@ -132,6 +137,7 @@ def generate_launch_description():
         lidar1,
         tf2,
         lidar2,
+        camera,
         merge,
         tf3,
         slam,
