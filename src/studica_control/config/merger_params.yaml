@@ -2,7 +2,7 @@
   ros__parameters:
     scanTopic1: /scan1
     scanTopic2: /scan2
-    pointCloudTopic: cloud_in
+    pointCloudTopic: /merged_cloud
     pointCloutFrameId: laser
     use_sim_time: false
     show1: true

@@ -114,8 +114,8 @@ def generate_launch_description():
         executable='pointcloud_to_laserscan_node',
         name='pointcloud_to_laserscan',
         remappings=[
-            ('cloud_in', '/base/custom_cloud'),
-            ('scan', '/merged_scan')  # Avoid conflict with merger output
+            ('cloud_in', '/merged_cloud'),  # Merger's PointCloud2 output
+            ('scan', '/merged_scan')        # SLAM subscribes to this
         ],
         parameters=[{
             'target_frame': 'laser',
