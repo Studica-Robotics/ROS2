@@ -109,29 +109,29 @@ def generate_launch_description():
     # )
 
     # Convert depth camera pointcloud to laserscan (DISABLED - camera disabled)
-    # pointcloud_to_scan = Node(
-    #     package='pointcloud_to_laserscan',
-    #     executable='pointcloud_to_laserscan_node',
-    #     name='pointcloud_to_laserscan',
-    #     remappings=[
-    #         ('cloud_in', '/camera/depth/points'),
-    #         ('scan', '/camera/scan')  # Avoid conflict with merger output
-    #     ],
-    #     parameters=[{
-    #         'target_frame': 'laser',
-    #         'transform_tolerance': 0.01,
-    #         'min_height': -0.5,
-    #         'max_height': 2.0,
-    #         'angle_min': -1.5708,
-    #         'angle_max': 1.5708,
-    #         'angle_increment': 0.0087,
-    #         'scan_time': 0.1,
-    #         'range_min': 0.35,
-    #         'range_max': 10.0,
-    #         'use_inf': True,
-    #     }],
-    #     condition=IfCondition(use_merger)
-    # )
+    pointcloud_to_scan = Node(
+        package='pointcloud_to_laserscan',
+        executable='pointcloud_to_laserscan_node',
+        name='pointcloud_to_laserscan',
+        remappings=[
+            ('cloud_in', '/camera/depth/points'),
+            ('scan', '/camera/scan')  # Avoid conflict with merger output
+        ],
+        parameters=[{
+            'target_frame': 'laser',
+            'transform_tolerance': 0.01,
+            'min_height': -0.5,
+            'max_height': 2.0,
+            'angle_min': -1.5708,
+            'angle_max': 1.5708,
+            'angle_increment': 0.0087,
+            'scan_time': 0.1,
+            'range_min': 0.35,
+            'range_max': 10.0,
+            'use_inf': True,
+        }],
+        condition=IfCondition(use_merger)
+    )
 
     # Merge LiDAR scans only: /scan1 + /scan2 -> /merged_scan
     merger_params_file = os.path.join(pkg_share, 'config', 'merger_params.yaml')
@@ -174,7 +174,7 @@ def generate_launch_description():
         tf2,
         lidar2,
         # camera,              # DISABLED - USB issues
-        # pointcloud_to_scan,  # DISABLED - camera disabled
+        pointcloud_to_scan,  # DISABLED - camera disabled
         merger,                # Merge 2 LiDAR scans
         tf3,
         slam,
