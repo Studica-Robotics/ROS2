@@ -114,20 +114,20 @@ def generate_launch_description():
         executable='pointcloud_to_laserscan_node',
         name='pointcloud_to_laserscan',
         remappings=[
-            ('cloud_in', '/camera/depth/points'),
-            ('scan', '/camera/scan')  # Avoid conflict with merger output
+            ('cloud_in', '/base/custom_cloud'),
+            ('scan', '/merged_scan')  # Avoid conflict with merger output
         ],
         parameters=[{
             'target_frame': 'laser',
             'transform_tolerance': 0.01,
             'min_height': -0.5,
             'max_height': 2.0,
-            'angle_min': -1.5708,
-            'angle_max': 1.5708,
+            'angle_min': -3.14159,
+            'angle_max': 3.14159,
             'angle_increment': 0.0087,
             'scan_time': 0.1,
-            'range_min': 0.35,
-            'range_max': 10.0,
+            'range_min': 0.05,
+            'range_max': 12.0,
             'use_inf': True,
         }],
         condition=IfCondition(use_merger)
