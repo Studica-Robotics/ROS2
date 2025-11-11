@@ -140,7 +140,14 @@ def generate_launch_description():
         executable='ros2_laser_scan_merger',
         name='ros2_laser_scan_merger',
         output='screen',
-        parameters=[merger_params_file],
+        parameters=[
+            merger_params_file,
+            {
+                'laserscan_topics': '/scan1 /scan2',
+                'scan_destination_topic': '/merged_scan',
+                'destination_frame': 'laser'
+            }
+        ],
         condition=IfCondition(use_merger)
     )
 
