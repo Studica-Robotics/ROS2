@@ -76,3 +76,17 @@ slam_toolbox:
     use_response_expansion: true
     min_pass_through: 2
     occupancy_threshold: 0.1
+
+pointcloud_to_laserscan:
+  ros__parameters:
+    target_frame: laser
+    transform_tolerance: 0.01
+    min_height: -0.5
+    max_height: 2.0
+    angle_min: -2.443   # ~-140° to match combined LiDAR coverage
+    angle_max: 2.443    # ~+140° (280° total from front + rear LiDARs)
+    angle_increment: 0.0087
+    scan_time: 0.1
+    range_min: 0.03     # Match YDLidar specs
+    range_max: 12.0     # Match YDLidar specs
+    use_inf: true

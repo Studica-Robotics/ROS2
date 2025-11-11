@@ -5,23 +5,3 @@
     pointCloudTopic: /merged_cloud
     pointCloutFrameId: laser
     use_sim_time: false
-    show1: true
-    show2: true
-    flip1: false
-    flip2: false
-    inverse1: false
-    inverse2: false
-    # Front LiDAR transform (already published via TF as laser1_frame)
-    laser1XOff: 0.0
-    laser1YOff: 0.0
-    laser1ZOff: 0.0
-    laser1Alpha: 0.0
-    laser1AngleMin: -180.0
-    laser1AngleMax: 180.0
-    # Rear LiDAR transform (already published via TF as laser2_frame)
-    laser2XOff: 0.0
-    laser2YOff: 0.0
-    laser2ZOff: 0.0
-    laser2Alpha: 180.0
-    laser2AngleMin: -180.0
-    laser2AngleMax: 180.0
