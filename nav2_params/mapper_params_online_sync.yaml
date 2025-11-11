@@ -30,7 +30,7 @@ slam_toolbox:
     map_update_interval: 2.0
     resolution: 0.04
     scan_queue_size: 20  # increased for merging multiple scan sources
-    min_laser_range: 0.1 #for rastering images
+    min_laser_range: 0.03 # Match YDLidar minimum range
     max_laser_range: 12.0 #for rastering images
     minimum_time_interval: 0.5
     transform_timeout: 0.2
@@ -85,7 +85,7 @@ pointcloud_to_laserscan:
     max_height: 2.0
     angle_min: -2.443   # ~-140° to match combined LiDAR coverage
     angle_max: 2.443    # ~+140° (280° total from front + rear LiDARs)
-    angle_increment: 0.00868  # 4.886 / 563 = exactly 563 readings
+    angle_increment: 0.008663  # 4.886 / 564 = exactly 564 readings
     scan_time: 0.1
     range_min: 0.03     # Match YDLidar specs
     range_max: 12.0     # Match YDLidar specs
