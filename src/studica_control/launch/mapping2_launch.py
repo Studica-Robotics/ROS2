@@ -6,12 +6,21 @@ To save the map, open a new, privledged terminal and run: ros2 service call /sla
 # studica_launch.py is no longer included and must be launched separately.
 
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node, LifecycleNode
 from ament_index_python.packages import get_package_share_directory
 import os
 
 def generate_launch_description():
     pkg_share = get_package_share_directory('studica_control')
+    
+    # Declare launch arguments
+    resolution_arg = DeclareLaunchArgument(
+        'resolution',
+        default_value='0.04',
+        description='SLAM map resolution in meters per pixel (e.g., 0.02 for 2cm cells, 0.05 for 5cm cells)'
+    )
     
     # Hardcoded parameter file paths
     lidar_1_file = os.path.join(pkg_share, 'config', 'ydlidar_f.yaml')
@@ -76,7 +85,10 @@ def generate_launch_description():
         executable='sync_slam_toolbox_node',
         name='slam_toolbox',
         output='screen',
-        parameters=[mapper_params_file]
+        parameters=[
+            mapper_params_file,
+            {'resolution': LaunchConfiguration('resolution')}  # Override resolution from launch arg
+        ]
     )
 
     # Launch Orbbec depth camera (DISABLED - USB issues)
@@ -116,6 +128,7 @@ def generate_launch_description():
 
 
     nodes = [
+        resolution_arg,  # Include the launch argument
         base_tf,
     #   laser_tf,
         tf1,
