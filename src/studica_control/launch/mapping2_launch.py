@@ -126,6 +126,13 @@ def generate_launch_description():
         arguments=['0', '0', '0.02', '0', '0', '0', '1', 'base_link', 'laser']
     )
 
+    # Foxglove Bridge for visualization
+    foxglove = Node(
+        package='foxglove_bridge',
+        executable='foxglove_bridge',
+        name='foxglove_bridge',
+        output='screen'
+    )
 
     nodes = [
         resolution_arg,  # Include the launch argument
@@ -140,6 +147,7 @@ def generate_launch_description():
         merger,                # Merge 2 LiDAR scans
         tf3,
         slam,
+        foxglove,
     ]
 
     return LaunchDescription(nodes)
