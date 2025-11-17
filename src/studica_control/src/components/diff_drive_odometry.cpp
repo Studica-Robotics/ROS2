@@ -62,7 +62,7 @@ void DiffOdometry::publishOdometry() {
     nav_msgs::msg::Odometry odom_msg;
     odom_msg.header.stamp = current_time;
     odom_msg.header.frame_id = "odom";
-    odom_msg.child_frame_id = "base_link";
+    odom_msg.child_frame_id = "base_footprint";
 
     tf2::Quaternion q;
 
