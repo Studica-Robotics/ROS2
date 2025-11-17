@@ -55,6 +55,7 @@ control_server:
       use_imu: true
       imu_topic: "imu"
       topic: "odom"
+      publish_tf: false
 
     dio:
       enabled: true

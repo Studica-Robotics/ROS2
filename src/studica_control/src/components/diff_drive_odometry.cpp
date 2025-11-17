@@ -7,19 +7,21 @@ std::shared_ptr<DiffOdometry> DiffOdometry::initialize(rclcpp::Node *control){
     control->declare_parameter<bool>("diff_drive_odometry.use_imu", true);
     control->declare_parameter<std::string>("diff_drive_odometry.imu_topic", "");
     control->declare_parameter<std::string>("diff_drive_odometry.topic", "unknown");
+    control->declare_parameter<bool>("diff_drive_odometry.publish_tf", true);
 
     std::string name = control->get_parameter("diff_drive_odometry.name").as_string();
     bool use_imu = control->get_parameter("diff_drive_odometry.use_imu").as_bool();
     std::string imu_topic = control->get_parameter("diff_drive_odometry.imu_topic").as_string();
     std::string topic = control->get_parameter("diff_drive_odometry.topic").as_string();
+    bool publish_tf = control->get_parameter("diff_drive_odometry.publish_tf").as_bool();
 
-    auto diff_odom = std::make_shared<DiffOdometry>(name, use_imu, imu_topic, topic, 10);
+    auto diff_odom = std::make_shared<DiffOdometry>(name, use_imu, imu_topic, topic, publish_tf, 10);
     return diff_odom;
 }
 
 DiffOdometry::DiffOdometry(const rclcpp::NodeOptions & options) : Node("diff_odometry", options) {}
 
-DiffOdometry::DiffOdometry(const std::string &name, bool use_imu, const std::string &imu_topic, const std::string &topic, size_t velocity_rolling_window_size)
+DiffOdometry::DiffOdometry(const std::string &name, bool use_imu, const std::string &imu_topic, const std::string &topic, bool publish_tf, size_t velocity_rolling_window_size)
 : Node(name),
   timestamp_(0.0), 
   x_(0.0), y_(0.0), 
@@ -30,6 +32,7 @@ DiffOdometry::DiffOdometry(const std::string &name, bool use_imu, const std::str
   left_wheel_prev_pos_(0.0),
   right_wheel_prev_pos_(0.0),
   use_imu_(use_imu),
+  publish_tf_(publish_tf),
   imu_topic_(imu_topic),
   topic_(topic),
   velocity_rolling_window_size_(velocity_rolling_window_size),
@@ -95,7 +98,9 @@ void DiffOdometry::publishOdometry() {
 
     tf.transform.rotation = odom_msg.pose.pose.orientation;
     
-    tf_broadcaster_->sendTransform(tf);
+    if (publish_tf_) {
+        tf_broadcaster_->sendTransform(tf);
+    }
 }
 
 bool DiffOdometry::updateAndPublish(double left_pos, double right_pos, const rclcpp::Time &time) {
