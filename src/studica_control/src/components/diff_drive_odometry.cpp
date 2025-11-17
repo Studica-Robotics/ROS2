@@ -85,6 +85,24 @@ void DiffOdometry::publishOdometry() {
     odom_msg.twist.twist.linear.x = linear_;
     odom_msg.twist.twist.linear.y = 0.0;
 
+    odom_msg.pose.covariance = {
+        0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+        0.0,  0.01, 0.0,  0.0,  0.0,  0.0,
+        0.0,  0.0,  1e6,  0.0,  0.0,  0.0,
+        0.0,  0.0,  0.0,  1e6,  0.0,  0.0,
+        0.0,  0.0,  0.0,  0.0,  1e6,  0.0,
+        0.0,  0.0,  0.0,  0.0,  0.0,  1e3
+    };
+
+    odom_msg.twist.covariance = {
+        0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+        0.0,  1e6,  0.0,  0.0,  0.0,  0.0,
+        0.0,  0.0,  1e6,  0.0,  0.0,  0.0,
+        0.0,  0.0,  0.0,  1e6,  0.0,  0.0,
+        0.0,  0.0,  0.0,  0.0,  1e6,  0.0,
+        0.0,  0.0,  0.0,  0.0,  0.0,  1e3
+    };
+
     odom_publisher_->publish(odom_msg);
 
     geometry_msgs::msg::TransformStamped tf;

@@ -68,6 +68,28 @@ void Imu::publish_data() {
     msg.linear_acceleration.y = imu_->GetWorldLinearAccelY() * 9.80665;
     msg.linear_acceleration.z = imu_->GetWorldLinearAccelZ() * 9.80665;
 
+    // Populate covariances (3x3 matrices flattened row-major) for EKF weighting (2D use)
+    // orientation_covariance: roll, pitch large; yaw modest (~2 deg)^2
+    msg.orientation_covariance = {
+        1e6, 0.0, 0.0,
+        0.0, 1e6, 0.0,
+        0.0, 0.0, 0.0012
+    };
+
+    // angular_velocity_covariance: roll/pitch large; yaw rate modest (~1.8 deg/s)^2
+    msg.angular_velocity_covariance = {
+        1e6, 0.0, 0.0,
+        0.0, 1e6, 0.0,
+        0.0, 0.0, 0.001
+    };
+
+    // linear_acceleration_covariance: not used by our EKF; set reasonable diagonal
+    msg.linear_acceleration_covariance = {
+        0.5, 0.0, 0.0,
+        0.0, 0.5, 0.0,
+        0.0, 0.0, 0.5
+    };
+
     publisher_->publish(msg);
 }
 
