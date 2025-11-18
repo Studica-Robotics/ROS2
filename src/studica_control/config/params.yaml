@@ -52,9 +52,10 @@ control_server:
     
     diff_drive_odometry:
       name: "differential_odom"
-      use_imu: false
+      use_imu: true
       imu_topic: "imu"
       topic: "odom"
+      publish_tf: false
 
     dio:
       enabled: true
@@ -100,7 +101,7 @@ control_server:
       topic: "imu"
 
     mecanum_drive_component:
-      enabled: true
+      enabled: false
       name: "mecanum_drive_controller"
       can_id: 42
       motor_freq: 15600
@@ -119,7 +120,7 @@ control_server:
 
     mecanum_drive_odometry:
       name: "mecanum_odom"
-      use_imu: true
+      use_imu: false
       imu_topic: "imu"
       topic: "odom"
 
@@ -132,7 +133,7 @@ control_server:
         topic: "servo_angle"
 
     sharp:
-      enabled: false
+      enabled: true
       sensors: ["sharp"]
       sharp:
         port: 22
@@ -147,7 +148,7 @@ control_server:
         topic: "titan_encoders"
 
     ultrasonic:
-      enabled: false
+      enabled: true
       sensors: ["ultrasonic"]
       ultrasonic:
         ping: 10
