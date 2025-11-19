@@ -36,6 +36,13 @@ def generate_launch_description():
         arguments=['0', '0', '0', '0', '0', '0', 'base_footprint', 'base_link']
     )
     
+    imu_tf = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='tf_imu',
+        arguments=['0.0924043', '-0.061896', '0.1511', '0', '0', '0', '1', 'base_link', 'imu_link']
+    )
+    
     #laser_tf = ExecuteProcess(
     #    cmd=[[
     #       'ros2 run tf2_ros static_transform_publisher --x 0.144 --y 0 --z 0 --qx 0 --qy 0 --qz 0.7071 --qw -0.7071 --frame-id base_link --child-frame-id laser_frame'
@@ -146,6 +153,7 @@ def generate_launch_description():
     nodes = [
         resolution_arg,  # Include the launch argument
         base_tf,
+        imu_tf,
     #   laser_tf,
         tf1,
         lidar1,
