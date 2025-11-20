@@ -17,10 +17,18 @@ def generate_launch_description():
         parameters=[params_file]
     )
 
+    ekf = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_filter_node',
+        output='screen',
+        parameters=[os.path.join(pkg_share, 'config', 'ekf.yaml')]
+    )
+
     rosbridge_server = ExecuteProcess(
         cmd=['ros2', 'launch', 'rosbridge_server', 'rosbridge_websocket_launch.xml'],
         output='screen'
     )
 
-    nodes = [manual_composition, rosbridge_server]
+    nodes = [manual_composition, ekf, rosbridge_server]
     return LaunchDescription(nodes)

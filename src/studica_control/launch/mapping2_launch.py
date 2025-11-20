@@ -141,15 +141,6 @@ def generate_launch_description():
         output='screen'
     )
 
-    # Robot Localization EKF to fuse wheel odom + IMU and publish odom->base_footprint
-    ekf = Node(
-        package='robot_localization',
-        executable='ekf_node',
-        name='ekf_filter_node',
-        output='screen',
-        parameters=[os.path.join(pkg_share, 'config', 'ekf.yaml')]
-    )
-
     nodes = [
         resolution_arg,  # Include the launch argument
         base_tf,
@@ -164,7 +155,6 @@ def generate_launch_description():
         merger,                # Merge 2 LiDAR scans
         tf3,
         slam,
-        ekf,
         foxglove,
     ]
 
