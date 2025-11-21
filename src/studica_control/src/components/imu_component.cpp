@@ -73,14 +73,14 @@ void Imu::publish_data() {
     msg.orientation_covariance = {
         1e6, 0.0, 0.0,
         0.0, 1e6, 0.0,
-        0.0, 0.0, 0.0012
+        0.0, 0.0, 0.0005
     };
 
     // angular_velocity_covariance: roll/pitch large; yaw rate modest (~1.8 deg/s)^2
     msg.angular_velocity_covariance = {
         1e6, 0.0, 0.0,
         0.0, 1e6, 0.0,
-        0.0, 0.0, 0.001
+        0.0, 0.0, 0.0005
     };
 
     // linear_acceleration_covariance: not used by our EKF; set reasonable diagonal
