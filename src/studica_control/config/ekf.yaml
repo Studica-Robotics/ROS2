@@ -24,10 +24,10 @@ ekf_filter_node:
     odom0_nodelay: true
     odom0_differential: false
     odom0_relative: false
-    # Use wheel pose x,y and linear x velocity only (no z/roll/pitch/yaw from odom)
+    # Use wheel pose x,y, linear x velocity, and yaw (previously disabled)
     # States: [x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az]
     odom0_config: [true, true, false,
-                   false, false, false,
+                   false, false, true,
                    true, false, false,
                    false, false, false,
                    false, false, false]
