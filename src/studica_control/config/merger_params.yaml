@@ -1,7 +1,50 @@
 /ros2_laser_scan_merger:
   ros__parameters:
+    # Input scan topics from front and rear YDLIDARs
     scanTopic1: /scan1
     scanTopic2: /scan2
+
+    # Enable both lidars
+    show1: true
+    show2: true
+
+    # Mounts are upright, not flipped
+    flip1: false
+    flip2: false
+
+    # Use the given angle windows directly (no inversion)
+    inverse1: false
+    inverse2: false
+
+    # Heading of each lidar in the merged frame (degrees)
+    # Front lidar faces forward, rear lidar faces backward
+    laser1Alpha: 0.0
+    laser2Alpha: 180.0
+
+    # Use full 140° FOV from each lidar (matches angle_min/max in YDLIDAR configs)
+    laser1AngleMax: 70.0
+    laser1AngleMin: -70.0
+    laser2AngleMax: 70.0
+    laser2AngleMin: -70.0
+
+    # Position of each lidar relative to the merged "laser" frame (which sits at base_link)
+    laser1XOff: 0.144
+    laser1YOff: 0.0
+    laser1ZOff: 0.02
+    laser2XOff: -0.144
+    laser2YOff: 0.0
+    laser2ZOff: 0.02
+
+    # Colors for visualizing each lidar's contribution in /merged_cloud
+    laser1R: 255
+    laser1G: 0
+    laser1B: 0
+    laser2R: 0
+    laser2G: 255
+    laser2B: 0
+
+    # Output point cloud settings
     pointCloudTopic: /merged_cloud
-    pointCloutFrameId: laser
+    pointCloudFrameId: laser
+
     use_sim_time: false
