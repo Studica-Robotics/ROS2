@@ -137,10 +137,10 @@ control_server:
       sensors: ["sharp1", "sharp2"]
       sharp1:
         port: 22
-        topic: "ir_range"
+        topic: "ir_range1"
       sharp2:
-        port: 23
-        topic: "ir_range"
+        port: 25
+        topic: "ir_range2"
 
     titan:
       enabled: true
