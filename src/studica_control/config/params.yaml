@@ -134,9 +134,12 @@ control_server:
 
     sharp:
       enabled: true
-      sensors: ["sharp"]
-      sharp:
+      sensors: ["sharp1", "sharp2"]
+      sharp1:
         port: 22
+        topic: "ir_range"
+      sharp2:
+        port: 23
         topic: "ir_range"
 
     titan:
@@ -149,8 +152,12 @@ control_server:
 
     ultrasonic:
       enabled: true
-      sensors: ["ultrasonic"]
-      ultrasonic:
+      sensors: ["ultrasonic1", "ultrasonic2"]
+      ultrasonic1:
+        ping: 8
+        echo: 9
+        topic: "ultrasonic_range1"
+      ultrasonic2:
         ping: 10
         echo: 11
-        topic: "ultrasonic_range"
+        topic: "ultrasonic_range2"
