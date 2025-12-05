@@ -46,6 +46,20 @@ ekf_filter_node:
                   false, false, true,
                   false, false, false]
 
+    # LiDAR odometry input (from rf2o scan matching)
+    odom1: rf2o_odom
+    odom1_queue_size: 10
+    odom1_nodelay: true
+    odom1_differential: false
+    odom1_relative: false
+    # Use LiDAR-derived x, y, and yaw (not velocities - scan matching velocity estimates are noisy)
+    # States: [x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az]
+    odom1_config: [true,  true,  false,
+                   false, false, true,
+                   false, false, false,
+                   false, false, false,
+                   false, false, false]
+
     # Initial estimate covariance (P0) for state vector
     # State order:
     # [x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az]
