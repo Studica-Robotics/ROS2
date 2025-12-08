@@ -84,10 +84,10 @@ def generate_launch_description():
     )
 
     # Launch Orbbec depth camera (DISABLED - USB issues)
-    # camera = ExecuteProcess(
-    #     cmd=['ros2', 'launch', 'orbbec_camera', 'gemini_e.launch.py'],
-    #     output='screen'
-    # )
+    camera = ExecuteProcess(
+        cmd=['ros2', 'launch', 'orbbec_camera', 'gemini_e.launch.py'],
+        output='screen'
+    )
 
     # Convert depth camera pointcloud to laserscan
     pointcloud_to_scan = Node(
@@ -150,7 +150,7 @@ def generate_launch_description():
         lidar1,
         tf2,
         lidar2,
-        # camera,              # DISABLED - USB issues
+        camera,              # DISABLED - USB issues
         pointcloud_to_scan,    # Convert merged_cloud to scan
         merger,                # Merge 2 LiDAR scans
         tf3,
