@@ -6,7 +6,7 @@ To save the map, open a new, privledged terminal and run: ros2 service call /sla
 # studica_launch.py is no longer included and must be launched separately.
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node, LifecycleNode
 from ament_index_python.packages import get_package_share_directory
