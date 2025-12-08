@@ -85,7 +85,7 @@ def generate_launch_description():
 
     # Launch Orbbec depth camera (DISABLED - USB issues)
     camera = ExecuteProcess(
-        cmd=['ros2', 'launch', 'orbbec_camera', 'gemini_e.launch.py'],
+        cmd=['ros2', 'launch', 'orbbec_camera', 'gemini_e.launch.py', 'enable_ir:=false'],
         output='screen'
     )
 
