@@ -24,7 +24,7 @@ ekf_filter_node:
     odom0_nodelay: true
     odom0_differential: false
     odom0_relative: false
-    # Use wheel pose x,y, linear x velocity, and yaw (previously disabled)
+    # Use wheel pose x,y and linear x velocity only (no yaw from wheels due to slip)
     # States: [x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az]
     odom0_config: [true, true, false,
                    false, false, false,
@@ -41,18 +41,18 @@ ekf_filter_node:
     imu0_remove_gravitational_acceleration: true
     # Use yaw and yaw rate from IMU (2D)
     imu0_config: [false, false, false,
+                  false, false, true,
                   false, false, false,
-                  false, false, false,
-                  false, false, false,
+                  false, false, true,
                   false, false, false]
 
     # LiDAR odometry input (from rf2o scan matching)
     odom1: rf2o_odom
     odom1_queue_size: 10
     odom1_nodelay: true
-    odom1_differential: false
+    odom1_differential: true      # use incremental changes from LiDAR odom to avoid large jumps
     odom1_relative: false
-    # Use LiDAR-derived x, y, and yaw (not velocities - scan matching velocity estimates are noisy)
+    # Use LiDAR-derived x, y, and yaw (yaw fused with IMU yaw; LiDAR used as a weaker, incremental constraint)
     # States: [x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az]
     odom1_config: [true,  true,  false,
                    false, false, true,
