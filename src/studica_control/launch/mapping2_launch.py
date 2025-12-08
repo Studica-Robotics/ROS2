@@ -119,21 +119,21 @@ def generate_launch_description():
     )
 
     # LiDAR odometry via scan matching (rf2o)
-    rf2o = Node(
-        package='rf2o_laser_odometry',
-        executable='rf2o_laser_odometry_node',
-        name='rf2o_laser_odometry',
-        output='screen',
-        parameters=[{
-            'laser_scan_topic': '/merged_scan',
-            'odom_topic': '/rf2o_odom',
-            'publish_tf': False,  # EKF will publish the odom->base_footprint TF
-            'base_frame_id': 'base_footprint',
-            'odom_frame_id': 'odom',
-            'init_pose_from_topic': '',
-            'freq': 10.0
-        }]
-    )
+    # rf2o = Node(
+    #     package='rf2o_laser_odometry',
+    #     executable='rf2o_laser_odometry_node',
+    #     name='rf2o_laser_odometry',
+    #     output='screen',
+    #     parameters=[{
+    #         'laser_scan_topic': '/merged_scan',
+    #         'odom_topic': '/rf2o_odom',
+    #         'publish_tf': False,  # EKF will publish the odom->base_footprint TF
+    #         'base_frame_id': 'base_footprint',
+    #         'odom_frame_id': 'odom',
+    #         'init_pose_from_topic': '',
+    #         'freq': 10.0
+    #     }]
+    # )
 
     # Foxglove Bridge for visualization
     foxglove = Node(
@@ -154,7 +154,7 @@ def generate_launch_description():
         pointcloud_to_scan,    # Convert merged_cloud to scan
         merger,                # Merge 2 LiDAR scans
         tf3,
-        rf2o,                  # LiDAR odometry for EKF fusion
+    #    rf2o,                  # LiDAR odometry for EKF fusion
         slam,
         foxglove,
     ]
