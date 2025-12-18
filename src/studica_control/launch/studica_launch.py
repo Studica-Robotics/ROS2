@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch_ros.actions import Node
+from launch_ros.actions import LifecycleNode, Node
 from launch.actions import ExecuteProcess
 from ament_index_python.packages import get_package_share_directory
 import os
@@ -21,7 +21,7 @@ def generate_launch_description():
         ],
     )
 
-    velocity_smoother = Node(
+    velocity_smoother = LifecycleNode(
         package='nav2_velocity_smoother',
         executable='velocity_smoother',
         name='velocity_smoother',
@@ -32,6 +32,17 @@ def generate_launch_description():
             ('cmd_vel_smoothed', '/cmd_vel_smoothed'),
             ('odom', 'odom'),
         ],
+    )
+
+    velocity_smoother_lifecycle_mgr = Node(
+        package='nav2_lifecycle_manager',
+        executable='lifecycle_manager',
+        name='velocity_smoother_lifecycle_manager',
+        output='screen',
+        parameters=[{
+            'autostart': True,
+            'node_names': ['velocity_smoother'],
+        }],
     )
 
     ekf = Node(
@@ -61,5 +72,5 @@ def generate_launch_description():
         output='screen'
     )
 
-    nodes = [velocity_smoother, manual_composition, ekf, base_tf, imu_tf, rosbridge_server]
+    nodes = [velocity_smoother, velocity_smoother_lifecycle_mgr, manual_composition, ekf, base_tf, imu_tf, rosbridge_server]
     return LaunchDescription(nodes)
