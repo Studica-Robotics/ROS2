@@ -25,6 +25,7 @@ def generate_launch_description():
         package='nav2_velocity_smoother',
         executable='velocity_smoother',
         name='velocity_smoother',
+        namespace='',
         output='screen',
         parameters=[params_file],
         remappings=[
