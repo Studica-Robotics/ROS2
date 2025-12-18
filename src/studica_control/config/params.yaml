@@ -161,3 +161,22 @@ control_server:
         ping: 10
         echo: 11
         topic: "ultrasonic_range2"
+
+
+# Smooths cmd_vel to prevent sudden jerks. The launch file wires:
+#   /cmd_vel -> velocity_smoother -> /cmd_vel_smoothed
+#   drivetrain subscribes to /cmd_vel_smoothed
+velocity_smoother:
+  ros__parameters:
+    smoothing_frequency: 50.0
+    scale_velocities: false
+    feedback: "OPEN_LOOP"
+    odom_topic: "odom"
+    # Set reasonable limits first, then tune.
+    max_velocity: [0.7, 0.0, 0.0]        # [vx, vy, vz] m/s
+    min_velocity: [-0.7, 0.0, 0.0]
+    max_accel: [0.6, 0.0, 0.0]           # m/s^2
+    max_decel: [-0.9, 0.0, 0.0]          # m/s^2 (negative)
+    max_angular_velocity: [0.0, 0.0, 1.8]  # [wx, wy, wz] rad/s
+    max_angular_accel: [0.0, 0.0, 2.5]     # rad/s^2
+    max_angular_decel: [0.0, 0.0, -3.0]    # rad/s^2 (negative)

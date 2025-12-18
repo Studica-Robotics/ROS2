@@ -14,7 +14,24 @@ def generate_launch_description():
         executable='manual_composition',
         name='control_server',
         output='screen',
-        parameters=[params_file]
+        parameters=[params_file],
+        remappings=[
+            ('/cmd_vel', '/cmd_vel_smoothed'),
+            ('cmd_vel', '/cmd_vel_smoothed'),
+        ],
+    )
+
+    velocity_smoother = Node(
+        package='nav2_velocity_smoother',
+        executable='velocity_smoother',
+        name='velocity_smoother',
+        output='screen',
+        parameters=[params_file],
+        remappings=[
+            ('cmd_vel', '/cmd_vel'),
+            ('cmd_vel_smoothed', '/cmd_vel_smoothed'),
+            ('odom', 'odom'),
+        ],
     )
 
     ekf = Node(
@@ -44,5 +61,5 @@ def generate_launch_description():
         output='screen'
     )
 
-    nodes = [manual_composition, ekf, base_tf, imu_tf, rosbridge_server]
+    nodes = [velocity_smoother, manual_composition, ekf, base_tf, imu_tf, rosbridge_server]
     return LaunchDescription(nodes)
