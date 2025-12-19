@@ -175,7 +175,9 @@ velocity_smoother:
     odom_topic: "odom"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
-    velocity_timeout: 1.0
+    # If your upstream publisher only sends occasional cmd_vel messages (not a continuous stream),
+    # this timeout will otherwise force the smoother output back to zero.
+    velocity_timeout: 5.0
     # Nav2 velocity smoother uses [vx, vy, wz]
     max_velocity: [0.7, 0.0, 1.8]
     min_velocity: [-0.7, 0.0, -1.8]
