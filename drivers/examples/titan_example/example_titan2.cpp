@@ -1,20 +1,20 @@
 /*
- * VMX-Pi Host: Titan2 4-channel speed sequence test
+ * VMX-Pi Host: Titan2 四通道速度序列测试
  *
- * Flow:
- *   1. SetSpeed all 4 channels same duty cycle: 100% -> 50% -> 0 -> 80% -> 0 (duty cycle %)
- *   2. SetPIDType(0), SetTargetVelocity all 4 same target RPM: 100 -> 50 -> 0 -> 80 -> 0
- *   3. SetPIDType(1), same target RPM sequence again
- *   4. SetSensitivity(0..3, 10), same target RPM sequence again
- * Continuously output encoder RPM while motors are running.
+ * 流程：
+ *   1. SetSpeed 四路同占空比: 100% -> 50% -> 0 -> 80% -> 0 (duty cycle %)
+ *   2. SetPIDType(0)，SetTargetVelocity 四路同目标 RPM: 100 -> 50 -> 0 -> 80 -> 0
+ *   3. SetPIDType(1)，同上目标 RPM 再来一遍
+ *   4. SetSensitivity(0..3, 10)，同上目标 RPM 再来一遍
+ * 电机转动期间持续输出 encoder 读到的 RPM。
  *
- * Build (Raspberry Pi, Titan2 root):
+ * 编译（树莓派，Titan2 根目录）:
  *   g++ -o titan_speed_sequence_test VMX_HOST_TITAN_SPEED_SEQUENCE_TEST.cpp Host/titan.cpp \
  *       -I. -IHost -I/usr/local/include/vmxpi \
  *       -L/usr/local/frc/third-party/lib -lvmxpi_hal_cpp -lpthread -std=c++11
  *
- * Run: sudo ./titan_speed_sequence_test [CANID]
- *      e.g.: sudo ./titan_speed_sequence_test 20
+ * 运行: sudo ./titan_speed_sequence_test [CANID]
+ *       例如: sudo ./titan_speed_sequence_test 20
  */
 
  #include <stdio.h>
@@ -22,20 +22,20 @@
  #include <unistd.h>
  #include "Host/titan.h"
  
-/* Hold time per speed step (seconds) */
+ /* 每个速度档位保持时间 (秒) */
  static const int HOLD_SEC = 5;
- /* RPM sampling interval (ms); print RPM at this interval while motor runs */
+ /* 转速采样间隔 (毫秒)，电机转时按此间隔打印 RPM */
  static const int RPM_PRINT_INTERVAL_MS = 200;
- /* In Phase 1 with SetSpeed, how often to resend SET_MOTOR_SPEED (firmware needs periodic receipt to maintain output) */
+ /* Phase 1 用 SetSpeed 时，每隔多久重发一次 SET_MOTOR_SPEED（固件需周期性收到才能维持输出） */
  static const int SET_SPEED_RESEND_MS = 50;
-
- /* SetTargetVelocity target RPM: 100, 50, 0, 80 (matches SetSpeed steps, unit rpm) */
+ 
+ /* SetTargetVelocity 目标 RPM：100, 50, 0, 80（与 SetSpeed 档位对应，单位 rpm） */
  static const int16_t RPM_100 = 100;
  static const int16_t RPM_50  = 50;
  static const int16_t RPM_80  = 80;
  static const int16_t RPM_0   = 0;
  
- /* Phase 2/3/4: periodically resend SetTargetVelocity(0..3, target_rpm) so target changes (100→50→0→80→0) take effect, and print RPM every 200ms */
+ /* Phase 2/3/4 专用：周期重发 SetTargetVelocity(0..3, target_rpm)，使目标切换（100→50→0→80→0）生效，并每 200ms 打印 RPM */
  static const int TARGET_VELOCITY_RESEND_MS = 50;
  
  static void run_for_seconds_target_velocity_and_rpm(studica_driver::Titan& titan, int seconds_sec, int16_t target_rpm, const char* label)
@@ -68,8 +68,8 @@
      }
  }
  
- /* Stop: use only SetSpeed(motor,0), order 3→2→1→0 to avoid [0,0,0,0] being treated as legacy and stopping only ch0.
-  * Do not send SetTargetVelocity(0) in Phase 1, otherwise HandleSetVelocity(0) will change device state and keep encoder RPM at 0. */
+ /* 停转：仅用 SetSpeed(motor,0)，顺序 3→2→1→0 避免 [0,0,0,0] 被当 legacy 只停 ch0。
+  * 不在 Phase 1 发 SetTargetVelocity(0)，否则 HandleSetVelocity(0) 会改设备状态并导致 encoder RPM 一直为 0。 */
  static void stop_all(studica_driver::Titan& titan)
  {
      titan.SetSpeed(3, 0.0);
@@ -79,7 +79,7 @@
      usleep(150 * 1000);
  }
  
- /* Phase 1: resend SetSpeed(0..3, duty) every SET_SPEED_RESEND_MS; duty<0 is reverse, duty=0 uses SetSpeed only to stop; print RPM every 200ms */
+ /* Phase 1 专用：每 SET_SPEED_RESEND_MS 重发 SetSpeed(0..3, duty)；duty<0 为反转，duty=0 时仅 SetSpeed 停转；每 200ms 打印 RPM */
  static void run_for_seconds_set_speed_and_rpm(studica_driver::Titan& titan, int seconds_sec, double duty, const char* label)
  {
      int total_ms = seconds_sec * 1000;
@@ -89,7 +89,7 @@
      {
          if (duty == 0.0)
          {
-             /* Order 3→2→1→0; Phase 1 uses SetSpeed only to stop, do not send SetTargetVelocity(0) to avoid affecting encoder */
+             /* 顺序 3→2→1→0；Phase 1 仅用 SetSpeed 停转，不发 SetTargetVelocity(0) 以免影响 encoder */
              titan.SetSpeed(3, 0.0);
              titan.SetSpeed(2, 0.0);
              titan.SetSpeed(1, 0.0);
@@ -111,7 +111,7 @@
          if (elapsed_ms >= next_print_ms)
          {
              next_print_ms += RPM_PRINT_INTERVAL_MS;
-             /* Wait before read to avoid contending with SetSpeed on bus; let device send one round of sensor first */
+             /* 读前稍等，避免和 SetSpeed 同一时刻抢总线，让设备先发一轮 sensor */
              usleep(8 * 1000);
              int16_t r0, r1, r2, r3;
              bool ok0 = titan.TryGetRPM(0, &r0);
@@ -137,13 +137,13 @@
      titan.Enable(true);
      sleep(1);
  
-    /* Set PIDType 0 first, stop and clear target, then run SetSpeed */
-    titan.SetPIDType(0);
-    stop_all(titan);
-    /* Wait for device to send several rounds of encoder/RPM before reading, to avoid Blackboard having no data yet */
-    usleep(80 * 1000);
-
-    /* Diagnostics: confirm device response and check if RPM frames are received */
+     /* 先设 PIDType 0，停转清空目标，再跑 SetSpeed */
+     titan.SetPIDType(0);
+     stop_all(titan);
+     /* 等设备发几轮 encoder/RPM 再读，避免 Blackboard 尚无数据 */
+     usleep(80 * 1000);
+ 
+     /* 诊断：确认能收到设备应答，并检查是否收到 RPM 帧 */
      {
          uint8_t devId = titan.GetID();
          std::string fw = titan.GetFirmwareVersion();
@@ -161,7 +161,7 @@
              printf("  >>> No RPM frames. Check: (1) Device CAN ID matches %u (2) Device sending sensor data every 10ms.\n", (unsigned)canId);
      }
  
-     /* ---------- Phase 1: SetSpeed 100 -> 50 -> 0 -> 80 -> 0 (periodically resend SET_MOTOR_SPEED; when duty=0 also send target 0 to stop) ---------- */
+     /* ---------- Phase 1: SetSpeed 100 -> 50 -> 0 -> 80 -> 0（周期重发 SET_MOTOR_SPEED；duty=0 时同时发目标 0 以停转）---------- */
      printf("\n--- Phase 1: SetPIDType(0), SetSpeed (duty 100%%, 50%%, 0, 80%%, 0) ---\n");
  
      printf("  SetSpeed all -> 100%% (resend every %d ms)\n", SET_SPEED_RESEND_MS);
@@ -185,15 +185,15 @@
      stop_all(titan);
      run_for_seconds_set_speed_and_rpm(titan, 2, 0.0, "0");
  
-    /* Wait for device to process remaining SetTargetVelocity(0) in queue before sending 100, to avoid target being overwritten back to 0 */
-    usleep(150 * 1000);
-
-    /* ---------- Phase 2: PIDType 0, SetTargetVelocity all 4 channels same target RPM 100->50->0->80->0 ---------- */
+     /* 等设备把队列里残留的 SetTargetVelocity(0) 处理完，再发 100，避免 target 被覆盖回 0 */
+     usleep(150 * 1000);
+ 
+     /* ---------- Phase 2: PIDType 0, SetTargetVelocity 四路同目标 RPM 100->50->0->80->0 ---------- */
      printf("\n--- Phase 2: SetPIDType(0), SetTargetVelocity all 4 (target RPM 100->50->0->80->0) ---\n");
      titan.SetPIDType(0);
  
-    /* At start send multiple rounds of 100 to fill queue, avoid late (0) overwriting target */
-    for (int i = 0; i < 8; i++)
+     /* 开局连发多轮 100，把队列灌满，避免迟到的 (0) 覆盖 target */
+     for (int i = 0; i < 8; i++)
      {
          titan.SetTargetVelocity(0, RPM_100);
          titan.SetTargetVelocity(1, RPM_100);
@@ -202,8 +202,8 @@
          usleep(10 * 1000);
      }
  
-    /* Read back device target speed to confirm SET_TARGET_VELOCITY was received */
-    {
+     /* 读回设备内目标转速，确认 SET_TARGET_VELOCITY 是否被接收 */
+     {
          int16_t devTarget[4] = {0, 0, 0, 0};
          if (titan.GetTargetRPMFromDevice(devTarget))
              printf("  Device target RPM (readback): M0=%d M1=%d M2=%d M3=%d\n",
@@ -211,8 +211,8 @@
          else
              printf("  Device target RPM readback failed.\n");
      }
-    /* Give device time for PID output to take effect and encoder to have non-zero values before printing */
-    usleep(150 * 1000);
+     /* 给设备时间让 PID 输出生效、encoder 有非零值后再开始打印 */
+     usleep(150 * 1000);
  
      printf("  SetTargetVelocity all 4 -> %d rpm (resend every %d ms)\n", (int)RPM_100, TARGET_VELOCITY_RESEND_MS);
      run_for_seconds_target_velocity_and_rpm(titan, HOLD_SEC, RPM_100, "100rpm");
@@ -229,9 +229,9 @@
      printf("  SetTargetVelocity all 4 -> 0\n");
      run_for_seconds_target_velocity_and_rpm(titan, 1, RPM_0, "0rpm");
  
-    /* ---------- Phase 3: PIDType 1 requires Autotune first, then SetTargetVelocity ---------- */
-    printf("\n--- Phase 3: SetPIDType(1), AutotuneAll(), then SetTargetVelocity (same sequence) ---\n");
-    /* Enable again and send one round of SetTargetVelocity(0) to ensure device USBOverride=1 and enabled, then send PIDType and Autotune */
+     /* ---------- Phase 3: PIDType 1 需先 Autotune，再 SetTargetVelocity ---------- */
+     printf("\n--- Phase 3: SetPIDType(1), AutotuneAll(), then SetTargetVelocity (same sequence) ---\n");
+     /* 再次 Enable 并发一轮 SetTargetVelocity(0)，确保设备 USBOverride=1、已使能，再发 PIDType 和 Autotune */
      titan.Enable(true);
      usleep(50 * 1000);
      titan.SetTargetVelocity(0, 0);
@@ -253,8 +253,12 @@
      }
      sleep(18);
  
-     printf("  SetTargetVelocity all 4 -> %d rpm\n", (int)RPM_100);
-     run_for_seconds_target_velocity_and_rpm(titan, HOLD_SEC, RPM_100, "100rpm");
+     printf("  SetTargetVelocity all 4 -> %d rpm (PIDType 1)\n", (int)RPM_100);
+     run_for_seconds_target_velocity_and_rpm(titan, 2, RPM_100, "100rpm");
+     printf("  SetTargetVelocity all 4 -> -100 rpm (reverse, 5 s)\n");
+     run_for_seconds_target_velocity_and_rpm(titan, 5, -RPM_100, "100rpm rev");
+     printf("  SetTargetVelocity all 4 -> %d rpm (continue)\n", (int)RPM_100);
+     run_for_seconds_target_velocity_and_rpm(titan, 2, RPM_100, "100rpm");
  
      printf("  SetTargetVelocity all 4 -> %d rpm\n", (int)RPM_50);
      run_for_seconds_target_velocity_and_rpm(titan, HOLD_SEC, RPM_50, "50rpm");
@@ -268,7 +272,7 @@
      printf("  SetTargetVelocity all 4 -> 0\n");
      run_for_seconds_target_velocity_and_rpm(titan, 1, RPM_0, "0rpm");
  
-     /* ---------- Phase 4: Sensitivity=10, SetTargetVelocity same speed sequence ---------- */
+     /* ---------- Phase 4: Sensitivity=10, SetTargetVelocity 同样速度 ---------- */
      printf("\n--- Phase 4: SetSensitivity(0..3, 10), SetTargetVelocity (same sequence) ---\n");
      titan.SetSensitivity(0, 10);
      titan.SetSensitivity(1, 10);
