@@ -1,18 +1,8 @@
 #include "titan.h"
-#include <cmath>
 
 using namespace studica_driver;
 
-uint32_t Titan::GetSendID(uint8_t cmd_offset) const
-{
-    return (CAN_DEVICE_TYPE + CAN_MANUFACTURER_ID + canID_) + (cmd_offset * CAN_OFFSET);
-}
-
-uint32_t Titan::GetRecvID(uint8_t rsp_offset) const
-{
-    return (CAN_DEVICE_TYPE + CAN_MANUFACTURER_ID + canID_) + (rsp_offset * CAN_OFFSET);
-}
-
+ 
 Titan::Titan(const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, std::shared_ptr<VMXPi> vmx)
     : vmx_(vmx), canID_(canID), motorFreq_(motorFreq), distPerTick_(distPerTick)
 {
@@ -86,7 +76,7 @@ Titan::Titan(const uint8_t &canID, const uint16_t &motorFreq, const float &distP
             for (int i = 0; i < 4; i++)
             {
                 data[0] = i; // motor #
-                Write(GetSendID(CMD_CONFIG_MOTOR), data, 0);
+                Write(GetAddress(CONFIG_MOTOR), data, 0);
             }
             printf("Titan Driver Started!\n");
         }
@@ -101,6 +91,11 @@ Titan::Titan(const uint8_t &canID, const uint16_t &motorFreq, const float &distP
     }
 }
 Titan::~Titan() {}
+
+uint32_t Titan::GetAddress(uint32_t addressBase) const
+{
+    return addressBase + canID_;
+}
 
 void Titan::SetupEncoder(uint8_t encoder) {
     ConfigureEncoder(encoder, distPerTick_);
@@ -137,73 +132,98 @@ bool Titan::Read(uint32_t address, uint8_t* data)
     return true;
 }
  
-void Titan::Enable(bool enable)
+void Titan::Enable(bool enable) // Not really a fan of this should be tied to the watchdog somehow aka checking if the watchdog is fed.
 {
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     if (enable)
-        Titan::Write(GetSendID(CMD_ENABLED_FLAG), data, 10);
+    {
+        Titan::Write(GetAddress(ENABLED_FLAG), data, 10);
+    }
     else
-        Titan::Write(GetSendID(CMD_DISABLED_FLAG), data, 10);
+    {
+        Titan::Write(GetAddress(DISABLED_FLAG), data, 10);
+        for (int i = 0; i < 4; i++)
+            lastDuty_[i] = 0;
+    }
 }
  
+bool Titan::EnsureTitanInfoCached()
+{
+    if (cached_titan_info_valid_)
+        return true;
+    uint8_t req[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    const int max_attempts = 4;
+    const int delay_ms = 40;
+    for (int attempt = 0; attempt < max_attempts; attempt++)
+    {
+        Write(GetAddress(GET_TITAN_INFO), req, 0);
+        vmx_->time.DelayMilliseconds(delay_ms);
+        if (Read(GetAddress(RETURN_TITAN_INFO), cached_titan_info_))
+        {
+            cached_titan_info_valid_ = true;
+            return true;
+        }
+    }
+    return false;
+}
+
 uint8_t Titan::GetID()
 {
-    uint8_t data[8];
-    Titan::Read(GetRecvID(RSP_TITAN_INFO), data);
-    return data[0];
+    EnsureTitanInfoCached();
+    return cached_titan_info_valid_ ? cached_titan_info_[0] : 0;
 }
  
 uint16_t Titan::GetFrequency()
 {
     uint8_t data[8];
-    Titan::Read(GetRecvID(RSP_MOTOR_FREQUENCY), data);
+    Titan::Read(GetAddress(RETURN_MOTOR_FREQUENCY), data);
     return data[0] + (data[1] << 8);
 }
  
 std::string Titan::GetFirmwareVersion()
 {
+    if (!EnsureTitanInfoCached())
+        return "Firmware Version: (read failed)";
     std::string result;
-    uint8_t data[8];
-    Titan::Read(GetRecvID(RSP_TITAN_INFO), data);
     result += "Firmware Version: [";
-    result += std::to_string(data[1]);
+    result += std::to_string(cached_titan_info_[1]);
     result += ".";
-    result += std::to_string(data[2]);
+    result += std::to_string(cached_titan_info_[2]);
     result += ".";
-    result += std::to_string(data[3]);
+    result += std::to_string(cached_titan_info_[3]);
     result += "]";
-    return (result);  
+    return result;
 }
  
 std::string Titan::GetHardwareVersion()
 {
-    uint8_t data[8];
-    Titan::Read(GetRecvID(RSP_TITAN_INFO), data);
-    if ((int)data[4] == 1)
+    if (!EnsureTitanInfoCached())
+        return "Hardware: (read failed)";
+    if ((int)cached_titan_info_[4] == 1)
     {
-        return "Hardware: Titan Quad, Version: " + std::to_string(data[5]);
+        return "Hardware: Titan Quad, Version: " + std::to_string(cached_titan_info_[5]);
     }
-    else if ((int)data[4] == 2)
+    else if ((int)cached_titan_info_[4] == 2)
     {
-        return "Hardware: Titan Small, Version: " + std::to_string(data[5]);
+        return "Hardware: Titan Small, Version: " + std::to_string(cached_titan_info_[5]);
     }
     else
     {
-        return ("No Hardware Found!");
+        return "Hardware: Type " + std::to_string((int)cached_titan_info_[4]) + ", Rev " + std::to_string((int)cached_titan_info_[5]) + " (unknown type)";
     }
 }
  
 float Titan::GetControllerTemp()
 {
     uint8_t data[8];
-    Titan::Read(GetRecvID(RSP_MCU_TEMP), data);
+    Titan::Read(GetAddress(MCU_TEMP), data);
     return data[0] + (data[1] / 100.0);
 }
  
 bool Titan::GetLimitSwitch(uint8_t motor, uint8_t direction)
 {
     uint8_t data[8];
-    Titan::Read(GetRecvID(RSP_LIMIT_SWITCH), data);
+    Titan::Read(GetAddress(LIMIT_SWITCH), data);
     uint8_t index = 0;
     if (direction == 1)
     {
@@ -225,10 +245,27 @@ bool Titan::GetLimitSwitch(uint8_t motor, uint8_t direction)
  
 int16_t Titan::GetRPM(uint8_t motor)
 {
-    uint8_t data[8];
-    if (motor < 4)
-        Read(GetRecvID(static_cast<uint8_t>(RSP_RPM_0 + motor)), data);
-    return static_cast<int16_t>(data[0] | (data[1] << 8));
+    int16_t v = 0;
+    TryGetRPM(motor, &v);
+    return v;
+}
+
+bool Titan::TryGetRPM(uint8_t motor, int16_t* out_rpm)
+{
+    if (out_rpm == nullptr)
+        return false;
+    *out_rpm = 0;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    uint32_t addr;
+    if (motor == 0) addr = GetAddress(CAN_RPM_0);
+    else if (motor == 1) addr = GetAddress(CAN_RPM_1);
+    else if (motor == 2) addr = GetAddress(CAN_RPM_2);
+    else if (motor == 3) addr = GetAddress(CAN_RPM_3);
+    else addr = GetAddress(CAN_RPM_0);
+    if (!Read(addr, data))
+        return false;
+    *out_rpm = static_cast<int16_t>(data[0] | (data[1] << 8));
+    return true;
 }
  
 std::string Titan::GetSerialNumber()
@@ -239,9 +276,9 @@ std::string Titan::GetSerialNumber()
     std::stringstream stream1;
     std::stringstream stream2;
     std::stringstream stream3;
-    Titan::Read(GetRecvID(RSP_UID_WORD_1), data1);
-    Titan::Read(GetRecvID(RSP_UID_WORD_2), data2);
-    Titan::Read(GetRecvID(RSP_UID_WORD_3), data3);
+Titan::Read(GetAddress(RETURN_WORD_1), data1);
+        Titan::Read(GetAddress(RETURN_WORD_2), data2);
+        Titan::Read(GetAddress(RETURN_WORD_3), data3);
     int word1 = data1[0] + (data1[1] << 8) + (data1[2] << 16) + (data1[3] << 24);
     int word2 = data2[0] + (data2[1] << 8) + (data2[2] << 16) + (data2[3] << 24);
     int word3 = data3[0] + (data3[1] << 8) + (data3[2] << 16) + (data3[3] << 24);
@@ -256,36 +293,135 @@ std::string Titan::GetSerialNumber()
  
 double Titan::GetEncoderDistance(uint8_t motor)
 {
-    if (motor >= 4) return -1;
     uint8_t data[8];
-    Titan::Read(GetRecvID(static_cast<uint8_t>(RSP_ENCODER_0 + motor)), data);
-    int32_t ticks = static_cast<int32_t>(
-        static_cast<uint32_t>(data[0]) |
-        (static_cast<uint32_t>(data[1]) << 8) |
-        (static_cast<uint32_t>(data[2]) << 16) |
-        (static_cast<uint32_t>(data[3]) << 24)
-    );
-    if ((motor == 0 && invertEncoder0) || (motor == 1 && invertEncoder1) ||
-        (motor == 2 && invertEncoder2) || (motor == 3 && invertEncoder3))
-        ticks *= -1;
-    double dpt = (motor == 0) ? distPerTick_0 : (motor == 1) ? distPerTick_1 : (motor == 2) ? distPerTick_2 : distPerTick_3;
-    return ticks * dpt;
+    int32_t ticks = 0;
+    if (motor == 0)
+    {
+        Titan::Read(GetAddress(ENCODER_0), data);
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
+        if (invertEncoder0)
+        {
+            ticks *= -1;
+        }
+        return ticks * distPerTick_0;
+    }
+    if (motor == 1)
+    {
+        Titan::Read(GetAddress(ENCODER_1), data);
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
+        if (invertEncoder1)
+        {
+            ticks *= -1;
+        }
+        return ticks * distPerTick_1;
+    }
+    if (motor == 2)
+    {
+        Titan::Read(GetAddress(ENCODER_2), data);
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
+        if (invertEncoder2)
+        {
+            ticks *= -1;
+        }
+        return ticks * distPerTick_2;
+    }
+    if (motor == 3)
+    {
+        Titan::Read(GetAddress(ENCODER_3), data);
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
+        if (invertEncoder3)
+        {
+            ticks *= -1;
+        }
+        return ticks * distPerTick_3;
+    }
+    return -1;
 }
  
 int32_t Titan::GetEncoderCount(uint8_t motor)
 {
-    if (motor >= 4) return 0;
-    uint8_t data[8];
-    Titan::Read(GetRecvID(static_cast<uint8_t>(RSP_ENCODER_0 + motor)), data);
-    int32_t ticks = static_cast<int32_t>(
-        static_cast<uint32_t>(data[0]) |
-        (static_cast<uint32_t>(data[1]) << 8) |
-        (static_cast<uint32_t>(data[2]) << 16) |
-        (static_cast<uint32_t>(data[3]) << 24)
-    );
-    if ((motor == 0 && invertEncoder0) || (motor == 1 && invertEncoder1) ||
-        (motor == 2 && invertEncoder2) || (motor == 3 && invertEncoder3))
-        ticks *= -1;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    int32_t ticks = 0;
+    if (motor == 0)
+    {
+        if (!Titan::Read(GetAddress(ENCODER_0), data))
+            return 0;
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
+        if (invertEncoder0)
+        {
+            ticks *= -1;
+        }
+    }
+    else if (motor == 1)
+    {
+        if (!Titan::Read(GetAddress(ENCODER_1), data))
+            return 0;
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
+        if (invertEncoder1)
+        {
+            ticks *= -1;
+        }
+    }
+    else if (motor == 2)
+    {
+        if (!Titan::Read(GetAddress(ENCODER_2), data))
+            return 0;
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
+        if (invertEncoder2)
+        {
+            ticks *= -1;
+        }
+    }
+    else if (motor == 3)
+    {
+        if (!Titan::Read(GetAddress(ENCODER_3), data))
+            return 0;
+        ticks = static_cast<int32_t>(
+            static_cast<uint32_t>(data[0]) |
+            (static_cast<uint32_t>(data[1]) << 8) |
+            (static_cast<uint32_t>(data[2]) << 16) |
+            (static_cast<uint32_t>(data[3]) << 24)
+        );
+        if (invertEncoder3)
+        {
+            ticks *= -1;
+        }
+    }
     return ticks;
 }
 
@@ -312,35 +448,54 @@ void Titan::ConfigureEncoder(uint8_t motor, double cfg)
 void Titan::ResetEncoder(uint8_t motor)
 {
     uint8_t data[8] = {motor, 0, 0, 0, 0, 0, 0, 0};
-    Titan::Write(GetSendID(CMD_RESET_ENCODER), data, 0);
+    Titan::Write(GetAddress(RESET_ENCODER), data, 0);
 }
  
 double Titan::GetCypherAngle(uint8_t port)
 {
     uint8_t data[8];
-    Titan::Read(GetRecvID(RSP_CYPHER_OUTPUT), data);
     int index = port * 2;
-    if (index + 1 >= 8) return 0.0;
-    uint16_t angle_x100 = static_cast<uint16_t>(data[index] | (data[index + 1] << 8));
-    return static_cast<double>(angle_x100) / 100.0;
+    Titan::Read(GetAddress(CYPHER_OUTPUT), data);
+    return ((static_cast<double>(data[index]) + (static_cast<double>(data[index+1] << 8))) / 100.0);
 }
  
 void Titan::SetSpeed(uint8_t motor, double speedCfg)
 {
-    if (motor >= 4) return;
+    if (motor > 3)
+        return;
+    /* Apply invert (direction) for this channel. */
     if (motor == 0 && invertMotor0) speedCfg *= -1;
     else if (motor == 1 && invertMotor1) speedCfg *= -1;
     else if (motor == 2 && invertMotor2) speedCfg *= -1;
     else if (motor == 3 && invertMotor3) speedCfg *= -1;
     if (speedCfg > 1.0) speedCfg = 1.0;
     if (speedCfg < -1.0) speedCfg = -1.0;
-    int duty = static_cast<int>(std::abs(speedCfg) * 100.0);
+    int duty = static_cast<int>(speedCfg >= 0 ? speedCfg * 100.0 : -speedCfg * 100.0);
     if (duty > 100) duty = 100;
-    last_duty_[motor] = static_cast<uint8_t>(duty);
-    uint8_t data[8] = { last_duty_[0], last_duty_[1], last_duty_[2], last_duty_[3], 0, 0, 0, 0 };
-    Titan::Write(GetSendID(CMD_SET_MOTOR_SPEED), data, 0);
+    if (duty < 0) duty = 0;
+    lastDuty_[motor] = static_cast<uint8_t>(duty);
+    if (speedCfg >= 0)
+        lastDirection_ |= (1u << motor);
+    else
+        lastDirection_ &= ~(1u << motor);
+    uint8_t data[8] = { lastDuty_[0], lastDuty_[1], lastDuty_[2], lastDuty_[3], lastDirection_, 0, 0, 0 };
+    Titan::Write(GetAddress(SET_MOTOR_SPEED), data, 0);
 }
- 
+
+void Titan::SetSpeedAll(double duty)
+{
+    if (duty > 1.0) duty = 1.0;
+    if (duty < 0.0) duty = 0.0;
+    int d = static_cast<int>(duty * 100.0);
+    if (d > 100) d = 100;
+    if (d < 0) d = 0;
+    uint8_t u = static_cast<uint8_t>(d);
+    lastDuty_[0] = lastDuty_[1] = lastDuty_[2] = lastDuty_[3] = u;
+    lastDirection_ = 0x0F;   /* all forward */
+    uint8_t data[8] = { u, u, u, u, lastDirection_, 0, 0, 0 };
+    Write(GetAddress(SET_MOTOR_SPEED), data, 0);
+}
+
 void Titan::InvertMotorDirection(uint8_t motor)
 {
     if (motor == 0)
@@ -406,4 +561,143 @@ void Titan::InvertMotor(uint8_t motor)
     InvertMotorDirection(motor);
     InvertMotorRPM(motor);
     InvertEncoderDirection(motor);
+}
+
+/* -------- Titan2 extended CAN API -------- */
+
+bool Titan::GetTargetRPMFromDevice(int16_t targetRpm[4])
+{
+    if (targetRpm == nullptr)
+        return false;
+    for (int i = 0; i < 4; i++)
+        targetRpm[i] = 0;
+    uint8_t req[8] = {0};
+    Write(GetAddress(GET_TARGET_RPM), req, 0);
+    /* Device also sends RSP_TARGET_RPM every 100ms; wait then read so we get either reply or periodic frame */
+    vmx_->time.DelayMilliseconds(80);
+    uint8_t data[8] = {0};
+    for (int attempt = 0; attempt < 5; attempt++)
+    {
+        if (Read(GetAddress(TARGET_RPM), data))
+        {
+            for (int i = 0; i < 4; i++)
+                targetRpm[i] = static_cast<int16_t>(data[i*2] | (data[i*2+1] << 8));
+            return true;
+        }
+        vmx_->time.DelayMilliseconds(25);
+    }
+    return false;
+}
+
+void Titan::SetTargetVelocity(uint8_t motor, int16_t velocityRpm)
+{
+    if (motor >= 4) return;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = motor;
+    data[1] = static_cast<uint8_t>(velocityRpm & 0xFF);
+    data[2] = static_cast<uint8_t>((velocityRpm >> 8) & 0xFF);
+    Write(GetAddress(SET_TARGET_VELOCITY), data, 0);
+}
+
+void Titan::SetTargetDistance(uint8_t motor, int32_t distanceCounts)
+{
+    if (motor >= 4) return;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = motor;
+    data[1] = static_cast<uint8_t>(distanceCounts & 0xFF);
+    data[2] = static_cast<uint8_t>((distanceCounts >> 8) & 0xFF);
+    data[3] = static_cast<uint8_t>((distanceCounts >> 16) & 0xFF);
+    Write(GetAddress(SET_TARGET_DISTANCE), data, 0);
+}
+
+void Titan::SetTargetAngle(uint8_t motor, double angleDeg)
+{
+    if (motor >= 4) return;
+    if (angleDeg < 0.0) angleDeg = 0.0;
+    if (angleDeg > 360.0) angleDeg = 360.0;
+    uint16_t angle_x100 = static_cast<uint16_t>(angleDeg * 100.0);
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = motor;
+    data[1] = static_cast<uint8_t>(angle_x100 & 0xFF);
+    data[2] = static_cast<uint8_t>((angle_x100 >> 8) & 0xFF);
+    Write(GetAddress(SET_TARGET_ANGLE), data, 0);
+}
+
+void Titan::SetPositionHold(uint8_t motor, bool hold)
+{
+    if (motor >= 4) return;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = motor;
+    data[1] = hold ? 1 : 0;
+    Write(GetAddress(SET_POSITION_HOLD), data, 0);
+}
+
+void Titan::SetEncoderResolution(uint8_t channel, uint16_t cpr)
+{
+    if (channel >= 4) return;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = channel;
+    data[1] = static_cast<uint8_t>(cpr & 0xFF);
+    data[2] = static_cast<uint8_t>((cpr >> 8) & 0xFF);
+    Write(GetAddress(SET_ENCODER_RESOLUTION), data, 0);
+}
+
+void Titan::SetCurrentLimit(uint8_t channel, float limitAmps)
+{
+    if (channel >= 4) return;
+    if (limitAmps < 0.0f) limitAmps = 0.0f;
+    /* Titan2: send limit in 0.01A (e.g. 150 = 1.5A); firmware may need (float)limit/100.0f */
+    uint16_t limit_x100 = static_cast<uint16_t>(limitAmps * 100.0f);
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = channel;
+    data[1] = static_cast<uint8_t>(limit_x100 & 0xFF);
+    data[2] = static_cast<uint8_t>((limit_x100 >> 8) & 0xFF);
+    Write(GetAddress(SET_CURRENT_LIMIT), data, 0);
+}
+
+void Titan::SetCurrentLimitMode(uint8_t channel, uint8_t mode)
+{
+    if (channel >= 4) return;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = channel;
+    data[1] = (mode != 0) ? 1 : 0;
+    Write(GetAddress(SET_CURRENT_LIMIT_MODE), data, 0);
+}
+
+void Titan::SetMotorStopMode(uint8_t mode)
+{
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = mode;
+    Write(GetAddress(SET_MOTOR_STOP_MODE), data, 0);
+}
+
+void Titan::SetPIDType(uint8_t type)
+{
+    if (type > 1) return;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = type;
+    Write(GetAddress(SET_PID_TYPE), data, 0);
+}
+
+void Titan::AutotuneAll()
+{
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    Write(GetAddress(AUTOTUNE_ALL), data, 0);
+}
+
+void Titan::SetSensitivity(uint8_t motor, uint8_t sensitivity)
+{
+    if (motor >= 4 || sensitivity > 10) return;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = motor;
+    data[1] = sensitivity;
+    Write(GetAddress(SET_SENSITIVITY), data, 0);
+}
+
+void Titan::DisableMotor(uint8_t motor)
+{
+    if (motor >= 4) return;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = motor;
+    Write(GetAddress(DISABLE_MOTOR), data, 0);
 }
