@@ -19,6 +19,17 @@ namespace studica_driver
 #define BASE                       (TITAN_DEVICE_TYPE + TITAN_MANUFACTURER_ID)
 #define OFFSET                     TITAN_OFFSET
 
+/*
+ * Enable/safe (Titan device behavior – host must match):
+ * - Device powers up disabled; host MUST call Enable(true) before any SetSpeed/SetTargetVelocity.
+ * - ENABLED_FLAG: device sets robotDisabled=0 and allows motor commands.
+ * - DISABLED_FLAG: device stops motors immediately and sets disabled.
+ * - Any valid CAN message refreshes device "last RX" time; if no message for 200 ms → brake/coast + disabled, 10 s → coast + disabled.
+ * - SET_MOTOR_SPEED is only applied when device is enabled (robotDisabled==0).
+ * - When controlling via CAN, send commands (e.g. SetSpeed or SetTargetVelocity) at least every ~150 ms to avoid 200 ms timeout.
+ */
+#define TITAN_CAN_KEEPALIVE_MS     150   /* Send CAN at least this often when controlling to avoid device 200 ms timeout */
+
 /* CAN API: address = BASE + canID + (OFFSET * index). Use GetAddress(XXX) to add canID. */
 #define DISABLED_FLAG              BASE
 #define ENABLED_FLAG               BASE + (OFFSET * 1)
@@ -64,6 +75,7 @@ class Titan
     public:
         Titan(const uint8_t &canID, const uint16_t &motorFreq, const float &distPerTick, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
         ~Titan();
+        /** Enable(true): send ENABLED_FLAG so device allows motor commands. Enable(false): send DISABLED_FLAG, motors stop immediately. Call Enable(true) before any SetSpeed/SetTargetVelocity. */
         void Enable(bool enable);
         void SetupEncoder(uint8_t encoder);
         uint8_t GetID();
@@ -81,8 +93,9 @@ class Titan
         void ConfigureEncoder(uint8_t motor, double cfg);
         void ResetEncoder(uint8_t motor);
         double GetCypherAngle(uint8_t port);
+        /** SET_MOTOR_SPEED (one frame per motor). Only applied when device is enabled; resend within TITAN_CAN_KEEPALIVE_MS to avoid 200 ms timeout. */
         void SetSpeed(uint8_t motor, double speedCfg);
-        /** Set all 4 channels to same duty (0..1) in one CAN frame. Use to avoid jitter from sending 4 frames. */
+        /** Set all 4 channels to same duty (0..1). Sends 4 CAN frames, one per motor (Titan format [motor, duty, inA, inB]). Resend within TITAN_CAN_KEEPALIVE_MS when holding. */
         void SetSpeedAll(double duty);
         void InvertMotorDirection(uint8_t motor);
         void InvertMotorRPM(uint8_t motor);
@@ -124,7 +137,7 @@ class Titan
         uint8_t cached_titan_info_[8] = {0};
         bool cached_titan_info_valid_ = false;
         bool EnsureTitanInfoCached();
-        /** Titan2 SET_MOTOR_SPEED: one frame = data[0..3] = ch0..ch3 duty 0-100%, data[4] = direction bits (bit i: 1=forward, 0=reverse). */
+        /** SET_MOTOR_SPEED (same as Titan): one frame per motor: data[0]=motor, data[1]=duty, data[2]=inA, data[3]=inB. */
         uint8_t lastDuty_[4] = {0, 0, 0, 0};
         uint8_t lastDirection_ = 0x0F;   /* all forward */
         // Motor Flags

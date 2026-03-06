@@ -132,7 +132,7 @@ bool Titan::Read(uint32_t address, uint8_t* data)
     return true;
 }
  
-void Titan::Enable(bool enable) // Not really a fan of this should be tied to the watchdog somehow aka checking if the watchdog is fed.
+void Titan::Enable(bool enable)
 {
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     if (enable)
@@ -141,7 +141,11 @@ void Titan::Enable(bool enable) // Not really a fan of this should be tied to th
     }
     else
     {
-        Titan::Write(GetAddress(DISABLED_FLAG), data, 10);
+        for (int i = 0; i < 3; i++)
+        {
+            Titan::Write(GetAddress(DISABLED_FLAG), data, 10);
+            vmx_->time.DelayMilliseconds(50);
+        }
         for (int i = 0; i < 4; i++)
             lastDuty_[i] = 0;
     }
@@ -474,11 +478,14 @@ void Titan::SetSpeed(uint8_t motor, double speedCfg)
     if (duty > 100) duty = 100;
     if (duty < 0) duty = 0;
     lastDuty_[motor] = static_cast<uint8_t>(duty);
+    uint8_t inA = (speedCfg >= 0) ? 1 : 0;
+    uint8_t inB = (speedCfg >= 0) ? 0 : 1;
     if (speedCfg >= 0)
         lastDirection_ |= (1u << motor);
     else
         lastDirection_ &= ~(1u << motor);
-    uint8_t data[8] = { lastDuty_[0], lastDuty_[1], lastDuty_[2], lastDuty_[3], lastDirection_, 0, 0, 0 };
+    /* Titan format: one frame per motor [motor, duty, inA, inB] */
+    uint8_t data[8] = { motor, static_cast<uint8_t>(duty), inA, inB, 0, 0, 0, 0 };
     Titan::Write(GetAddress(SET_MOTOR_SPEED), data, 0);
 }
 
@@ -492,8 +499,12 @@ void Titan::SetSpeedAll(double duty)
     uint8_t u = static_cast<uint8_t>(d);
     lastDuty_[0] = lastDuty_[1] = lastDuty_[2] = lastDuty_[3] = u;
     lastDirection_ = 0x0F;   /* all forward */
-    uint8_t data[8] = { u, u, u, u, lastDirection_, 0, 0, 0 };
-    Write(GetAddress(SET_MOTOR_SPEED), data, 0);
+    /* Titan format: one frame per motor [motor, duty, inA, inB]; send 4 frames. */
+    for (uint8_t m = 0; m < 4; m++)
+    {
+        uint8_t data[8] = { m, u, 1, 0, 0, 0, 0, 0 };
+        Write(GetAddress(SET_MOTOR_SPEED), data, 0);
+    }
 }
 
 void Titan::InvertMotorDirection(uint8_t motor)

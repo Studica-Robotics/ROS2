@@ -22,11 +22,21 @@
  #include <unistd.h>
  #include "Host/titan.h"
  
+ static studica_driver::Titan* s_titan_for_atexit = nullptr;
+ static void atexit_disable_titan(void)
+ {
+     if (s_titan_for_atexit)
+     {
+         s_titan_for_atexit->Enable(false);
+         usleep(400 * 1000);
+     }
+ }
+ 
  /* 每个速度档位保持时间 (秒) */
  static const int HOLD_SEC = 5;
  /* 转速采样间隔 (毫秒)，电机转时按此间隔打印 RPM */
  static const int RPM_PRINT_INTERVAL_MS = 200;
- /* Phase 1 用 SetSpeed 时，每隔多久重发一次 SET_MOTOR_SPEED（固件需周期性收到才能维持输出） */
+ /* Phase 1 用 SetSpeed 时，每隔多久重发一次 SET_MOTOR_SPEED。须 < TITAN_CAN_KEEPALIVE_MS(150) 以免设备 200ms 超时 disable。 */
  static const int SET_SPEED_RESEND_MS = 50;
  
  /* SetTargetVelocity 目标 RPM：100, 50, 0, 80（与 SetSpeed 档位对应，单位 rpm） */
@@ -35,7 +45,7 @@
  static const int16_t RPM_80  = 80;
  static const int16_t RPM_0   = 0;
  
- /* Phase 2/3/4 专用：周期重发 SetTargetVelocity(0..3, target_rpm)，使目标切换（100→50→0→80→0）生效，并每 200ms 打印 RPM */
+ /* Phase 2/3/4 专用：周期重发 SetTargetVelocity。须 < TITAN_CAN_KEEPALIVE_MS 以免设备 200ms 超时；并每 200ms 打印 RPM */
  static const int TARGET_VELOCITY_RESEND_MS = 50;
  
  static void run_for_seconds_target_velocity_and_rpm(studica_driver::Titan& titan, int seconds_sec, int16_t target_rpm, const char* label)
@@ -68,18 +78,14 @@
      }
  }
  
- /* 停转：仅用 SetSpeed(motor,0)，顺序 3→2→1→0 避免 [0,0,0,0] 被当 legacy 只停 ch0。
-  * 不在 Phase 1 发 SetTargetVelocity(0)，否则 HandleSetVelocity(0) 会改设备状态并导致 encoder RPM 一直为 0。 */
+ /* 停转：SetSpeedAll(0) 发 4 帧 [motor, 0, 1, 0] 停四路。不在 Phase 1 发 SetTargetVelocity(0)，否则会改设备状态。 */
  static void stop_all(studica_driver::Titan& titan)
  {
-     titan.SetSpeed(3, 0.0);
-     titan.SetSpeed(2, 0.0);
-     titan.SetSpeed(1, 0.0);
-     titan.SetSpeed(0, 0.0);
+     titan.SetSpeedAll(0.0);
      usleep(150 * 1000);
  }
  
- /* Phase 1 专用：每 SET_SPEED_RESEND_MS 重发 SetSpeed(0..3, duty)；duty<0 为反转，duty=0 时仅 SetSpeed 停转；每 200ms 打印 RPM */
+ /* Phase 1 专用：每 SET_SPEED_RESEND_MS 重发 SET_MOTOR_SPEED（Titan 格式一帧一电机）；duty<0 为反转，duty=0 用 SetSpeedAll(0) 停转；每 200ms 打印 RPM */
  static void run_for_seconds_set_speed_and_rpm(studica_driver::Titan& titan, int seconds_sec, double duty, const char* label)
  {
      int total_ms = seconds_sec * 1000;
@@ -89,21 +95,22 @@
      {
          if (duty == 0.0)
          {
-             /* 顺序 3→2→1→0；Phase 1 仅用 SetSpeed 停转，不发 SetTargetVelocity(0) 以免影响 encoder */
-             titan.SetSpeed(3, 0.0);
-             titan.SetSpeed(2, 0.0);
-             titan.SetSpeed(1, 0.0);
-             titan.SetSpeed(0, 0.0);
+             titan.SetSpeedAll(0.0);
          }
          else if (duty < 0.0)
          {
              titan.SetSpeed(0, duty);
+             usleep(3 * 1000);
              titan.SetSpeed(1, duty);
+             usleep(3 * 1000);
              titan.SetSpeed(2, duty);
+             usleep(3 * 1000);
              titan.SetSpeed(3, duty);
          }
          else
+         {
              titan.SetSpeedAll(duty);
+         }
          int sleep_ms = SET_SPEED_RESEND_MS;
          if (elapsed_ms + sleep_ms > total_ms) sleep_ms = total_ms - elapsed_ms;
          usleep(sleep_ms * 1000);
@@ -134,7 +141,9 @@
      printf("CAN ID: %u\n", canId);
  
      studica_driver::Titan titan(canId, 2000, 1.0f);
-     titan.Enable(true);
+     s_titan_for_atexit = &titan;
+     atexit(atexit_disable_titan);
+     titan.Enable(true);   /* Device powers up disabled; must send ENABLED_FLAG before motor commands */
      sleep(1);
  
      /* 先设 PIDType 0，停转清空目标，再跑 SetSpeed */
@@ -161,7 +170,7 @@
              printf("  >>> No RPM frames. Check: (1) Device CAN ID matches %u (2) Device sending sensor data every 10ms.\n", (unsigned)canId);
      }
  
-     /* ---------- Phase 1: SetSpeed 100 -> 50 -> 0 -> 80 -> 0（周期重发 SET_MOTOR_SPEED；duty=0 时同时发目标 0 以停转）---------- */
+     /* ---------- Phase 1: SetSpeed 100 -> 50 -> 0 -> 80 -> 0（周期重发 SET_MOTOR_SPEED，Titan 格式一帧一电机；duty=0 时 SetSpeedAll(0) 停转）---------- */
      printf("\n--- Phase 1: SetPIDType(0), SetSpeed (duty 100%%, 50%%, 0, 80%%, 0) ---\n");
  
      printf("  SetSpeed all -> 100%% (resend every %d ms)\n", SET_SPEED_RESEND_MS);
@@ -174,14 +183,14 @@
      printf("  SetSpeed all -> 50%%\n");
      run_for_seconds_set_speed_and_rpm(titan, HOLD_SEC, 0.5, "50%");
  
-     printf("  SetSpeed all -> 0 (duty + target 0 to stop)\n");
+     printf("  SetSpeed all -> 0 (SetSpeedAll(0) to stop)\n");
      stop_all(titan);
      run_for_seconds_set_speed_and_rpm(titan, 2, 0.0, "0");
  
      printf("  SetSpeed all -> 80%%\n");
      run_for_seconds_set_speed_and_rpm(titan, HOLD_SEC, 0.8, "80%");
  
-     printf("  SetSpeed all -> 0 (duty + target 0 to stop)\n");
+     printf("  SetSpeed all -> 0 (SetSpeedAll(0) to stop)\n");
      stop_all(titan);
      run_for_seconds_set_speed_and_rpm(titan, 2, 0.0, "0");
  
@@ -296,7 +305,12 @@
  
      printf("\n--- Stop & Disable ---\n");
      stop_all(titan);
-     titan.Enable(false);
+     for (int i = 0; i < 3; i++)
+     {
+         titan.Enable(false);
+         usleep(80 * 1000);
+     }
+     usleep(400 * 1000);
      printf("Done.\n");
      return 0;
  }
