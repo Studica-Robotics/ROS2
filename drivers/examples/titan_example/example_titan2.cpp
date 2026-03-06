@@ -1,23 +1,23 @@
 /*
- * VMX-Pi Host: Titan2 四通道速度序列测试
+ * VMX-Pi Host: Titan2 4-channel speed sequence test
  *
- * 流程：
- *   1. SetSpeed 四路同占空比: 100% -> 50% -> 0 -> 80% -> 0 (duty cycle %)
- *   2. SetPIDType(0)，SetTargetVelocity 四路同目标 RPM: 100 -> 50 -> 0 -> 80 -> 0
- *   3. SetPIDType(1)，同上目标 RPM 再来一遍
- *   4. SetSensitivity(0..3, 10)，同上目标 RPM 再来一遍
- * 电机转动期间持续输出 encoder 读到的 RPM。
+ * Flow:
+ *   1. SetSpeed all 4 channels same duty cycle: 100% -> 50% -> 0 -> 80% -> 0 (duty cycle %)
+ *   2. SetPIDType(0), SetTargetVelocity all 4 same target RPM: 100 -> 50 -> 0 -> 80 -> 0
+ *   3. SetPIDType(1), same target RPM sequence again
+ *   4. SetSensitivity(0..3, 10), same target RPM sequence again
+ * Continuously output encoder RPM while motors are running.
  *
- * 支持 1 或 2 个 Titan：传两个 CAN ID 时，对两个设备发相同指令并同时打印两边 RPM。
+ * Supports 1 or 2 Titans: when two CAN IDs are passed, same commands are sent to both devices and RPM from both is printed.
  *
- * 编译（树莓派，Titan2 根目录）:
+ * Build (Raspberry Pi, Titan2 root):
  *   g++ -o titan_speed_sequence_test VMX_HOST_TITAN_SPEED_SEQUENCE_TEST.cpp Host/titan.cpp \
  *       -I. -IHost -I/usr/local/include/vmxpi \
  *       -L/usr/local/frc/third-party/lib -lvmxpi_hal_cpp -lpthread -std=c++11
  *
- * 运行: sudo ./titan_speed_sequence_test [CANID1] [CANID2]
- *       单机: sudo ./titan_speed_sequence_test 20
- *       双机: sudo ./titan_speed_sequence_test 20 21
+ * Run: sudo ./titan_speed_sequence_test [CANID1] [CANID2]
+ *      Single device: sudo ./titan_speed_sequence_test 20
+ *      Two devices:   sudo ./titan_speed_sequence_test 20 21
  */
 
  #include <stdio.h>
@@ -49,25 +49,25 @@
      usleep(400 * 1000);
  }
  
- /* 每个速度档位保持时间 (秒) */
+/* Hold time per speed step (seconds) */
  static const int HOLD_SEC = 5;
- /* 转速采样间隔 (毫秒)，电机转时按此间隔打印 RPM */
+ /* RPM sampling interval (ms); print RPM at this interval while motor runs */
  static const int RPM_PRINT_INTERVAL_MS = 200;
- /* Phase 1 用 SetSpeed 时，每隔多久重发一次 SET_MOTOR_SPEED。须 < TITAN_CAN_KEEPALIVE_MS(150) 以免设备 200ms 超时 disable。 */
+ /* In Phase 1 with SetSpeed, how often to resend SET_MOTOR_SPEED. Must be < TITAN_CAN_KEEPALIVE_MS(150) to avoid device 200ms timeout disable. */
  static const int SET_SPEED_RESEND_MS = 50;
- 
- /* SetTargetVelocity 目标 RPM：100, 50, 0, 80（与 SetSpeed 档位对应，单位 rpm） */
+
+ /* SetTargetVelocity target RPM: 100, 50, 0, 80 (matches SetSpeed steps, unit rpm) */
  static const int16_t RPM_100 = 100;
  static const int16_t RPM_50  = 50;
  static const int16_t RPM_80  = 80;
  static const int16_t RPM_0   = 0;
  
- /* Phase 2/3/4 专用：周期重发 SetTargetVelocity。须 < TITAN_CAN_KEEPALIVE_MS 以免设备 200ms 超时；并每 200ms 打印 RPM */
+/* Phase 2/3/4: periodically resend SetTargetVelocity. Must be < TITAN_CAN_KEEPALIVE_MS to avoid device 200ms timeout; print RPM every 200ms */
  static const int TARGET_VELOCITY_RESEND_MS = 50;
- 
- /* 双机时每发完一台的 4 帧后等 VMX 把该批帧发上总线，再发下一台 */
+
+ /* When 2 devices: after sending 4 frames for one device, wait for VMX to put them on bus before sending to the next */
  static const int INTER_DEVICE_SEND_DELAY_MS = 20;
- /* 双机时发送周期拉长到 80ms，让 VMX 在两次发送之间有足够时间排空 TX 队列，否则从第三轮起会积压延迟（仍 < 150ms keepalive） */
+ /* When 2 devices: lengthen send period to 80ms so VMX has time to drain TX queue between sends; otherwise backlog from 3rd round (still < 150ms keepalive) */
  static const int SEND_PERIOD_TWO_DEVICES_MS = 80;
  
  /* Send on a strict 50ms schedule so two Titans never see ~0.5s gap caused by 8 blocking Reads. */
@@ -126,7 +126,7 @@
      }
  }
  
- /* 停转：SetSpeedAll(0) 发 4 帧 [motor, 0, 1, 0] 停四路。双机时两台之间短延时让 VMX 先发完第一台再发第二台。 */
+ /* Stop: SetSpeedAll(0) sends 4 frames [motor, 0, 1, 0] to stop all 4. With 2 devices, short delay between them so VMX sends first device before second. */
  static void stop_all(studica_driver::Titan* titans[], int num_titans)
  {
      for (int t = 0; t < num_titans; t++)
@@ -241,14 +241,14 @@
          titans[t]->Enable(true);
      sleep(1);
  
-     /* 先设 PIDType 0，停转清空目标，再跑 SetSpeed */
-     for (int t = 0; t < num_titans; t++)
+    /* Set PIDType 0 first, stop and clear target, then run SetSpeed */
+    for (int t = 0; t < num_titans; t++)
          titans[t]->SetPIDType(0);
      stop_all(titans, num_titans);
      usleep(80 * 1000);
  
-     /* 诊断：确认能收到设备应答，并检查是否收到 RPM 帧 */
-     for (int t = 0; t < num_titans; t++)
+    /* Diagnostics: confirm device response and check if RPM frames are received */
+    for (int t = 0; t < num_titans; t++)
      {
          uint8_t devId = titans[t]->GetID();
          std::string fw = titans[t]->GetFirmwareVersion();
@@ -292,7 +292,7 @@
  
      usleep(150 * 1000);
  
-     /* ---------- Phase 2: PIDType 0, SetTargetVelocity 四路同目标 RPM 100->50->0->80->0 ---------- */
+     /* ---------- Phase 2: PIDType 0, SetTargetVelocity all 4 same target RPM 100->50->0->80->0 ---------- */
      printf("\n--- Phase 2: SetPIDType(0), SetTargetVelocity all 4 (target RPM 100->50->0->80->0) ---\n");
      for (int t = 0; t < num_titans; t++)
          titans[t]->SetPIDType(0);
@@ -337,7 +337,7 @@
      printf("  SetTargetVelocity all 4 -> 0\n");
      run_for_seconds_target_velocity_and_rpm(titans, num_titans, 1, RPM_0, "0rpm");
  
-     /* ---------- Phase 3: PIDType 1 需先 Autotune，再 SetTargetVelocity ---------- */
+     /* ---------- Phase 3: PIDType 1 requires Autotune first, then SetTargetVelocity ---------- */
      printf("\n--- Phase 3: SetPIDType(1), AutotuneAll(), then SetTargetVelocity (same sequence) ---\n");
      for (int t = 0; t < num_titans; t++)
          titans[t]->Enable(true);
@@ -387,7 +387,7 @@
      printf("  SetTargetVelocity all 4 -> 0\n");
      run_for_seconds_target_velocity_and_rpm(titans, num_titans, 1, RPM_0, "0rpm");
  
-     /* ---------- Phase 4: Sensitivity=10, SetTargetVelocity 同样速度 ---------- */
+     /* ---------- Phase 4: Sensitivity=10, SetTargetVelocity same speed sequence ---------- */
      printf("\n--- Phase 4: SetSensitivity(0..3, 10), SetTargetVelocity (same sequence) ---\n");
      for (int t = 0; t < num_titans; t++)
      {
