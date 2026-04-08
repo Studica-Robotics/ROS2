@@ -99,6 +99,7 @@ DiffDrive::DiffDrive(
     if (invert_rear_right) titan_->InvertMotor(rr_);
 
     titan_->Enable(true);
+    titan_->SetPIDType(0);  // type 0 = SetSpeed (duty-cycle), required by current Titan firmware
 
     odom_->setWheelParams(wheelbase_);
     odom_->init(this->now());
