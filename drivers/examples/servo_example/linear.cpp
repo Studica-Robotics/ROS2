@@ -1,9 +1,9 @@
 #include "servo.h"
-#include <thread>
 #include <chrono>
+#include <thread>
 
 #define SERVO_PIN 12
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     VMXChannelIndex port = SERVO_PIN;
     studica_driver::Servo servo(port, studica_driver::ServoType::Linear, 0, 100);

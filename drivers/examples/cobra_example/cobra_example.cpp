@@ -1,9 +1,10 @@
-#include "cobra.h"
-#include <thread>
-#include <chrono>
 #include "VMXPi.h"
+#include "cobra.h"
+#include <chrono>
+#include <thread>
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[])
+{
 
     std::shared_ptr<VMXPi> vmx_ = std::make_shared<VMXPi>(true, 50);
 

@@ -1,0 +1,26 @@
+#pragma once
+
+#include "VMXPi.h"
+#include <iostream>
+#include <memory>
+#include <stdio.h>
+
+namespace studica_driver
+{
+
+    class AnalogInput
+    {
+        public:
+            AnalogInput(VMXChannelIndex port, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
+            ~AnalogInput();
+
+            float GetAverageVoltage(float& volt);
+
+        private:
+            std::shared_ptr<VMXPi> vmx_;
+            VMXChannelIndex port_;
+            VMXResourceHandle accumulator_res_handle_;
+            void DisplayVMXError(VMXErrorCode vmxerr);
+    };
+
+} // namespace studica_driver
