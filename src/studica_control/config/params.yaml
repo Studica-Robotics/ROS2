@@ -32,31 +32,6 @@ control_server:
         port: 8
         topic: "duty_cycle_encoder"
 
-    diff_drive_component:
-      enabled: true
-      name: "diff_drive_controller"
-      can_id: 42
-      motor_freq: 15600
-      ticks_per_rotation: 1464
-      wheel_radius: 0.05 # in metres
-      wheelbase: 0.28 # in metres
-      width: 0.3 # in metres
-      front_left: 2
-      front_right: 0
-      rear_left: 3
-      rear_right: 1
-      invert_front_left: false
-      invert_front_right: true
-      invert_rear_left: false
-      invert_rear_right: true
-    
-    diff_drive_odometry:
-      name: "differential_odom"
-      use_imu: true
-      imu_topic: "imu"
-      topic: "odom"
-      publish_tf: false
-
     dio:
       enabled: true
       sensors: ["dio"]
@@ -100,30 +75,6 @@ control_server:
       name: "imu"
       topic: "imu"
 
-    mecanum_drive_component:
-      enabled: false
-      name: "mecanum_drive_controller"
-      can_id: 42
-      motor_freq: 15600
-      ticks_per_rotation: 1464
-      wheel_radius: 0.05 # in metres
-      wheelbase: 0.28 # in metres
-      width: 0.3 # in metres
-      front_left: 2
-      front_right: 0
-      rear_left: 3
-      rear_right: 1
-      invert_front_left: false
-      invert_front_right: true
-      invert_rear_left: false
-      invert_rear_right: true
-
-    mecanum_drive_odometry:
-      name: "mecanum_odom"
-      use_imu: false
-      imu_topic: "imu"
-      topic: "odom"
-
     servo:
       enabled: false
       sensors: ["servo"]
@@ -161,25 +112,3 @@ control_server:
         ping: 10
         echo: 11
         topic: "ultrasonic_range2"
-
-
-# Smooths cmd_vel to prevent sudden jerks. The launch file wires:
-#   /cmd_vel -> velocity_smoother -> /cmd_vel_smoothed
-#   drivetrain subscribes to /cmd_vel_smoothed
-velocity_smoother:
-  ros__parameters:
-    use_sim_time: false
-    smoothing_frequency: 50.0
-    scale_velocities: false
-    feedback: "OPEN_LOOP"
-    odom_topic: "odom"
-    odom_duration: 0.1
-    deadband_velocity: [0.0, 0.0, 0.0]
-    # If your upstream publisher only sends occasional cmd_vel messages (not a continuous stream),
-    # this timeout will otherwise force the smoother output back to zero.
-    velocity_timeout: 5.0
-    # Nav2 velocity smoother uses [vx, vy, wz]
-    max_velocity: [0.7, 0.0, 1.8]
-    min_velocity: [-0.7, 0.0, -1.8]
-    max_accel: [0.6, 0.0, 2.5]
-    max_decel: [-0.9, 0.0, -3.0]
