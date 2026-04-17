@@ -6,12 +6,10 @@
 
 #include "studica_control/cobra_component.h"
 #include "studica_control/dc_encoder_component.h"
-#include "studica_control/diff_drive_component.h"
 #include "studica_control/dio_component.h"
 #include "studica_control/encoder_component.h"
-//#include "studica_control/gamepad_component.h"
+#include "studica_control/gamepad_component.h"
 #include "studica_control/imu_component.h"
-#include "studica_control/mecanum_drive_component.h"
 #include "studica_control/servo_component.h"
 #include "studica_control/sharp_component.h"
 #include "studica_control/titan_component.h"
@@ -34,12 +32,10 @@ public:
     bool initialize() {
         this->declare_parameter<bool>("cobra.enabled", false);
         this->declare_parameter<bool>("duty_cycle.enabled", false);
-        this->declare_parameter<bool>("diff_drive_component.enabled", false);
         this->declare_parameter<bool>("dio.enabled", false);
         this->declare_parameter<bool>("encoder.enabled", false);
-        //this->declare_parameter<bool>("gamepad.enabled", false);
+        this->declare_parameter<bool>("gamepad.enabled", false);
         this->declare_parameter<bool>("imu.enabled", false);
-        this->declare_parameter<bool>("mecanum_drive_component.enabled", false);
         this->declare_parameter<bool>("servo.enabled", false);
         this->declare_parameter<bool>("sharp.enabled", false);
         this->declare_parameter<bool>("titan.enabled", false);
@@ -52,21 +48,14 @@ public:
 
         bool cobra_enabled = this->get_parameter("cobra.enabled").as_bool();
         bool duty_cycle_enabled = this->get_parameter("duty_cycle.enabled").as_bool();
-        bool diff_drive_enabled = this->get_parameter("diff_drive_component.enabled").as_bool();
         bool dio_enabled = this->get_parameter("dio.enabled").as_bool();
         bool encoder_enabled = this->get_parameter("encoder.enabled").as_bool();
-        //bool gamepad_enabled = this->get_parameter("gamepad.enabled").as_bool();
+        bool gamepad_enabled = this->get_parameter("gamepad.enabled").as_bool();
         bool imu_enabled = this->get_parameter("imu.enabled").as_bool();
-        bool mecanum_drive_enabled = this->get_parameter("mecanum_drive_component.enabled").as_bool();
         bool servo_enabled = this->get_parameter("servo.enabled").as_bool();
         bool sharp_enabled = this->get_parameter("sharp.enabled").as_bool();
         bool titan_enabled = this->get_parameter("titan.enabled").as_bool();
         bool ultrasonic_enabled = this->get_parameter("ultrasonic.enabled").as_bool();
-
-        if (diff_drive_enabled && mecanum_drive_enabled) {
-            RCLCPP_ERROR(this->get_logger(), "Cannot initialize both differential and mecanum drive controllers. Make sure only one of them is enabled.");
-            return false;
-        }
 
         if (cobra_enabled) {
             auto cobra_nodes = studica_control::Cobra::initialize(this, vmx_);
@@ -76,13 +65,6 @@ public:
         if (duty_cycle_enabled) {
             auto duty_cycle_nodes = studica_control::DutyCycleEncoder::initialize(this, vmx_);
             component_nodes.insert(component_nodes.end(), duty_cycle_nodes.begin(), duty_cycle_nodes.end());
-        }
-
-        if (diff_drive_enabled) {
-            auto odom = studica_control::DiffOdometry::initialize(this);
-            auto diff_drive_node = studica_control::DiffDrive::initialize(this, odom, vmx_);
-            component_nodes.push_back(odom);
-            component_nodes.push_back(diff_drive_node);
         }
 
         if (dio_enabled) {
@@ -95,21 +77,14 @@ public:
             component_nodes.insert(component_nodes.end(), encoder_nodes.begin(), encoder_nodes.end());
         }
 
-        //if (gamepad_enabled) {
-        //    auto gamepad_node = studica_control::GamepadController::initialize(this);
-        //    component_nodes.push_back(gamepad_node);
-        //}
+        if (gamepad_enabled) {
+            auto gamepad_node = studica_control::GamepadController::initialize(this);
+            component_nodes.push_back(gamepad_node);
+        }
 
         if (imu_enabled) {
             auto imu_node = studica_control::Imu::initialize(this, vmx_);
             component_nodes.push_back(imu_node);
-        }
-
-        if (mecanum_drive_enabled) {
-            auto odom = studica_control::MecanumOdometry::initialize(this);
-            auto mecanum_drive_node = studica_control::MecanumDrive::initialize(this, odom, vmx_);
-            component_nodes.push_back(odom);
-            component_nodes.push_back(mecanum_drive_node);
         }
 
         if (servo_enabled) {

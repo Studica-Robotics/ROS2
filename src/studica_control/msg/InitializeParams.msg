@@ -30,3 +30,7 @@ int32 left
 int32 right
 bool invert_left
 bool invert_right
+# general purpose fields for commands that need an integer mode/type/value
+int32 int_value
+# general purpose bool (e.g. position hold on/off)
+bool hold

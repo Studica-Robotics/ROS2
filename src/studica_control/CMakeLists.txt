@@ -7,7 +7,6 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_index_cpp REQUIRED)
-find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_components REQUIRED)
@@ -18,9 +17,6 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
-find_package(tf2 REQUIRED)
-find_package(tf2_ros REQUIRED)
-find_package(tf2_geometry_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files (srv, msg, action)
   "msg/DutyCycleEncoderMsg.msg"
@@ -41,32 +37,25 @@ set(studica_control_HDRS
   include/studica_control/cobra_component.h
   include/studica_control/device.h
   include/studica_control/dc_encoder_component.h
-  include/studica_control/diff_drive_component.h
-  include/studica_control/diff_drive_odometry.h
   include/studica_control/dio_component.h
   include/studica_control/encoder_component.h
   include/studica_control/gamepad_component.h
   include/studica_control/imu_component.h
-  include/studica_control/mecanum_drive_component.h
   include/studica_control/servo_component.h
   include/studica_control/sharp_component.h
   include/studica_control/titan_component.h
   include/studica_control/ultrasonic_component.h
 )
 
-set(dependencies 
-  "ament_index_cpp" 
+set(dependencies
+  "ament_index_cpp"
   "geometry_msgs"
-  "nav_msgs"
-  "rclcpp" 
+  "rclcpp"
   "rclcpp_action"
-  "rclcpp_components" 
-  "sensor_msgs"  
-  "std_msgs" 
-  "std_srvs" 
-  "tf2"
-  "tf2_ros"
-  "tf2_geometry_msgs" 
+  "rclcpp_components"
+  "sensor_msgs"
+  "std_msgs"
+  "std_srvs"
 )
 
 add_library(cobra_component SHARED src/components/cobra_component.cpp)
@@ -76,14 +65,6 @@ rclcpp_components_register_nodes(cobra_component "studica_control::cobra")
 add_library(dc_encoder_component SHARED src/components/dc_encoder_component.cpp)
 ament_target_dependencies(dc_encoder_component ${dependencies})
 rclcpp_components_register_nodes(dc_encoder_component "studica_control::DutyCycleEncoder")
-
-add_library(diff_drive_component SHARED src/components/diff_drive_component.cpp)
-ament_target_dependencies(diff_drive_component ${dependencies})
-rclcpp_components_register_nodes(diff_drive_component "studica_control::DiffDrive")
-
-add_library(diff_drive_odometry SHARED src/components/diff_drive_odometry.cpp)
-ament_target_dependencies(diff_drive_odometry ${dependencies})
-rclcpp_components_register_nodes(diff_drive_odometry "studica_control::DiffOdometry")
 
 add_library(dio_component SHARED src/components/dio_component.cpp)
 ament_target_dependencies(dio_component ${dependencies})
@@ -101,13 +82,6 @@ add_library(imu_component SHARED src/components/imu_component.cpp)
 ament_target_dependencies(imu_component ${dependencies})
 rclcpp_components_register_nodes(imu_component "studica_control::imu")
 
-add_library(mecanum_drive_component SHARED src/components/mecanum_drive_component.cpp)
-ament_target_dependencies(mecanum_drive_component ${dependencies})
-rclcpp_components_register_nodes(mecanum_drive_component "studica_control::MecanumDrive")
-
-add_library(mecanum_drive_odometry SHARED src/components/mecanum_drive_odometry.cpp)
-ament_target_dependencies(mecanum_drive_odometry ${dependencies})
-
 add_library(servo_component SHARED src/components/servo_component.cpp)
 ament_target_dependencies(servo_component ${dependencies})
 rclcpp_components_register_nodes(servo_component "studica_control::Servo")
@@ -124,20 +98,13 @@ add_library(ultrasonic_component SHARED src/components/ultrasonic_component.cpp)
 ament_target_dependencies(ultrasonic_component ${dependencies})
 rclcpp_components_register_nodes(ultrasonic_component "studica_control::Ultrasonic")
 
-target_link_libraries(diff_drive_component diff_drive_odometry)
-target_link_libraries(mecanum_drive_component mecanum_drive_odometry)
-
-install(TARGETS 
+install(TARGETS
   cobra_component
   dc_encoder_component
-  diff_drive_component
-  diff_drive_odometry
   dio_component
   encoder_component
   gamepad_component
   imu_component
-  mecanum_drive_component
-  mecanum_drive_odometry
   servo_component
   sharp_component
   titan_component
@@ -150,17 +117,13 @@ install(TARGETS
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 
 add_executable(manual_composition src/manual_composition.cpp)
-target_link_libraries(manual_composition 
+target_link_libraries(manual_composition
   cobra_component
   dc_encoder_component
-  diff_drive_component
-  diff_drive_odometry
   dio_component
   encoder_component
   gamepad_component
   imu_component
-  mecanum_drive_component
-  mecanum_drive_odometry
   servo_component
   sharp_component
   titan_component
@@ -202,13 +165,10 @@ ament_export_include_directories(include)
 ament_export_libraries(
   cobra_component
   dc_encoder_component
-  diff_drive_component
-  diff_drive_odometry
   dio_component
   encoder_component
   gamepad_component
   imu_component
-  mecanum_drive_component
   servo_component
   sharp_component
   titan_component

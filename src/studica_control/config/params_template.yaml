@@ -1,0 +1,157 @@
+# params_template.yaml
+#
+# Full reference for all available components.
+# Copy any section into params.yaml and set enabled: true to activate it.
+#
+# Multi-instance components (cobra, duty_cycle, dio, encoder, servo, sharp,
+# titan, ultrasonic) support multiple sensors by adding names to the
+# "sensors" list and adding a matching config block for each name.
+#
+# Single-instance components (gamepad, imu) have a flat config.
+#
+
+control_server:
+  ros__parameters:
+
+    # -------------------------------------------------------------------------
+    # Titan — CAN bus motor controller (up to 4 motors per unit)
+    # Topic:   <topic> (std_msgs/Float32MultiArray) — encoder counts for all 4 motors
+    # Service: /<name>/titan_cmd (SetData)
+    #   Commands: enable, disable, start, stop, reset, invert_motor,
+    #             set_speed (n_encoder, speed), get_rpm, get_encoder_count,
+    #             get_encoder_distance, setup_encoder, configure_encoder
+    # -------------------------------------------------------------------------
+    titan:
+      enabled: false
+      sensors: ["titan"]
+      titan:
+        can_id: 42          # CAN bus ID of the Titan controller
+        motor_freq: 15600   # PWM frequency (Hz)
+        topic: "titan_encoders"
+
+    # -------------------------------------------------------------------------
+    # IMU — onboard 9-axis IMU 
+    # Topic:   <topic> (sensor_msgs/Imu) — orientation, angular velocity, linear acceleration
+    # Service: /imu/get_imu_data (SetData) — returns pitch, yaw, roll as string
+    # -------------------------------------------------------------------------
+    imu:
+      enabled: false
+      name: "imu"
+      topic: "imu"
+      frame_id: "imu_link"  # TF frame to stamp on published messages
+
+    # -------------------------------------------------------------------------
+    # Encoder — quadrature encoder via two digital input channels
+    # Topic:   <topic> (studica_control/EncoderMsg) — count (int32), direction (string)
+    # Service: /<name>/encoder_cmd (SetData)
+    #   Commands: get_count, get_direction
+    # -------------------------------------------------------------------------
+    encoder:
+      enabled: false
+      sensors: ["encoder"]
+      encoder:
+        port_a: 0   # VMX channel index for channel A
+        port_b: 1   # VMX channel index for channel B
+        topic: "encoder"
+
+    # -------------------------------------------------------------------------
+    # Duty Cycle Encoder — absolute encoder via PWM duty cycle
+    # Topic:   <topic> (studica_control/DutyCycleEncoderMsg)
+    #            absolute_angle (float64), rollover_count (int32), total_rotation (float64)
+    # Service: /<name>/duty_cycle_encoder_cmd (SetData)
+    #   Commands: get_absolute_position, get_rollover_count, get_total_rotation
+    # -------------------------------------------------------------------------
+    duty_cycle:
+      enabled: false
+      sensors: ["duty_cycle"]
+      duty_cycle:
+        port: 8       # VMX channel index
+        topic: "duty_cycle_encoder"
+
+    # -------------------------------------------------------------------------
+    # Servo — standard, continuous, or linear servo
+    # Topic:   <topic> (std_msgs/Float32) — last commanded angle
+    # Service: /<name>/set_servo_angle (SetData)
+    #   Command: pass target angle (degrees) as the params string, e.g. "90"
+    # -------------------------------------------------------------------------
+    servo:
+      enabled: false
+      sensors: ["servo"]
+      servo:
+        port: 14                # VMX PWM channel index
+        type: "standard"        # "standard", "continuous", or "linear"
+        topic: "servo_angle"
+
+    # -------------------------------------------------------------------------
+    # Ultrasonic — HC-SR04-style sonar range sensor
+    # Topic:   <topic> (sensor_msgs/Range) — distance in metres
+    # Service: /<name>/ultrasonic_cmd (SetData)
+    #   Commands: get_distance, get_distance_inches, get_distance_millimeters
+    # -------------------------------------------------------------------------
+    ultrasonic:
+      enabled: false
+      sensors: ["ultrasonic"]
+      ultrasonic:
+        ping: 8     # VMX DIO channel for trigger
+        echo: 9     # VMX DIO channel for echo
+        topic: "ultrasonic_range"
+
+    # -------------------------------------------------------------------------
+    # Sharp — GP2Y-series infrared range sensor
+    # Topic:   <topic> (sensor_msgs/Range) — distance in metres
+    # Service: /<name>/sharp_cmd (SetData)
+    #   Commands: get_distance
+    # -------------------------------------------------------------------------
+    sharp:
+      enabled: false
+      sensors: ["sharp"]
+      sharp:
+        port: 22    # VMX analog input channel
+        topic: "ir_range"
+
+    # -------------------------------------------------------------------------
+    # DIO — digital input or output pin
+    # Topic:   <topic> (std_msgs/Bool) — current pin state
+    # Service: /<name>/dio_cmd (SetData)
+    #   Commands: toggle
+    # -------------------------------------------------------------------------
+    dio:
+      enabled: false
+      sensors: ["dio"]
+      dio:
+        pin: 15
+        type: "output"  # "input" or "output"
+        topic: "dio_state"
+
+    # -------------------------------------------------------------------------
+    # Cobra — VEX Cobra analog current sensor
+    # Topic:   <topic> (std_msgs/Float32) — voltage reading
+    # Service: /<name>/cobra_cmd (SetData)
+    #   Commands: get_raw, get_voltage
+    # -------------------------------------------------------------------------
+    cobra:
+      enabled: false
+      sensors: ["cobra"]
+      cobra:
+        vref: 5.0   # reference voltage (V)
+        topic: "cobra"
+
+    # -------------------------------------------------------------------------
+    # Gamepad — joystick/gamepad input to cmd_vel
+    # Requires a joy node publishing to /joy (e.g. ros2 run joy joy_node)
+    # Topic:   <cmd_vel_topic> (geometry_msgs/Twist) — velocity commands
+    # Axis mapping is set via /gamepad_buttons topic (Int32MultiArray: [x, y, z])
+    # -------------------------------------------------------------------------
+    gamepad:
+      enabled: false
+
+# Gamepad controller node parameters (separate namespace from control_server).
+# Only relevant when gamepad.enabled is true above.
+gamepad_controller:
+  ros__parameters:
+    cmd_vel_topic: "/cmd_vel"
+    linear_scale: 1.0       # scale factor applied to linear axes
+    angular_scale: 1.0      # scale factor applied to angular axis
+    deadzone: 0.1           # axis values below this are treated as zero
+    turbo_multiplier: 1.5   # scale multiplier when turbo button is held
+    button_turbo: 5         # button index for turbo mode
