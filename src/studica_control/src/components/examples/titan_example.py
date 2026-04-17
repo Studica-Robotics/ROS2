@@ -23,7 +23,7 @@ class TitanExample(Node):
         super().__init__('titan_example')
         self.sub = self.create_subscription(
             Float32MultiArray, 'titan_encoders', self.on_encoder, 10)
-        self.client = self.create_client(SetData, 'titan_cmd')
+        self.client = self.create_client(SetData, 'titan/titan_cmd')
         self.get_logger().info('Listening on titan_encoders...')
 
     def on_encoder(self, msg):
