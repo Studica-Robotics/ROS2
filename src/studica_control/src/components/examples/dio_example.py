@@ -4,8 +4,8 @@
 Run:  python3 dio_example.py
 Requires: studica_launch.py running, dio enabled in params.yaml
 
-Topic:   subscribes to dio topic (std_msgs/Bool)
-Service: '/<dio_name>/dio_cmd' (SetData)
+Topic:   subscribes to 'dio_state' (std_msgs/Bool) — set dio.<sensor>.topic: dio_state in params.yaml
+Service: '/<sensor_name>/dio_cmd' (SetData) — sensor name 'dio' sets the prefix
   Commands: toggle
 """
 import rclpy

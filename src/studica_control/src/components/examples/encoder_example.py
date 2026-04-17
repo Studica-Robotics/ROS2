@@ -4,7 +4,7 @@
 Run:  python3 encoder_example.py
 Requires: studica_launch.py running, encoder enabled in params.yaml
 
-Topic:   subscribes to encoder topic (studica_control/EncoderMsg)
+Topic:   subscribes to 'rr_enc' (studica_control/EncoderMsg) — set encoder.<sensor>.topic: rr_enc in params.yaml
 Service: '/<encoder_name>/encoder_cmd' (SetData)
   Commands: get_count, get_direction
 """

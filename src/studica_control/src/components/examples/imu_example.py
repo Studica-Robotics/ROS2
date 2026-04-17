@@ -4,7 +4,7 @@
 Run:  python3 imu_example.py
 Requires: studica_launch.py running, imu enabled in params.yaml
 
-Topic:   subscribes to 'imu' (sensor_msgs/Imu)
+Topic:   subscribes to 'imu' (sensor_msgs/Imu) — set imu.<sensor>.topic: imu in params.yaml
 Service: '/imu/get_imu_data' (SetData) — returns pitch, yaw, roll
 """
 import rclpy

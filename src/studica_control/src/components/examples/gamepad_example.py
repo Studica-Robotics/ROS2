@@ -5,7 +5,7 @@ Run:  python3 gamepad_example.py
 Requires: studica_launch.py running, gamepad enabled in params.yaml,
           and a joystick node publishing to /joy (e.g. ros2 run joy joy_node)
 
-Topic: subscribes to '/cmd_vel' (geometry_msgs/Twist)
+Topic: subscribes to '/cmd_vel' (geometry_msgs/Twist) — no topic to configure, cmd_vel is fixed
 """
 import rclpy
 from rclpy.node import Node

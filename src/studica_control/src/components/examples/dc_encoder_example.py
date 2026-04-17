@@ -4,7 +4,7 @@
 Run:  python3 dc_encoder_example.py
 Requires: studica_launch.py running, duty_cycle enabled in params.yaml
 
-Topic:   subscribes to duty cycle topic (studica_control/DutyCycleEncoderMsg)
+Topic:   subscribes to 'duty_cycle_encoder' (studica_control/DutyCycleEncoderMsg) — set duty_cycle.<sensor>.topic: duty_cycle_encoder in params.yaml
 Service: '/<sensor_name>/duty_cycle_encoder_cmd' (SetData)
   Commands: get_absolute_position, get_rollover_count, get_total_rotation
 """

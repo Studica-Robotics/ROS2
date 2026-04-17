@@ -4,12 +4,14 @@
 Run:  python3 titan_example.py
 Requires: studica_launch.py running, titan enabled in params.yaml
 
-Topics:  subscribes to 'titan_encoders' (Float32MultiArray, 4 encoder counts)
-Service: '/titan/titan_cmd' (SetData)
+Topics:  subscribes to 'titan/titan_encoders' (Float32MultiArray, 4 encoder counts)
+           set titan.<sensor>.topic: titan_encoders in params.yaml — sensor name 'titan' sets the prefix
+Service: 'titan/titan_cmd' (SetData)
   Commands: set_speed, stop, enable, disable, reset, invert_motor,
             get_rpm, get_encoder_count, get_encoder_distance,
             setup_encoder, configure_encoder
 """
+import time
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
@@ -20,9 +22,9 @@ class TitanExample(Node):
     def __init__(self):
         super().__init__('titan_example')
         self.sub = self.create_subscription(
-            Float32MultiArray, 'titan_encoders', self.on_encoder, 10)
-        self.client = self.create_client(SetData, '/titan/titan_cmd')
-        self.get_logger().info('Listening on titan_encoders...')
+            Float32MultiArray, 'titan/titan_encoders', self.on_encoder, 10)
+        self.client = self.create_client(SetData, 'titan/titan_cmd')
+        self.get_logger().info('Listening on titan/titan_encoders...')
 
     def on_encoder(self, msg):
         self.get_logger().info(f'Encoder counts: {list(msg.data)}')
@@ -33,21 +35,33 @@ class TitanExample(Node):
         req.initparams.n_encoder = motor
         req.initparams.speed = speed
         future = self.client.call_async(req)
-        future.add_done_callback(
-            lambda f: self.get_logger().info(f'{command}: {f.result().message}'))
+        rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
+        if future.result():
+            self.get_logger().info(f'{command}: {future.result().message}')
+        else:
+            self.get_logger().error(f'{command}: no response')
 
 
 def main():
     rclpy.init()
     node = TitanExample()
 
-    # Example: spin motor 0 at 30% for 3 seconds, then stop
-    def run_motor():
-        node.call_titan('set_speed', motor=0, speed=0.3)
-        node.create_timer(3.0, lambda: node.call_titan('stop', motor=0))
+    if not node.client.wait_for_service(timeout_sec=3.0):
+        node.get_logger().error('titan_cmd service not available')
+        rclpy.shutdown()
+        return
 
-    node.create_timer(2.0, run_motor)
-    rclpy.spin(node)
+    # spin motor 0 at 30% for 3 seconds, then stop for 2 seconds — repeat 3 times
+    for _ in range(3):
+        node.call_titan('set_speed', motor=0, speed=0.3)
+        end = time.time() + 3.0
+        while time.time() < end:
+            rclpy.spin_once(node, timeout_sec=0.05)
+        node.call_titan('stop', motor=0)
+        end = time.time() + 2.0
+        while time.time() < end:
+            rclpy.spin_once(node, timeout_sec=0.05)
+
     rclpy.shutdown()
 
 

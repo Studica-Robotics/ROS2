@@ -4,8 +4,8 @@
 Run:  python3 servo_example.py
 Requires: studica_launch.py running, servo enabled in params.yaml
 
-Topic:   subscribes to servo topic (std_msgs/Float32, last commanded angle)
-Service: '/<servo_name>/set_servo_angle' (SetData)
+Topic:   subscribes to 'servo_angle' (std_msgs/Float32) — set servo.<sensor>.topic: servo_angle in params.yaml
+Service: '/<sensor_name>/set_servo_angle' (SetData) — sensor name 'servo' sets the prefix
   Command: pass the target angle as the 'params' string (e.g. "90")
 """
 import rclpy

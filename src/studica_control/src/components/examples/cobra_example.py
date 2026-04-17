@@ -8,7 +8,7 @@ use the 4 channel readings together to follow a line or detect surface changes.
 Run:  python3 cobra_example.py
 Requires: studica_launch.py running, cobra enabled in params.yaml
 
-Topic:   subscribes to cobra topic (std_msgs/Float32MultiArray)
+Topic:   subscribes to 'cobra' (std_msgs/Float32MultiArray) — set cobra.<sensor>.topic: cobra in params.yaml
            data[0..3] = voltage in volts for channels 0-3
 Service: 'cobra_cmd' (studica_control/SetData)
   Commands:
