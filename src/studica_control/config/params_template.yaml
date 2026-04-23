@@ -140,18 +140,16 @@ control_server:
     # Gamepad — joystick/gamepad input to cmd_vel
     # Requires a joy node publishing to /joy (e.g. ros2 run joy joy_node)
     # Topic:   <cmd_vel_topic> (geometry_msgs/Twist) — velocity commands
-    # Axis mapping is set via /gamepad_buttons topic (Int32MultiArray: [x, y, z])
+    # Run ros2 topic echo /joy to find your controller's axis indices
     # -------------------------------------------------------------------------
     gamepad:
       enabled: false
-
-# Gamepad controller node parameters (separate namespace from control_server).
-# Only relevant when gamepad.enabled is true above.
-gamepad_controller:
-  ros__parameters:
-    cmd_vel_topic: "/cmd_vel"
-    linear_scale: 1.0       # scale factor applied to linear axes
-    angular_scale: 1.0      # scale factor applied to angular axis
-    deadzone: 0.1           # axis values below this are treated as zero
-    turbo_multiplier: 1.5   # scale multiplier when turbo button is held
-    button_turbo: 5         # button index for turbo mode
+      axis_linear_x: 1      # joystick axis index for forward/back
+      axis_linear_y: 0      # joystick axis index for strafe (0 if unused)
+      axis_angular_z: 0     # joystick axis index for rotation
+      button_turbo: 5       # button index that activates turbo mode
+      linear_scale: 1.0     # scale factor applied to linear axes
+      angular_scale: 1.0    # scale factor applied to angular axis
+      deadzone: 0.05        # axis values below this are treated as zero
+      turbo_multiplier: 2.0 # speed multiplier when turbo button is held
+      cmd_vel_topic: "cmd_vel"

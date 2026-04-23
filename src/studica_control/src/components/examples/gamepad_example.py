@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """Gamepad — subscribe to cmd_vel output from the gamepad controller.
 
-Run:  python3 gamepad_example.py
-Requires: studica_launch.py running, gamepad enabled in params.yaml,
-          and a joystick node publishing to /joy (e.g. ros2 run joy joy_node)
+Setup (3 terminals):
+  1. ros2 launch studica_control studica_launch.py   # main HAL — gamepad.enabled must be true in params.yaml
+  2. ros2 run joy joy_node                            # publishes raw joystick input to /joy
+  3. python3 gamepad_example.py                       # this script — shows cmd_vel output
+
+To find your controller's axis indices:
+  ros2 topic echo /joy   — move each stick and note which axes[] index changes
+
+Configure axes in params.yaml under control_server.gamepad:
+  axis_linear_x, axis_linear_y, axis_angular_z, button_turbo
 
 Topic: subscribes to '/cmd_vel' (geometry_msgs/Twist) — no topic to configure, cmd_vel is fixed
 """

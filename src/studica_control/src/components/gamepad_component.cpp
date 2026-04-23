@@ -2,36 +2,50 @@
  * gamepad_component.cpp
  *
  * ros2 component that reads joystick input and publishes velocity commands.
- * subscribes to the /joy topic (from a joy node), applies scaling and a
- * deadzone, and publishes geometry_msgs/Twist to a configurable cmd_vel topic.
+ * subscribes to /joy (from a joy node), applies scaling and a deadzone,
+ * and publishes geometry_msgs/Twist to a configurable cmd_vel topic.
  *
- * axis mapping defaults to -1 (unset). set them by publishing an
- * Int32MultiArray of [x_axis, y_axis, z_axis] to /gamepad_buttons, or
- * configure them via params.yaml in the gamepad_controller section.
- *
- * to use this component:
- *   1. enable gamepad in params.yaml under control_server
- *   2. run a joy node: ros2 run joy joy_node
- *   3. publish axis mapping to /gamepad_buttons if needed
+ * axis indices are configured in params.yaml under control_server.gamepad.
+ * run 'ros2 topic echo /joy' and move the sticks to find the right indices.
+ * axis mapping can also be changed at runtime by publishing [x, y, z] indices
+ * to /gamepad_buttons (Int32MultiArray) — useful for remapping without restart.
  *
  * topic (subscribes): /joy (sensor_msgs/Joy) — raw joystick input
- * topic (subscribes): /gamepad_buttons (std_msgs/Int32MultiArray) — axis remap
+ * topic (subscribes): /gamepad_buttons (std_msgs/Int32MultiArray) — runtime axis remap
  * topic (publishes):  <cmd_vel_topic> (geometry_msgs/Twist) — velocity output
  */
 
 #include "studica_control/gamepad_component.h"
-#include "ament_index_cpp/get_package_share_directory.hpp"
 
 namespace studica_control {
 
 
-// loads params.yaml into the node's options so the gamepad_controller
-// section is picked up under the correct namespace
-std::shared_ptr<rclcpp::Node> GamepadController::initialize(rclcpp::Node * /*control*/) {
-    std::string params_file = ament_index_cpp::get_package_share_directory("studica_control")
-                              + "/config/params.yaml";
+// reads gamepad params from the control_server node and passes them as overrides
+// to the GamepadController constructor. this avoids relying on a second --params-file
+// load which is unreliable inside a setuid process.
+std::shared_ptr<rclcpp::Node> GamepadController::initialize(rclcpp::Node *control) {
+    control->declare_parameter("gamepad.axis_linear_x",  1);
+    control->declare_parameter("gamepad.axis_linear_y",  0);
+    control->declare_parameter("gamepad.axis_angular_z", 0);
+    control->declare_parameter("gamepad.linear_scale",   1.0);
+    control->declare_parameter("gamepad.angular_scale",  1.0);
+    control->declare_parameter("gamepad.deadzone",       0.05);
+    control->declare_parameter("gamepad.turbo_multiplier", 2.0);
+    control->declare_parameter("gamepad.button_turbo",   5);
+    control->declare_parameter<std::string>("gamepad.cmd_vel_topic", "cmd_vel");
+
     rclcpp::NodeOptions options;
-    options.arguments({"--ros-args", "--params-file", params_file});
+    options.parameter_overrides({
+        {"axis_linear_x",   control->get_parameter("gamepad.axis_linear_x").as_int()},
+        {"axis_linear_y",   control->get_parameter("gamepad.axis_linear_y").as_int()},
+        {"axis_angular_z",  control->get_parameter("gamepad.axis_angular_z").as_int()},
+        {"linear_scale",    control->get_parameter("gamepad.linear_scale").as_double()},
+        {"angular_scale",   control->get_parameter("gamepad.angular_scale").as_double()},
+        {"deadzone",        control->get_parameter("gamepad.deadzone").as_double()},
+        {"turbo_multiplier",control->get_parameter("gamepad.turbo_multiplier").as_double()},
+        {"button_turbo",    control->get_parameter("gamepad.button_turbo").as_int()},
+        {"cmd_vel_topic",   control->get_parameter("gamepad.cmd_vel_topic").as_string()},
+    });
     return std::make_shared<GamepadController>(options);
 }
 
@@ -89,7 +103,7 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
 
     if (axis_linear_x_ < 0 || axis_linear_y_ < 0 || axis_angular_z_ < 0) {
         RCLCPP_WARN(this->get_logger(),
-                    "axis mappings unset (-1). publish [x,y,z] axis indices to /gamepad_buttons to configure.");
+                    "axis mappings unset — set gamepad.axis_linear_x/y and axis_angular_z in params.yaml");
     }
 }
 
