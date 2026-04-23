@@ -75,9 +75,14 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
 
     // publishes encoder counts for all 4 motor channels at 20hz
     publisher_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(topic, 10);
-    timer_ = this->create_wall_timer(
+    encoder_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
         std::bind(&Titan::publish_encoders, this));
+
+    // resends current speed commands at 100hz to satisfy the titan CAN watchdog
+    watchdog_timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(10),
+        std::bind(&Titan::resend_speeds, this));
 
     // configure all 4 encoders with a distance-per-tick of 1 and clear counts
     for (int i = 0; i < 4; i++) {
@@ -85,7 +90,9 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
         titan_->ResetEncoder(i);
     }
 
+    titan_->SetPIDType(0);  // type 0 = duty-cycle mode (SetSpeed uses raw PWM duty, not velocity PID)
     titan_->Enable(true);
+    enabled_ = true;
 
     RCLCPP_INFO(this->get_logger(), "titan ready. can_id: %d, freq: %d hz", canID_, motor_freq_);
 }
@@ -111,26 +118,33 @@ void Titan::cmd(std::string params,
 
     if (params == "enable") {
         titan_->Enable(true);
+        enabled_ = true;
         response->success = true;
         response->message = "titan enabled";
 
     } else if (params == "disable") {
+        for (int i = 0; i < 4; i++) speeds_[i] = 0.0f;
+        enabled_ = false;
         titan_->Enable(false);
         response->success = true;
         response->message = "titan disabled";
 
     } else if (params == "set_speed") {
         float speed = request->initparams.speed;
+        speeds_[motor] = speed;
         titan_->SetSpeed(motor, speed);
         response->success = true;
         response->message = "motor " + std::to_string(motor) + " speed set to " + std::to_string(speed);
 
     } else if (params == "set_speed_all") {
-        titan_->SetSpeedAll(static_cast<double>(request->initparams.speed));
+        float speed = request->initparams.speed;
+        for (int i = 0; i < 4; i++) speeds_[i] = speed;
+        titan_->SetSpeedAll(static_cast<double>(speed));
         response->success = true;
-        response->message = "all motors set to " + std::to_string(request->initparams.speed);
+        response->message = "all motors set to " + std::to_string(speed);
 
     } else if (params == "stop") {
+        speeds_[motor] = 0.0f;
         titan_->SetSpeed(motor, 0.0);
         response->success = true;
         response->message = "motor " + std::to_string(motor) + " stopped";
@@ -316,16 +330,23 @@ void Titan::cmd(std::string params,
 }
 
 
-// reads encoder counts from all 4 motor channels and publishes them as an array
 void Titan::publish_encoders() {
+    if (!enabled_) return;
     std_msgs::msg::Float32MultiArray msg;
     msg.data.resize(4);
-
     for (int i = 0; i < 4; i++) {
         msg.data[i] = static_cast<float>(titan_->GetEncoderCount(i));
     }
-
     publisher_->publish(msg);
+}
+
+void Titan::resend_speeds() {
+    if (!enabled_) return;
+    for (int i = 0; i < 4; i++) {
+        if (speeds_[i] != 0.0f) {
+            titan_->SetSpeed(i, speeds_[i]);
+        }
+    }
 }
 
 

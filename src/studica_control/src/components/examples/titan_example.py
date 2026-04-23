@@ -7,9 +7,8 @@ Requires: studica_launch.py running, titan enabled in params.yaml
 Topics:  subscribes to '<sensor_name>/titan_encoders' (Float32MultiArray, 4 encoder counts)
            set titan.<sensor>.topic: titan_encoders in params.yaml — sensor name sets the prefix
 Service: '<sensor_name>/titan_cmd' (SetData)
-  Commands: set_speed, stop, enable, disable, reset, invert_motor,
-            get_rpm, get_encoder_count, get_encoder_distance,
-            setup_encoder, configure_encoder
+  See titan_component.h for the full command reference.
+  Common commands: set_speed, stop, enable, disable, get_rpm, get_encoder_count
 """
 import time
 import rclpy
@@ -51,10 +50,10 @@ def main():
         rclpy.shutdown()
         return
 
-    # enable motor 0 first, then spin at 30% for 3 seconds, stop for 2 — repeat 3 times
-    node.call_titan('enable', motor=0)
+    # spin motor 0 at 80% for 3 seconds, stop for 2 — repeat 3 times
+    # studica_launch.py enables the titan at startup — no need to call enable/disable here
     for _ in range(3):
-        node.call_titan('set_speed', motor=0, speed=0.3)
+        node.call_titan('set_speed', motor=0, speed=0.8)
         end = time.time() + 3.0
         while time.time() < end:
             rclpy.spin_once(node, timeout_sec=0.05)

@@ -2,7 +2,7 @@
  * titan_component.h
  *
  * ros2 component for the studica titan motor controller.
- * the titan controls up to 4 brushed dc motors over can bus. each titan
+ * the titan controls up to 4 motors over can bus. each titan
  * has a unique can id so you can run multiple on the same robot.
  *
  * topic (publishes): <topic> (std_msgs/Float32MultiArray)
@@ -130,9 +130,13 @@ private:
     uint16_t motor_freq_;
     float dist_per_tick_;
 
+    float speeds_[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    bool enabled_ = false;
+
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
     rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr publisher_;
-    rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::TimerBase::SharedPtr encoder_timer_;
+    rclcpp::TimerBase::SharedPtr watchdog_timer_;
 
     // receives the raw service request and forwards it to cmd()
     void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request,
@@ -142,8 +146,8 @@ private:
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request,
              std::shared_ptr<studica_control::srv::SetData::Response> response);
 
-    // reads encoder counts from all 4 motors and publishes them
     void publish_encoders();
+    void resend_speeds();  // resends non-zero speeds each tick to satisfy the titan CAN watchdog
 };
 
 }  // namespace studica_control
