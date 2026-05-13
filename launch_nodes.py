@@ -1,10 +1,13 @@
+import os
 import subprocess
+
+ROS_DISTRO = os.environ.get("ROS_DISTRO", "jazzy")
 
 def launch_ros2_nodes_and_services():
 
-    environment_commands = """
+    environment_commands = f"""
     cd /home/vmx/ROS2/
-    . /opt/ros/humble/setup.bash
+    . /opt/ros/{ROS_DISTRO}/setup.bash
     . install/setup.bash
     export LD_LIBRARY_PATH=/usr/local/lib/studica_drivers:$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/studica_control

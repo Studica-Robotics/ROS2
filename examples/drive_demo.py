@@ -16,7 +16,7 @@ You need TWO terminals.
 Terminal 1  (launches the robot hardware stack, needs root for hardware access):
     sudo su
     cd /home/vmx/ROS2
-    . /opt/ros/humble/setup.bash
+    . /opt/ros/jazzy/setup.bash
     . install/setup.bash
     ros2 launch studica_control studica_launch.py
 
@@ -24,9 +24,9 @@ Wait until you see "Managed nodes are active" in Terminal 1, then:
 
 Terminal 2  (runs this demo script):
     cd /home/vmx/ROS2
-    . /opt/ros/humble/setup.bash
+    . /opt/ros/jazzy/setup.bash
     . install/setup.bash
-    python3 examples/motor_demo.py
+    python3 examples/drive_demo.py
 
 WHAT IT DOES
 ------------

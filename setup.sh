@@ -29,13 +29,45 @@ while getopts ":hlce" opt; do
             INSTALL_EXPLORE=false
             ;;
         \?)
-            echo "Invalid option: -OPTARG" >&2
+            echo "Invalid option: -$OPTARG" >&2
             exit 1
     esac
 done
 
 if [ -z "$ROS_DISTRO" ]; then
-    export ROS_DISTRO=humble
+    # Tier-1 pairing: 22.04 -> Humble, 24.04 -> Jazzy
+    . /etc/os-release
+    case "${VERSION_ID:-}" in
+        22.04) export ROS_DISTRO=humble ;;
+        24.04) export ROS_DISTRO=jazzy ;;
+        *)
+            echo "Set ROS_DISTRO before running this script (unsupported VERSION_ID=${VERSION_ID:-unknown})."
+            echo "Example: export ROS_DISTRO=jazzy"
+            exit 1
+            ;;
+    esac
+fi
+
+if [ ! -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]; then
+    _UBUNTU_CODENAME="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-${VERSION_CODENAME}}")"
+    echo "ROS 2 not found at /opt/ros/${ROS_DISTRO}."
+    echo "Ubuntu mirrors do not include ROS packages until you add the ROS 2 apt repository."
+    echo "Doc: https://docs.ros.org/en/${ROS_DISTRO}/Installation/Ubuntu-Install-Debs.html"
+    echo ""
+    echo "On this machine (Ubuntu codename: ${_UBUNTU_CODENAME}), run:"
+    cat <<'INST'
+  sudo apt update && sudo apt install -y software-properties-common curl
+  sudo add-apt-repository universe
+  sudo apt update && sudo apt install curl -y
+  export ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F tag_name | awk -F'"' '{print $4}')
+INST
+    echo "  curl -L -o /tmp/ros2-apt-source.deb \"https://github.com/ros-infrastructure/ros-apt-source/releases/download/\${ROS_APT_SOURCE_VERSION}/ros2-apt-source_\${ROS_APT_SOURCE_VERSION}.${_UBUNTU_CODENAME}_all.deb\""
+    cat <<'INST'
+  sudo dpkg -i /tmp/ros2-apt-source.deb
+  sudo apt update
+INST
+    echo "  sudo apt install -y ros-${ROS_DISTRO}-desktop ros-${ROS_DISTRO}-rmw-cyclonedds-cpp ros-dev-tools"
+    exit 1
 fi
 
 ROS_SETUP_LINE=". /opt/ros/$ROS_DISTRO/setup.bash"
@@ -112,7 +144,7 @@ sudo apt update
 
 echo "Configuring Cyclone DDS..."
 DDS_SETUP_LINE="export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp"
-sudo apt install -y ros-humble-rmw-cyclonedds-cpp
+sudo apt install -y "ros-${ROS_DISTRO}-rmw-cyclonedds-cpp"
 if ! grep -Fxq "$DDS_SETUP_LINE" ~/.bashrc; then
     echo "$DDS_SETUP_LINE" >> ~/.bashrc
     echo "DDS Configuration done."
@@ -140,5 +172,8 @@ sudo apt install -y ros-$ROS_DISTRO-ros2-controllers || { echo "Failed to instal
 
 cd "$ORIGINAL_DIR/.."
 source ~/.bashrc
+
+echo "Build the studica_control workspace (run from your ROS2 repo root, typically where this script lives):"
+echo "  cd \"$ORIGINAL_DIR\" && source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symlink-install"
 
 echo "Setup script completed successfully! Run 'source ~/.bashrc' to apply all environment changes."

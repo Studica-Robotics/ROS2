@@ -59,11 +59,29 @@ sudo make install || { echo "Failed to install YDLidar-SDK"; exit 1; }
 
 cd "$LIDAR_DIR" 
 
+if [ -z "$ROS_DISTRO" ]; then
+    . /etc/os-release
+    case "${VERSION_ID:-}" in
+        22.04) export ROS_DISTRO=humble ;;
+        24.04) export ROS_DISTRO=jazzy ;;
+        *)
+            echo "Set ROS_DISTRO before running setup_lidar.sh (e.g. export ROS_DISTRO=jazzy)."
+            exit 1
+            ;;
+    esac
+fi
+if [ ! -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]; then
+    echo "Install ROS 2 first, e.g.: sudo apt install ros-${ROS_DISTRO}-desktop"
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "/opt/ros/${ROS_DISTRO}/setup.bash"
+
 echo "Setting up YDLidar ROS2 driver..."
 mkdir -p ydlidar_ros2_ws/src
 git clone https://github.com/YDLIDAR/ydlidar_ros2_driver.git ydlidar_ros2_ws/src/ydlidar_ros2_driver || { echo "Failed to clone ydlidar_ros2_driver"; exit 1; }
 cd ydlidar_ros2_ws/src/ydlidar_ros2_driver || { echo "Failed to change to ydlidar_ros2_driver directory"; exit 1; }
-git checkout origin/humble || { echo "Failed to checkout humble branch"; exit 1; }
+git fetch origin humble && git checkout humble || { echo "Failed to checkout humble branch"; exit 1; }
 
 cd "$LIDAR_DIR/ydlidar_ros2_ws"
 colcon build --symlink-install || { echo "Failed to build ROS2 package"; exit 1; }

@@ -31,8 +31,9 @@ rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files (srv, msg, action)
 )
 
 include_directories( # <- #include <"">
-  include 
-  /usr/local/include/vmxpi 
+  include
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../drivers"
+  /usr/local/include/vmxpi
   /usr/local/include/studica_drivers
   ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp
 )
@@ -127,6 +128,15 @@ rclcpp_components_register_nodes(ultrasonic_component "studica_control::Ultrason
 target_link_libraries(diff_drive_component diff_drive_odometry)
 target_link_libraries(mecanum_drive_component mecanum_drive_odometry)
 
+foreach(_lib IN ITEMS
+    cobra_component dc_encoder_component diff_drive_component diff_drive_odometry
+    dio_component encoder_component gamepad_component imu_component
+    mecanum_drive_component mecanum_drive_odometry servo_component sharp_component
+    titan_component ultrasonic_component
+)
+  add_dependencies(${_lib} ${PROJECT_NAME}__cpp)
+endforeach()
+
 install(TARGETS 
   cobra_component
   dc_encoder_component
@@ -149,6 +159,34 @@ install(TARGETS
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 
+# Prefer installed Studica driver library; fall back to sibling drivers/ build tree.
+set(_studica_sys "/usr/local/lib/studica_drivers/libstudica_drivers.so")
+set(_studica_local "${CMAKE_CURRENT_SOURCE_DIR}/../../drivers/libstudica_drivers.so")
+if(EXISTS "${_studica_sys}")
+  set(_studica_drivers "${_studica_sys}")
+elseif(EXISTS "${_studica_local}")
+  set(_studica_drivers "${_studica_local}")
+else()
+  message(FATAL_ERROR "libstudica_drivers.so not found. Run: cd ${CMAKE_CURRENT_SOURCE_DIR}/../../drivers && make && sudo make install")
+endif()
+set(_vmx_hal "/usr/local/lib/vmxpi/libvmxpi_hal_cpp.so")
+if(NOT EXISTS "${_vmx_hal}")
+  message(FATAL_ERROR "VMX HAL not found at ${_vmx_hal}. Install VMXPi HAL before building studica_control.")
+endif()
+
+foreach(_lib IN ITEMS
+    cobra_component dc_encoder_component diff_drive_component diff_drive_odometry
+    dio_component encoder_component gamepad_component imu_component
+    mecanum_drive_component mecanum_drive_odometry servo_component sharp_component
+    titan_component ultrasonic_component
+)
+  target_link_libraries(${_lib}
+    "${cpp_typesupport_target}"
+    "${_vmx_hal}"
+    "${_studica_drivers}"
+  )
+endforeach()
+
 add_executable(manual_composition src/manual_composition.cpp)
 target_link_libraries(manual_composition 
   cobra_component
@@ -165,11 +203,12 @@ target_link_libraries(manual_composition
   sharp_component
   titan_component
   ultrasonic_component
-  /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
-  /usr/local/lib/studica_drivers/libstudica_drivers.so
+  "${_vmx_hal}"
+  "${_studica_drivers}"
 )
 ament_target_dependencies(manual_composition ${dependencies})
 target_link_libraries(manual_composition "${cpp_typesupport_target}")
+add_dependencies(manual_composition ${PROJECT_NAME}__cpp)
 
 install(TARGETS
   manual_composition
@@ -181,11 +220,6 @@ install(DIRECTORY include/${PROJECT_NAME}/
 )
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp/
   DESTINATION include/${PROJECT_NAME}
-)
-
-install(
-  DIRECTORY include/
-  DESTINATION /usr/local/include/studica_control
 )
 
 install(DIRECTORY

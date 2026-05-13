@@ -308,7 +308,7 @@ planner_server:
       allow_reverse_expansion: true       # If true, allows the robot to use the primitives to expand in the mirrored opposite direction of the current robot's orientation (to reverse).
       coarse_search_resolution: 1         # Number of bins to skip when doing a coarse search for the path. Only used for all_direction goal heading mode.
       goal_heading_mode: "BIDIRECTIONAL"  # DEFAULT, BIDIRECTIONAL, ALL_DIRECTION
-      lattice_filepath: "/opt/ros/humble/share/nav2_smac_planner/sample_primitives/5cm_resolution/0.5m_turning_radius/omni/output.json" # The filepath to the state lattice graph
+      lattice_filepath: "/opt/ros/jazzy/share/nav2_smac_planner/sample_primitives/5cm_resolution/0.5m_turning_radius/omni/output.json" # The filepath to the state lattice graph
       smooth_path: True                   # If true, does a simple and quick smoothing post-processing to the path
       smoother:
         max_iterations: 1000
