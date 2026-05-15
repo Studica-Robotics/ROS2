@@ -1,4 +1,4 @@
-#include "i2c.h"
+#include "i2c.hpp"
 using namespace studica_driver;
 
 I2C::I2C(std::shared_ptr<VMXPi> vmx)
@@ -60,11 +60,11 @@ bool I2C::WriteI2C(uint8_t deviceAddress, int registerAddress, uint8_t* data, si
     if (!vmx_->io.I2C_Write(i2c_res_handle_, deviceAddress, registerAddress, data, data_size, &vmxerr))
     {
         std::cout << "Error Writing to I2C bus!" << std::endl;
-        return true;
+        return false;
     }
     else
     {
-        return false;
+        return true;
     }
 }
 
@@ -74,20 +74,20 @@ bool I2C::ReadI2C(uint8_t deviceAddress, int registerAddress, uint8_t* data, siz
     if (count < 1)
     {
         std::cout << "I2C Read count out of range" << std::endl;
-        return true;
+        return false;
     }
     if (data == nullptr)
     {
         std::cout << "I2C Read data is a null pointer" << std::endl;
-        return true;
+        return false;
     }
     if (!vmx_->io.I2C_Read(i2c_res_handle_, deviceAddress, registerAddress, data, count, &vmxerr))
     {
         std::cout << "Error reading I2C bus!" << std::endl;
-        return true;
+        return false;
     }
     else
     {
-        return false;
+        return true;
     }
 }

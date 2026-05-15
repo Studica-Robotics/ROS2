@@ -15,7 +15,7 @@
  *     get_distance — returns the current distance in centimetres as a string
  */
 
-#include "studica_control/sharp_component.h"
+#include "studica_control/sharp_component.hpp"
 
 namespace studica_control {
 
@@ -29,19 +29,19 @@ std::vector<std::shared_ptr<rclcpp::Node>> Sharp::initialize(rclcpp::Node *contr
     std::vector<std::string> sensor_ids = control->get_parameter("sharp.sensors").as_string_array();
 
     for (const auto &sensor : sensor_ids) {
-        std::string port_param  = "sharp." + sensor + ".port";
-        std::string topic_param = "sharp." + sensor + ".topic";
+        std::string port_param     = "sharp." + sensor + ".port";
+        std::string frame_id_param = "sharp." + sensor + ".frame_id";
 
         control->declare_parameter<int>(port_param, -1);
-        control->declare_parameter<std::string>(topic_param, "unknown");
+        control->declare_parameter<std::string>(frame_id_param, sensor);
 
-        int port          = control->get_parameter(port_param).as_int();
-        std::string topic = control->get_parameter(topic_param).as_string();
+        int port             = control->get_parameter(port_param).as_int();
+        std::string frame_id = control->get_parameter(frame_id_param).as_string();
 
-        RCLCPP_INFO(control->get_logger(), "%s -> port: %d, topic: %s",
-                    sensor.c_str(), port, topic.c_str());
+        RCLCPP_INFO(control->get_logger(), "%s -> port: %d, frame_id: %s",
+                    sensor.c_str(), port, frame_id.c_str());
 
-        auto sharp = std::make_shared<Sharp>(vmx, sensor, port, topic);
+        auto sharp = std::make_shared<Sharp>(vmx, sensor, port, frame_id);
         sharp_nodes.push_back(sharp);
     }
 
@@ -55,18 +55,17 @@ Sharp::Sharp(const rclcpp::NodeOptions & options) : Node("sharp", options) {}
 
 // main constructor — connects to the sensor and sets up the publisher,
 // service, and periodic timer
-Sharp::Sharp(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex port, const std::string &topic)
-    : rclcpp::Node(name), vmx_(vmx), port_(port) {
+Sharp::Sharp(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex port, const std::string &frame_id)
+    : rclcpp::Node(name), vmx_(vmx), port_(port), frame_id_(frame_id) {
 
     sharp_ = std::make_shared<studica_driver::Sharp>(port_, vmx_);
 
     // service for reading distance on demand
     service_ = this->create_service<studica_control::srv::SetData>(
-        "sharp_cmd",
+        name + "/sharp_cmd",
         std::bind(&Sharp::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
 
-    // publishes range data at 20hz
-    publisher_ = this->create_publisher<sensor_msgs::msg::Range>(topic, 10);
+    publisher_ = this->create_publisher<sensor_msgs::msg::Range>(name + "/range", 10);
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
         std::bind(&Sharp::publish_range, this));
@@ -106,7 +105,7 @@ void Sharp::publish_range() {
 
     sensor_msgs::msg::Range msg;
     msg.header.stamp    = this->get_clock()->now();
-    msg.header.frame_id = this->get_name();
+    msg.header.frame_id = frame_id_;
     msg.radiation_type  = sensor_msgs::msg::Range::INFRARED;
     msg.field_of_view   = field_of_view;
     msg.min_range       = min_range;

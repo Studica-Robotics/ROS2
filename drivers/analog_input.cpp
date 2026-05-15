@@ -1,4 +1,4 @@
-#include "analog_input.h"
+#include "analog_input.hpp"
 using namespace studica_driver;
 
 AnalogInput::AnalogInput(VMXChannelIndex port, std::shared_ptr<VMXPi> vmx)
@@ -11,7 +11,7 @@ AnalogInput::AnalogInput(VMXChannelIndex port, std::shared_ptr<VMXPi> vmx)
     float full_scale_voltage;
     if (!vmx_->IsOpen())
     {
-        std::cout << "VMX is not open." << full_scale_voltage << std::endl;
+        std::cout << "VMX is not open." << std::endl;
     }
     else
     {
@@ -34,14 +34,14 @@ AnalogInput::AnalogInput(VMXChannelIndex port, std::shared_ptr<VMXPi> vmx)
     {
         std::cerr << "Error activating analog channel " << port_ << std::endl;
     }
-    std::cout << "Analog Input Channel " << port_ << "activated." << std::endl;
+    std::cout << "Analog Input Channel " << port_ << " activated." << std::endl;
 }
 
 AnalogInput::~AnalogInput()
 {
 }
 
-float AnalogInput::GetAverageVoltage(float& volt)
+bool AnalogInput::GetAverageVoltage(float& volt)
 {
     VMXErrorCode vmxerr;
 

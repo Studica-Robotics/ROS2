@@ -1,4 +1,4 @@
-#include "duty_cycle_encoder.h"
+#include "duty_cycle_encoder.hpp"
 using namespace studica_driver;
 
 DutyCycleEncoder::DutyCycleEncoder(VMXChannelIndex port, std::shared_ptr<VMXPi> vmx)

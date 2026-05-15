@@ -1,4 +1,4 @@
-#include "ultrasonic.h"
+#include "ultrasonic.hpp"
 using namespace studica_driver;
 
 Ultrasonic::Ultrasonic(VMXChannelIndex ping, VMXChannelIndex echo, std::shared_ptr<VMXPi> vmx)
@@ -15,7 +15,7 @@ Ultrasonic::Ultrasonic(VMXChannelIndex ping, VMXChannelIndex echo, std::shared_p
             if (!vmx_->io.ActivateSinglechannelResource(VMXChannelInfo(ping_, VMXChannelCapability::DigitalOutput),
                                                         &dio_config, ping_output_res_handle, &vmxerr))
             {
-                printf("Studica Driver: Failed to open ping output resource on port %d", ping_);
+                printf("Studica Driver: Failed to open ping output resource on port %d\n", ping_);
                 DisplayVMXError(vmxerr);
             }
             else
@@ -68,7 +68,7 @@ Ultrasonic::Ultrasonic(VMXChannelIndex ping, VMXChannelIndex echo, std::shared_p
             if (!vmx_->io.ActivateSinglechannelResource(echo_chaninfo, &inputcap_config, echo_inputcap_res_handle,
                                                         &vmxerr))
             {
-                printf("Studica Driver: Failed to open echo input resource on port %d", echo_);
+                printf("Studica Driver: Failed to open echo input resource on port %d\n", echo_);
                 DisplayVMXError(vmxerr);
             }
             else
@@ -80,12 +80,12 @@ Ultrasonic::Ultrasonic(VMXChannelIndex ping, VMXChannelIndex echo, std::shared_p
         }
         else
         {
-            printf("Studica Driver: Invalid echo port %d", echo_);
+            printf("Studica Driver: Invalid echo port %d\n", echo_);
         }
     }
     else
     {
-        printf("Studica Driver: Invalid ping port %d", ping_);
+        printf("Studica Driver: Invalid ping port %d\n", ping_);
     }
 }
 
@@ -119,14 +119,14 @@ void Ultrasonic::Ping()
 
 float Ultrasonic::GetDistanceIN()
 {
-    uint32_t microseconds_per_inch = 148;
-    return get_count() / microseconds_per_inch;
+    constexpr double microseconds_per_inch = 148.0;
+    return static_cast<float>(get_count() / microseconds_per_inch);
 }
 
 float Ultrasonic::GetDistanceMM()
 {
-    uint32_t microseconds_per_mm = 5.8;
-    return get_count() / microseconds_per_mm;
+    constexpr double microseconds_per_mm = 5.8;
+    return static_cast<float>(get_count() / microseconds_per_mm);
 }
 
 // Method to read distance and publish

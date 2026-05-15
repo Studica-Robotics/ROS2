@@ -1,4 +1,4 @@
-#include "dio.h"
+#include "dio.hpp"
 
 using namespace studica_driver;
 

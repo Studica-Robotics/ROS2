@@ -1,4 +1,4 @@
-#include "titan.h"
+#include "titan.hpp"
 
 using namespace studica_driver;
 

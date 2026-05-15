@@ -1,4 +1,4 @@
-#include "servo.h"
+#include "servo.hpp"
 using namespace studica_driver;
 
 Servo::Servo(VMXChannelIndex port, ServoType type, int min, int max, std::shared_ptr<VMXPi> vmx)
@@ -6,7 +6,6 @@ Servo::Servo(VMXChannelIndex port, ServoType type, int min, int max, std::shared
     , prev_pwm_servo_value_(min - 1)
 {
 
-    SetBounds(0.5, 1.5, 2.5);
     if (port <= 21)
     {
         printf("Studica Driver: Successfully initialized port %d as a servo output\n", port);

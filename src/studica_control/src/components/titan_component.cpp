@@ -3,29 +3,27 @@
  *
  * ros2 component for the titan motor controller.
  * the titan is a can bus motor controller that supports up to 4 motors.
- * it publishes encoder counts for all 4 motor channels and accepts
- * speed, position, and pid commands through a service.
  *
- * topic:   <topic> (std_msgs/Float32MultiArray)
- *            array of 4 floats — encoder count for motors 0-3, published at 20hz
+ * encoder mode is configured per motor in params.yaml.
  *
- * service: <name>/titan_cmd (studica_control/SetData)
+ *   quadrature (default):
+ *     publishes /name/m_N/encoder (distance) and /name/m_N/rpm at 20hz
+ *
+ *   absolute (cypher encoder):
+ *     publishes /name/m_N/angle (degrees) at 20hz
+ *
+ * command topics (always active):
+ *     subscribe /name/m_N/cmd (Float64, duty cycle -1.0 to 1.0)
+ *
+ * service: /name/titan_cmd (studica_control/SetData)
  *   see titan_component.h for the full command reference.
- *   key initparams fields used across commands:
- *     n_encoder  — motor/channel index (0–3)
- *     speed      — float value: duty (-1.0..1.0), rpm, angle in degrees, or amps
- *     int_value  — integer value: mode codes, pid type, cpr, sensitivity, direction
- *     hold       — bool: used by set_position_hold
- *     dist_per_tick — distance per tick for configure_encoder
  */
 
-#include "studica_control/titan_component.h"
+#include "studica_control/titan_component.hpp"
 
 namespace studica_control {
 
 
-// reads titan parameters from params.yaml and creates one node per entry
-// in the sensors list. each node connects to a separate titan controller.
 std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
     std::vector<std::shared_ptr<rclcpp::Node>> titan_nodes;
 
@@ -35,20 +33,34 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
     for (const auto &sensor : sensor_ids) {
         std::string can_id_param     = "titan." + sensor + ".can_id";
         std::string motor_freq_param = "titan." + sensor + ".motor_freq";
-        std::string topic_param      = "titan." + sensor + ".topic";
 
         control->declare_parameter<int>(can_id_param, -1);
         control->declare_parameter<int>(motor_freq_param, -1);
-        control->declare_parameter<std::string>(topic_param, "");
 
-        uint8_t can_id      = control->get_parameter(can_id_param).as_int();
-        uint16_t motor_freq = control->get_parameter(motor_freq_param).as_int();
-        std::string topic   = control->get_parameter(topic_param).as_string();
+        uint8_t  can_id     = static_cast<uint8_t>(control->get_parameter(can_id_param).as_int());
+        uint16_t motor_freq = static_cast<uint16_t>(control->get_parameter(motor_freq_param).as_int());
 
-        RCLCPP_INFO(control->get_logger(), "%s -> can_id: %d, motor_freq: %d, topic: %s",
-                    sensor.c_str(), can_id, motor_freq, topic.c_str());
+        std::array<MotorConfig, 4> motor_configs;
+        for (int m = 0; m < 4; m++) {
+            std::string prefix = "titan." + sensor + ".m_" + std::to_string(m);
+            control->declare_parameter<std::string>(prefix + ".encoder_mode", "quadrature");
+            control->declare_parameter<double>     (prefix + ".dist_per_tick", 1.0);
+            control->declare_parameter<bool>       (prefix + ".invert_motor",   false);
+            control->declare_parameter<bool>       (prefix + ".invert_encoder", false);
+            control->declare_parameter<bool>       (prefix + ".invert_rpm",     false);
 
-        auto titan = std::make_shared<Titan>(vmx, sensor, can_id, motor_freq, topic);
+            std::string mode_str = control->get_parameter(prefix + ".encoder_mode").as_string();
+            motor_configs[m].encoder_mode  = (mode_str == "absolute") ? EncoderMode::Absolute : EncoderMode::Quadrature;
+            motor_configs[m].dist_per_tick = control->get_parameter(prefix + ".dist_per_tick").as_double();
+            motor_configs[m].invert_motor   = control->get_parameter(prefix + ".invert_motor").as_bool();
+            motor_configs[m].invert_encoder = control->get_parameter(prefix + ".invert_encoder").as_bool();
+            motor_configs[m].invert_rpm     = control->get_parameter(prefix + ".invert_rpm").as_bool();
+        }
+
+        RCLCPP_INFO(control->get_logger(), "%s -> can_id: %d, motor_freq: %d hz",
+                    sensor.c_str(), can_id, motor_freq);
+
+        auto titan = std::make_shared<Titan>(vmx, sensor, can_id, motor_freq, motor_configs);
         titan_nodes.push_back(titan);
     }
 
@@ -56,41 +68,61 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
 }
 
 
-// composable node constructor — used when loading as a ros2 plugin
 Titan::Titan(const rclcpp::NodeOptions &options) : Node("titan_", options) {}
 
 
-// main constructor — connects to the titan controller and sets up
-// the publisher, service, and periodic timer
 Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID,
-             const uint16_t &motor_freq, const std::string &topic)
-    : Node(name), vmx_(vmx), canID_(canID), motor_freq_(motor_freq) {
+             const uint16_t &motor_freq, const std::array<MotorConfig, 4> &motor_configs)
+    : Node(name), vmx_(vmx), canID_(canID), motor_freq_(motor_freq), motor_configs_(motor_configs) {
 
     titan_ = std::make_shared<studica_driver::Titan>(canID_, motor_freq_, 1, vmx_);
 
-    // service for sending commands to the titan
     service_ = this->create_service<studica_control::srv::SetData>(
         name + "/titan_cmd",
         std::bind(&Titan::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
 
-    // publishes encoder counts for all 4 motor channels at 20hz
-    publisher_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(topic, 10);
+    for (int i = 0; i < 4; i++) {
+        std::string prefix = name + "/m_" + std::to_string(i);
+
+        // command subscriber — always created
+        cmd_subs_[i] = this->create_subscription<std_msgs::msg::Float64>(
+            prefix + "/cmd", 10,
+            [this, i](std_msgs::msg::Float64::SharedPtr msg) {
+                if (!enabled_) return;
+                float speed = static_cast<float>(msg->data);
+                speeds_[i] = speed;
+                titan_->SetSpeed(i, speed);
+            });
+
+        // feedback publishers — depend on encoder mode
+        if (motor_configs_[i].encoder_mode == EncoderMode::Quadrature) {
+            encoder_pubs_[i] = this->create_publisher<std_msgs::msg::Float64>(prefix + "/encoder", 10);
+            rpm_pubs_[i]     = this->create_publisher<std_msgs::msg::Float64>(prefix + "/rpm", 10);
+            RCLCPP_INFO(this->get_logger(), "  m_%d: quadrature -> /%s/encoder, /%s/rpm",
+                        i, prefix.c_str(), prefix.c_str());
+        } else {
+            angle_pubs_[i] = this->create_publisher<std_msgs::msg::Float64>(prefix + "/angle", 10);
+            RCLCPP_INFO(this->get_logger(), "  m_%d: absolute   -> /%s/angle", i, prefix.c_str());
+        }
+    }
+
     encoder_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
         std::bind(&Titan::publish_encoders, this));
 
-    // resends current speed commands at 100hz to satisfy the titan CAN watchdog
     watchdog_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(10),
         std::bind(&Titan::resend_speeds, this));
 
-    // configure all 4 encoders with a distance-per-tick of 1 and clear counts
     for (int i = 0; i < 4; i++) {
-        titan_->ConfigureEncoder(i, 1);
+        titan_->ConfigureEncoder(i, motor_configs_[i].dist_per_tick);
         titan_->ResetEncoder(i);
+        if (motor_configs_[i].invert_motor)   titan_->InvertMotorDirection(i);
+        if (motor_configs_[i].invert_encoder) titan_->InvertEncoderDirection(i);
+        if (motor_configs_[i].invert_rpm)     titan_->InvertMotorRPM(i);
     }
 
-    titan_->SetPIDType(0);  // type 0 = duty-cycle mode (SetSpeed uses raw PWM duty, not velocity PID)
+    titan_->SetPIDType(0);
     titan_->Enable(true);
     enabled_ = true;
 
@@ -106,8 +138,6 @@ void Titan::cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request>
 }
 
 
-// dispatches incoming service commands to the appropriate titan driver function.
-// see the header for a full description of each command and its required initparams.
 void Titan::cmd(std::string params,
                 std::shared_ptr<studica_control::srv::SetData::Request> request,
                 std::shared_ptr<studica_control::srv::SetData::Response> response) {
@@ -155,7 +185,6 @@ void Titan::cmd(std::string params,
         response->message = "motor " + std::to_string(motor) + " disabled";
 
     } else if (params == "set_motor_stop_mode") {
-        // int_value: 0 = coast, 1 = brake (see firmware docs)
         titan_->SetMotorStopMode(static_cast<uint8_t>(request->initparams.int_value));
         response->success = true;
         response->message = "stop mode set to " + std::to_string(request->initparams.int_value);
@@ -163,28 +192,24 @@ void Titan::cmd(std::string params,
     // --- closed loop velocity / position control (titan2 firmware) ---
 
     } else if (params == "set_target_velocity") {
-        // speed field carries the target in rpm — cast to int16
         int16_t rpm = static_cast<int16_t>(request->initparams.speed);
         titan_->SetTargetVelocity(motor, rpm);
         response->success = true;
         response->message = "motor " + std::to_string(motor) + " target velocity set to " + std::to_string(rpm) + " rpm";
 
     } else if (params == "set_target_distance") {
-        // int_value carries the target in encoder counts
         titan_->SetTargetDistance(motor, static_cast<int32_t>(request->initparams.int_value));
         response->success = true;
         response->message = "motor " + std::to_string(motor) + " target distance set to "
                             + std::to_string(request->initparams.int_value) + " counts";
 
     } else if (params == "set_target_angle") {
-        // speed field carries the target angle in degrees
         titan_->SetTargetAngle(motor, static_cast<double>(request->initparams.speed));
         response->success = true;
         response->message = "motor " + std::to_string(motor) + " target angle set to "
                             + std::to_string(request->initparams.speed) + " degrees";
 
     } else if (params == "set_position_hold") {
-        // hold field: true = lock position, false = release
         titan_->SetPositionHold(motor, request->initparams.hold);
         response->success = true;
         response->message = "motor " + std::to_string(motor) + " position hold "
@@ -193,13 +218,11 @@ void Titan::cmd(std::string params,
     // --- pid tuning (titan2 firmware) ---
 
     } else if (params == "set_pid_type") {
-        // int_value: pid algorithm type — see firmware documentation for valid values
         titan_->SetPIDType(static_cast<uint8_t>(request->initparams.int_value));
         response->success = true;
         response->message = "pid type set to " + std::to_string(request->initparams.int_value);
 
     } else if (params == "set_sensitivity") {
-        // int_value: 0–255, controls how aggressively the pid responds
         titan_->SetSensitivity(motor, static_cast<uint8_t>(request->initparams.int_value));
         response->success = true;
         response->message = "motor " + std::to_string(motor) + " sensitivity set to "
@@ -223,7 +246,6 @@ void Titan::cmd(std::string params,
         response->message = "encoder " + std::to_string(motor) + " configured";
 
     } else if (params == "set_encoder_resolution") {
-        // int_value: counts per revolution (cpr) for this encoder
         titan_->SetEncoderResolution(motor, static_cast<uint16_t>(request->initparams.int_value));
         response->success = true;
         response->message = "encoder " + std::to_string(motor) + " resolution set to "
@@ -237,14 +259,12 @@ void Titan::cmd(std::string params,
     // --- current limiting ---
 
     } else if (params == "set_current_limit") {
-        // speed field carries the limit in amps
         titan_->SetCurrentLimit(motor, request->initparams.speed);
         response->success = true;
         response->message = "motor " + std::to_string(motor) + " current limit set to "
                             + std::to_string(request->initparams.speed) + " amps";
 
     } else if (params == "set_current_limit_mode") {
-        // int_value: mode code — see firmware documentation for valid values
         titan_->SetCurrentLimitMode(motor, static_cast<uint8_t>(request->initparams.int_value));
         response->success = true;
         response->message = "motor " + std::to_string(motor) + " current limit mode set to "
@@ -298,7 +318,6 @@ void Titan::cmd(std::string params,
         response->message = std::to_string(titan_->GetCypherAngle(motor));
 
     } else if (params == "get_limit_switch") {
-        // int_value: 0 = forward direction, 1 = reverse direction
         bool state = titan_->GetLimitSwitch(motor, static_cast<uint8_t>(request->initparams.int_value));
         response->success = true;
         response->message = state ? "triggered" : "open";
@@ -332,12 +351,22 @@ void Titan::cmd(std::string params,
 
 void Titan::publish_encoders() {
     if (!enabled_) return;
-    std_msgs::msg::Float32MultiArray msg;
-    msg.data.resize(4);
+
     for (int i = 0; i < 4; i++) {
-        msg.data[i] = static_cast<float>(titan_->GetEncoderCount(i));
+        if (motor_configs_[i].encoder_mode == EncoderMode::Quadrature) {
+            std_msgs::msg::Float64 enc_msg;
+            enc_msg.data = titan_->GetEncoderDistance(i);
+            encoder_pubs_[i]->publish(enc_msg);
+
+            std_msgs::msg::Float64 rpm_msg;
+            rpm_msg.data = static_cast<double>(titan_->GetRPM(i));
+            rpm_pubs_[i]->publish(rpm_msg);
+        } else {
+            std_msgs::msg::Float64 angle_msg;
+            angle_msg.data = titan_->GetCypherAngle(i);
+            angle_pubs_[i]->publish(angle_msg);
+        }
     }
-    publisher_->publish(msg);
 }
 
 void Titan::resend_speeds() {

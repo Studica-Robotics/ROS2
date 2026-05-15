@@ -1,4 +1,4 @@
-#include "pwm.h"
+#include "pwm.hpp"
 using namespace studica_driver;
 
 PWM::PWM(VMXChannelIndex port, PWMType type, int min, int max, std::shared_ptr<VMXPi> vmx)
@@ -56,7 +56,6 @@ void PWM::SetBounds(double min, double center, double max)
 
 int PWM::Map(int value)
 {
-    printf("Min: %d Max: %d Min_us: %d Max_us: %d\n", min_, max_, min_us_, max_us_);
     if (value < min_)
         value = min_;
     if (value > max_)

@@ -1,4 +1,4 @@
-#include "sharp.h"
+#include "sharp.hpp"
 using namespace studica_driver;
 
 Sharp::Sharp(VMXChannelIndex port, std::shared_ptr<VMXPi> vmx)

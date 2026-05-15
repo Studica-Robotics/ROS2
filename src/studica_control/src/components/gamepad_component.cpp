@@ -15,7 +15,7 @@
  * topic (publishes):  <cmd_vel_topic> (geometry_msgs/Twist) — velocity output
  */
 
-#include "studica_control/gamepad_component.h"
+#include "studica_control/gamepad_component.hpp"
 
 namespace studica_control {
 
@@ -81,11 +81,12 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
         "joy", 10,
         std::bind(&GamepadController::joy_callback, this, std::placeholders::_1));
 
-    // subscribe to axis remapping topic with transient local qos so we get
-    // the last published mapping even if we start after it was sent
+    // subscribe to axis remap topic with transient local qos so we get
+    // the last published mapping even if we start after it was sent.
+    // publish [x_axis, y_axis, z_axis] indices; use -1 to leave an axis unmapped.
     rclcpp::QoS buttons_qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local();
     gamepad_button_subscription_ = this->create_subscription<std_msgs::msg::Int32MultiArray>(
-        "/gamepad_buttons", buttons_qos,
+        "/gamepad_axis_remap", buttons_qos,
         std::bind(&GamepadController::gamepad_button_callback, this, std::placeholders::_1));
 
     std::string cmd_vel_topic = this->get_parameter("cmd_vel_topic").as_string();
@@ -101,9 +102,9 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
     RCLCPP_INFO(this->get_logger(), "gamepad controls: axis[%d/%d] = movement, axis[%d] = rotation, button[%d] = turbo",
                 axis_linear_x_, axis_linear_y_, axis_angular_z_, button_turbo_);
 
-    if (axis_linear_x_ < 0 || axis_linear_y_ < 0 || axis_angular_z_ < 0) {
+    if (axis_linear_x_ < 0 && axis_linear_y_ < 0 && axis_angular_z_ < 0) {
         RCLCPP_WARN(this->get_logger(),
-                    "axis mappings unset — set gamepad.axis_linear_x/y and axis_angular_z in params.yaml");
+                    "all axes are unmapped (-1) — set at least one axis in params.yaml or publish to /gamepad_axis_remap");
     }
 }
 
@@ -154,11 +155,11 @@ void GamepadController::joy_callback(const sensor_msgs::msg::Joy::SharedPtr msg)
         return;
     }
 
-    const size_t axes_sz = msg->axes.size();
-    if (static_cast<size_t>(axis_linear_x_) >= axes_sz ||
-        static_cast<size_t>(axis_linear_y_) >= axes_sz ||
-        static_cast<size_t>(axis_angular_z_) >= axes_sz ||
-        msg->buttons.size() <= static_cast<size_t>(button_turbo_)) {
+    const size_t axes_sz    = msg->axes.size();
+    const size_t buttons_sz = msg->buttons.size();
+    auto axis_ok = [&](int idx) { return idx < 0 || static_cast<size_t>(idx) < axes_sz; };
+    if (!axis_ok(axis_linear_x_) || !axis_ok(axis_linear_y_) || !axis_ok(axis_angular_z_) ||
+        buttons_sz <= static_cast<size_t>(button_turbo_)) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
                              "controller does not have enough axes or buttons for the configured mapping");
         return;
@@ -169,9 +170,9 @@ void GamepadController::joy_callback(const sensor_msgs::msg::Joy::SharedPtr msg)
         return (std::abs(value) < deadzone_) ? 0.0 : value;
     };
 
-    linear_x_  = apply_deadzone(msg->axes[axis_linear_x_]);
-    linear_y_  = apply_deadzone(msg->axes[axis_linear_y_]);
-    angular_z_ = apply_deadzone(msg->axes[axis_angular_z_]);
+    linear_x_  = (axis_linear_x_  >= 0) ? apply_deadzone(msg->axes[axis_linear_x_])  : 0.0;
+    linear_y_  = (axis_linear_y_  >= 0) ? apply_deadzone(msg->axes[axis_linear_y_])  : 0.0;
+    angular_z_ = (axis_angular_z_ >= 0) ? apply_deadzone(msg->axes[axis_angular_z_]) : 0.0;
     turbo_mode_ = (msg->buttons[button_turbo_] == 1);
 
     RCLCPP_DEBUG_THROTTLE(this->get_logger(), *this->get_clock(), 1000,

@@ -1,4 +1,4 @@
-#include "encoder.h"
+#include "encoder.hpp"
 using namespace studica_driver;
 
 Encoder::Encoder(VMXChannelIndex port_a, VMXChannelIndex port_b, std::shared_ptr<VMXPi> vmx)

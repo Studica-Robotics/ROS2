@@ -2,28 +2,19 @@
  * cobra_component.cpp
  *
  * ros2 component for the studica cobra reflectance sensor array.
- * the cobra is a 4-channel analog sensor that measures how much infrared
- * light is reflected off a surface. each channel outputs a voltage between
- * 0 and vref — low voltage over dark surfaces, high voltage over light ones.
- * this makes it well suited for line following and surface detection.
+ * publishes per-channel voltage on individual topics at 20hz.
  *
- * topic:   <topic> (std_msgs/Float32MultiArray)
- *            voltage for all 4 channels, published at 20hz.
- *            data[0..3] = voltage in volts for channels 0–3
- *
- * service: cobra_cmd (studica_control/SetData)
- *   params field sets the command. available commands:
- *     get_raw <channel>     — returns the raw adc value for one channel (0–3)
- *     get_voltage <channel> — returns the voltage in volts for one channel (0–3)
+ * topics (publish): <name>/ch_0 ... <name>/ch_3 (std_msgs/Float32), 20hz
+ * service: <name>/cobra_cmd (studica_control/SetData)
+ *   initparams.n_encoder — channel (0–3)
+ *   commands: get_raw, get_voltage
  */
 
-#include "studica_control/cobra_component.h"
+#include "studica_control/cobra_component.hpp"
 
 namespace studica_control {
 
 
-// reads cobra parameters from params.yaml and creates one node per entry
-// in the sensors list
 std::vector<std::shared_ptr<rclcpp::Node>> Cobra::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx) {
     std::vector<std::shared_ptr<rclcpp::Node>> cobra_nodes;
 
@@ -31,47 +22,42 @@ std::vector<std::shared_ptr<rclcpp::Node>> Cobra::initialize(rclcpp::Node *contr
     std::vector<std::string> sensor_ids = control->get_parameter("cobra.sensors").as_string_array();
 
     for (const auto &sensor : sensor_ids) {
-        std::string vref_param  = "cobra." + sensor + ".vref";
-        std::string topic_param = "cobra." + sensor + ".topic";
+        std::string vref_param = "cobra." + sensor + ".vref";
+        control->declare_parameter<float>(vref_param, 5.0f);
+        float vref = control->get_parameter(vref_param).get_value<float>();
 
-        control->declare_parameter<float>(vref_param, -1.0);
-        control->declare_parameter<std::string>(topic_param, "unknown");
+        RCLCPP_INFO(control->get_logger(), "%s -> vref: %.1f V", sensor.c_str(), vref);
 
-        float vref        = control->get_parameter(vref_param).get_value<float>();
-        std::string topic = control->get_parameter(topic_param).as_string();
-
-        RCLCPP_INFO(control->get_logger(), "%s -> vref: %f, topic: %s",
-                    sensor.c_str(), vref, topic.c_str());
-
-        auto cobra = std::make_shared<Cobra>(vmx, sensor, vref, topic);
-        cobra_nodes.push_back(cobra);
+        cobra_nodes.push_back(std::make_shared<Cobra>(vmx, sensor, vref));
     }
 
     return cobra_nodes;
 }
 
 
-// composable node constructor — used when loading as a plugin
 Cobra::Cobra(const rclcpp::NodeOptions &options) : Node("cobra", options) {}
 
 
-// main constructor — connects to the cobra sensor and sets up the publisher,
-// service, and periodic timer
-Cobra::Cobra(std::shared_ptr<VMXPi> vmx, const std::string &name, const float &vref, const std::string &topic)
+Cobra::Cobra(std::shared_ptr<VMXPi> vmx, const std::string &name, const float &vref)
     : Node(name), vmx_(vmx), vref_(vref) {
 
     cobra_ = std::make_shared<studica_driver::Cobra>(vmx_, vref_);
 
-    // service for reading individual channel values on demand
     service_ = this->create_service<studica_control::srv::SetData>(
-        "cobra_cmd",
+        name + "/cobra_cmd",
         std::bind(&Cobra::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
 
-    // publishes all 4 channel voltages at 20hz
-    publisher_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(topic, 10);
+    for (int i = 0; i < 4; i++) {
+        channel_pubs_[i] = this->create_publisher<std_msgs::msg::Float32>(
+            name + "/ch_" + std::to_string(i), 10);
+    }
+
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
         std::bind(&Cobra::publish_data, this));
+
+    RCLCPP_INFO(this->get_logger(), "cobra ready. topics: /%s/ch_0 ... /%s/ch_3",
+                name.c_str(), name.c_str());
 }
 
 Cobra::~Cobra() {}
@@ -79,45 +65,34 @@ Cobra::~Cobra() {}
 
 void Cobra::cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request,
                          std::shared_ptr<studica_control::srv::SetData::Response> response) {
-    cmd(request->params, response);
-}
-
-
-// dispatches incoming service commands. the params field should be
-// "get_raw <channel>" or "get_voltage <channel>" where channel is 0–3.
-void Cobra::cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Response> response) {
-    try {
-        if (params.rfind("get_raw", 0) == 0) {
-            uint8_t channel = static_cast<uint8_t>(std::stoi(params.substr(8)));
-            response->success = true;
-            response->message = std::to_string(cobra_->GetRawValue(channel));
-
-        } else if (params.rfind("get_voltage", 0) == 0) {
-            uint8_t channel = static_cast<uint8_t>(std::stoi(params.substr(12)));
-            response->success = true;
-            response->message = std::to_string(cobra_->GetVoltage(channel));
-
-        } else {
-            response->success = false;
-            response->message = "unknown command '" + params + "' — use 'get_raw <ch>' or 'get_voltage <ch>'";
-        }
-    } catch (const std::exception &e) {
+    uint8_t channel = static_cast<uint8_t>(request->initparams.n_encoder);
+    if (channel > 3) {
         response->success = false;
-        response->message = "invalid channel in command '" + params + "': " + std::string(e.what());
+        response->message = "invalid channel " + std::to_string(channel) + " — must be 0–3";
+        return;
+    }
+
+    if (request->params == "get_raw") {
+        response->success = true;
+        response->message = std::to_string(cobra_->GetRawValue(channel));
+
+    } else if (request->params == "get_voltage") {
+        response->success = true;
+        response->message = std::to_string(cobra_->GetVoltage(channel));
+
+    } else {
+        response->success = false;
+        response->message = "unknown command '" + request->params + "' — use 'get_raw' or 'get_voltage'";
     }
 }
 
 
-// reads voltage from all 4 channels and publishes them as an array
 void Cobra::publish_data() {
-    std_msgs::msg::Float32MultiArray msg;
-    msg.data.resize(4);
-
-    for (uint8_t i = 0; i < 4; i++) {
-        msg.data[i] = cobra_->GetVoltage(i);
+    for (int i = 0; i < 4; i++) {
+        std_msgs::msg::Float32 msg;
+        msg.data = cobra_->GetVoltage(static_cast<uint8_t>(i));
+        channel_pubs_[i]->publish(msg);
     }
-
-    publisher_->publish(msg);
 }
 
 

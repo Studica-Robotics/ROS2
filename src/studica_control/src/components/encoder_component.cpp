@@ -16,7 +16,7 @@
  *     get_direction — returns the current direction as a string
  */
 
-#include "studica_control/encoder_component.h"
+#include "studica_control/encoder_component.hpp"
 
 namespace studica_control {
 
@@ -66,7 +66,7 @@ Encoder::Encoder(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannel
 
     // service for reading encoder values on demand
     service_ = this->create_service<studica_control::srv::SetData>(
-        "encoder_cmd",
+        name + "/encoder_cmd",
         std::bind(&Encoder::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
 
     // publishes count and direction at 20hz

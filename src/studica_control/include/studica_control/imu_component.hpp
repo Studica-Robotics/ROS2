@@ -13,9 +13,10 @@
  *     linear_accel     — metres per second squared (converted from g)
  *   covariance fields are set to -1 (unknown) per ros2 convention (rep-145).
  *
- * service: imu_cmd (studica_control/SetData)
- *   params field sets the command. available commands:
- *     zero_yaw — reset the yaw (rotation around vertical axis) to zero
+ * service: <name>/get_imu_data (studica_control/SetData)
+ *   params field sets the command:
+ *     zero_yaw      — reset the yaw (heading) reference to zero at the current orientation
+ *     (any other)   — returns current pitch, yaw, roll as a string
  */
 
 #ifndef IMU_COMPONENT_H
@@ -27,7 +28,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 
-#include "imu.h"
+#include "imu.hpp"
 #include "studica_control/srv/set_data.hpp"
 #include "VMXPi.h"
 

@@ -12,9 +12,10 @@
  * topic (subscribes): /joy (sensor_msgs/Joy)
  *   raw joystick input from the ros2 joy node. run: ros2 run joy joy_node
  *
- * topic (subscribes): /gamepad_buttons (std_msgs/Int32MultiArray)
- *   runtime axis remap: publish [x_axis, y_axis, z_axis] to change axis mapping
- *   without restarting. primary configuration is via params.yaml.
+ * topic (subscribes): /gamepad_axis_remap (std_msgs/Int32MultiArray)
+ *   runtime axis remap: publish [x_axis, y_axis, z_axis] indices to change mapping
+ *   without restarting. use -1 for any axis to leave it unmapped (outputs 0).
+ *   primary configuration is via params.yaml.
  *
  * topic (publishes): <cmd_vel_topic> (geometry_msgs/Twist)
  *   velocity command published at 10hz regardless of joystick input rate.

@@ -15,7 +15,7 @@
  *   (no specific params field needed — any call returns the values)
  */
 
-#include "studica_control/imu_component.h"
+#include "studica_control/imu_component.hpp"
 
 namespace studica_control {
 
@@ -48,7 +48,7 @@ Imu::Imu(std::shared_ptr<VMXPi> vmx, const std::string &name, const std::string 
 
     // service for reading pitch, yaw, and roll on demand
     service_ = this->create_service<studica_control::srv::SetData>(
-        "get_imu_data",
+        name + "/get_imu_data",
         std::bind(&Imu::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
 
     // publishes full imu data at 20hz
@@ -63,25 +63,29 @@ Imu::Imu(std::shared_ptr<VMXPi> vmx, const std::string &name, const std::string 
 Imu::~Imu() {}
 
 
-// returns pitch, yaw, and roll as a human-readable string
-void Imu::cmd_callback(const std::shared_ptr<studica_control::srv::SetData::Request> /* request */,
+void Imu::cmd_callback(const std::shared_ptr<studica_control::srv::SetData::Request> request,
                        std::shared_ptr<studica_control::srv::SetData::Response> response) {
     try {
-        float pitch = imu_->GetPitch();
-        float yaw   = imu_->GetYaw();
-        float roll  = imu_->GetRoll();
+        if (request->params == "zero_yaw") {
+            imu_->ZeroYaw();
+            response->success = true;
+            response->message = "yaw zeroed";
+            RCLCPP_INFO(this->get_logger(), "yaw zeroed");
 
-        response->success = true;
-        response->message = "pitch: " + std::to_string(pitch)
-                          + ", yaw: "  + std::to_string(yaw)
-                          + ", roll: " + std::to_string(roll);
-
-        RCLCPP_INFO(this->get_logger(), "pitch: %f, yaw: %f, roll: %f", pitch, yaw, roll);
-
+        } else {
+            // default — return current pitch, yaw, roll
+            float pitch = imu_->GetPitch();
+            float yaw   = imu_->GetYaw();
+            float roll  = imu_->GetRoll();
+            response->success = true;
+            response->message = "pitch: " + std::to_string(pitch)
+                              + ", yaw: "  + std::to_string(yaw)
+                              + ", roll: " + std::to_string(roll);
+        }
     } catch (const std::exception &e) {
         response->success = false;
-        response->message = "failed to get imu data: " + std::string(e.what());
-        RCLCPP_ERROR(this->get_logger(), "failed to get imu data: %s", e.what());
+        response->message = "imu error: " + std::string(e.what());
+        RCLCPP_ERROR(this->get_logger(), "imu error: %s", e.what());
     }
 }
 

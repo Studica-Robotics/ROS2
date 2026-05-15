@@ -25,7 +25,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/range.hpp>
 
-#include "sharp.h"
+#include "sharp.hpp"
 #include "studica_control/srv/set_data.hpp"
 #include "VMXPi.h"
 
@@ -42,7 +42,7 @@ public:
 
     // main constructor — connects to the sensor and sets up topics/services
     Sharp(std::shared_ptr<VMXPi> vmx, const std::string &name,
-          VMXChannelIndex port, const std::string &topic);
+          VMXChannelIndex port, const std::string &frame_id);
 
     ~Sharp();
 
@@ -50,6 +50,7 @@ private:
     std::shared_ptr<studica_driver::Sharp> sharp_;
     std::shared_ptr<VMXPi> vmx_;
     VMXChannelIndex port_;
+    std::string frame_id_;
 
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
     rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr publisher_;

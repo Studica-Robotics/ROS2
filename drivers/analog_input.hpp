@@ -14,7 +14,7 @@ namespace studica_driver
             AnalogInput(VMXChannelIndex port, std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
             ~AnalogInput();
 
-            float GetAverageVoltage(float& volt);
+            bool GetAverageVoltage(float& volt);
 
         private:
             std::shared_ptr<VMXPi> vmx_;

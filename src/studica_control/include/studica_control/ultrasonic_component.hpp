@@ -29,7 +29,7 @@
 #include "sensor_msgs/msg/range.hpp"
 
 #include "studica_control/srv/set_data.hpp"
-#include "ultrasonic.h"
+#include "ultrasonic.hpp"
 #include "VMXPi.h"
 
 namespace studica_control {
@@ -45,15 +45,16 @@ public:
 
     // main constructor — connects to the sensor and sets up topics/services
     Ultrasonic(std::shared_ptr<VMXPi> vmx, const std::string &name,
-               VMXChannelIndex ping, VMXChannelIndex echo, const std::string &topic);
+               VMXChannelIndex ping, VMXChannelIndex echo, const std::string &frame_id);
 
     ~Ultrasonic();
 
 private:
     std::shared_ptr<studica_driver::Ultrasonic> ultrasonic_;
     std::shared_ptr<VMXPi> vmx_;
-    VMXChannelIndex ping_;  // trigger pin — sends the sound pulse
-    VMXChannelIndex echo_;  // echo pin — receives the reflected pulse
+    VMXChannelIndex ping_;
+    VMXChannelIndex echo_;
+    std::string frame_id_;
 
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
     rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr publisher_;

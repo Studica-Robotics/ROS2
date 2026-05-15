@@ -19,7 +19,7 @@
  *     get_distance_millimeters — returns distance in millimetres as a string
  */
 
-#include "studica_control/ultrasonic_component.h"
+#include "studica_control/ultrasonic_component.hpp"
 
 namespace studica_control {
 
@@ -33,22 +33,22 @@ std::vector<std::shared_ptr<rclcpp::Node>> Ultrasonic::initialize(rclcpp::Node *
     std::vector<std::string> sensor_ids = control->get_parameter("ultrasonic.sensors").as_string_array();
 
     for (const auto &sensor : sensor_ids) {
-        std::string ping_param  = "ultrasonic." + sensor + ".ping";
-        std::string echo_param  = "ultrasonic." + sensor + ".echo";
-        std::string topic_param = "ultrasonic." + sensor + ".topic";
+        std::string ping_param     = "ultrasonic." + sensor + ".ping";
+        std::string echo_param     = "ultrasonic." + sensor + ".echo";
+        std::string frame_id_param = "ultrasonic." + sensor + ".frame_id";
 
         control->declare_parameter<int>(ping_param, -1);
         control->declare_parameter<int>(echo_param, -1);
-        control->declare_parameter<std::string>(topic_param, "unknown");
+        control->declare_parameter<std::string>(frame_id_param, sensor);
 
-        int ping          = control->get_parameter(ping_param).as_int();
-        int echo          = control->get_parameter(echo_param).as_int();
-        std::string topic = control->get_parameter(topic_param).as_string();
+        int ping             = control->get_parameter(ping_param).as_int();
+        int echo             = control->get_parameter(echo_param).as_int();
+        std::string frame_id = control->get_parameter(frame_id_param).as_string();
 
-        RCLCPP_INFO(control->get_logger(), "%s -> ping: %d, echo: %d, topic: %s",
-                    sensor.c_str(), ping, echo, topic.c_str());
+        RCLCPP_INFO(control->get_logger(), "%s -> ping: %d, echo: %d, frame_id: %s",
+                    sensor.c_str(), ping, echo, frame_id.c_str());
 
-        auto ultrasonic = std::make_shared<Ultrasonic>(vmx, sensor, ping, echo, topic);
+        auto ultrasonic = std::make_shared<Ultrasonic>(vmx, sensor, ping, echo, frame_id);
         ultrasonic_nodes.push_back(ultrasonic);
     }
 
@@ -63,18 +63,17 @@ Ultrasonic::Ultrasonic(const rclcpp::NodeOptions &options) : Node("ultrasonic", 
 // main constructor — connects to the sensor and sets up the publisher,
 // service, and periodic timer
 Ultrasonic::Ultrasonic(std::shared_ptr<VMXPi> vmx, const std::string &name,
-                       VMXChannelIndex ping, VMXChannelIndex echo, const std::string &topic)
-    : Node(name), vmx_(vmx), ping_(ping), echo_(echo) {
+                       VMXChannelIndex ping, VMXChannelIndex echo, const std::string &frame_id)
+    : Node(name), vmx_(vmx), ping_(ping), echo_(echo), frame_id_(frame_id) {
 
     ultrasonic_ = std::make_shared<studica_driver::Ultrasonic>(ping_, echo_, vmx_);
 
     // service for reading distance on demand
     service_ = this->create_service<studica_control::srv::SetData>(
-        "ultrasonic_cmd",
+        name + "/ultrasonic_cmd",
         std::bind(&Ultrasonic::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
 
-    // publishes range data at 20hz
-    publisher_ = this->create_publisher<sensor_msgs::msg::Range>(topic, 10);
+    publisher_ = this->create_publisher<sensor_msgs::msg::Range>(name + "/range", 10);
     timer_ = this->create_wall_timer(
         std::chrono::milliseconds(50),
         std::bind(&Ultrasonic::publish_range, this));
@@ -127,7 +126,7 @@ void Ultrasonic::publish_range() {
 
     sensor_msgs::msg::Range msg;
     msg.header.stamp    = this->get_clock()->now();
-    msg.header.frame_id = this->get_name();
+    msg.header.frame_id = frame_id_;
     msg.radiation_type  = sensor_msgs::msg::Range::ULTRASOUND;
     msg.field_of_view   = field_of_view;
     msg.min_range       = min_range;

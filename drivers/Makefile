@@ -26,7 +26,7 @@ $(LIBRARY): $(OBJS)
 # Install headers and library
 install: $(LIBRARY)
 	sudo mkdir -p $(INCLUDE_INSTALL_PATH)
-	sudo cp -r $(SRCS:.cpp=.h) $(INCLUDE_INSTALL_PATH)/
+	sudo cp -r $(wildcard *.hpp) $(INCLUDE_INSTALL_PATH)/
 	sudo mkdir -p $(LIB_INSTALL_PATH)
 	sudo cp $(LIBRARY) $(LIB_INSTALL_PATH)
 

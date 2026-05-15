@@ -4,16 +4,16 @@
 
 #include "rclcpp/rclcpp.hpp"
 
-#include "studica_control/cobra_component.h"
-#include "studica_control/dc_encoder_component.h"
-#include "studica_control/dio_component.h"
-#include "studica_control/encoder_component.h"
-#include "studica_control/gamepad_component.h"
-#include "studica_control/imu_component.h"
-#include "studica_control/servo_component.h"
-#include "studica_control/sharp_component.h"
-#include "studica_control/titan_component.h"
-#include "studica_control/ultrasonic_component.h"
+#include "studica_control/cobra_component.hpp"
+#include "studica_control/dc_encoder_component.hpp"
+#include "studica_control/dio_component.hpp"
+#include "studica_control/encoder_component.hpp"
+#include "studica_control/gamepad_component.hpp"
+#include "studica_control/imu_component.hpp"
+#include "studica_control/servo_component.hpp"
+#include "studica_control/sharp_component.hpp"
+#include "studica_control/titan_component.hpp"
+#include "studica_control/ultrasonic_component.hpp"
 #include "VMXPi.h"
 
 class ControlServer : public rclcpp::Node {

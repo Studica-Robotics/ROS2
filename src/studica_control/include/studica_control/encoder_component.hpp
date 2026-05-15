@@ -25,7 +25,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 
-#include "encoder.h"
+#include "encoder.hpp"
 #include "studica_control/msg/encoder_msg.hpp"
 #include "studica_control/srv/set_data.hpp"
 #include "VMXPi.h"

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "VMXPi.h"
-#include "analog_input.h"
+#include "analog_input.hpp"
 #include <cmath>
 #include <stdio.h>
 

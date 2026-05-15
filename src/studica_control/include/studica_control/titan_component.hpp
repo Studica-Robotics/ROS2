@@ -5,16 +5,28 @@
  * the titan controls up to 4 motors over can bus. each titan
  * has a unique can id so you can run multiple on the same robot.
  *
- * topic (publishes): <topic> (std_msgs/Float32MultiArray)
- *   encoder counts for all 4 motors, published at 20hz.
- *   data[0..3] = raw encoder tick counts (float, but whole numbers)
+ * encoder modes — configured per motor in params.yaml:
  *
- * service: <name>/titan_cmd (studica_control/SetData)
+ *   quadrature (default)
+ *     /titan0/m_N/encoder  (std_msgs/Float64) — encoder distance, 20hz
+ *     /titan0/m_N/rpm      (std_msgs/Float64) — rpm, 20hz
+ *
+ *   absolute (cypher encoder)
+ *     /titan0/m_N/angle    (std_msgs/Float64) — absolute angle in degrees, 20hz
+ *
+ * command topics (always present regardless of encoder mode):
+ *     /titan0/m_0/cmd  (std_msgs/Float64) — duty cycle motor 0, -1.0 to 1.0
+ *     /titan0/m_1/cmd  ...
+ *     /titan0/m_2/cmd  ...
+ *     /titan0/m_3/cmd  ...
+ *
+ * service: /titan0/titan_cmd (studica_control/SetData)
+ *   use the service for configuration and closed-loop control.
  *   send commands via the params field. initparams carries extra values:
- *     n_encoder  — which motor to target (0–3)
- *     speed      — floating point value (duty -1.0..1.0, rpm, angle, amps)
- *     int_value  — integer value (mode codes, pid type, resolution, sensitivity)
- *     hold       — boolean (used by set_position_hold)
+ *     n_encoder     — which motor to target (0–3)
+ *     speed         — float: duty (-1.0..1.0), rpm, angle in degrees, or amps
+ *     int_value     — integer: mode codes, pid type, cpr, sensitivity, direction
+ *     hold          — bool: used by set_position_hold
  *     dist_per_tick — distance per encoder tick for configure_encoder
  *
  *   basic control:
@@ -51,11 +63,11 @@
  *   encoder configuration:
  *     setup_encoder        — prepare an encoder channel for use
  *                            requires: n_encoder
- *     configure_encoder    — set distance per tick for odometry
+ *     configure_encoder    — set distance per tick for odometry (quadrature mode)
  *                            requires: n_encoder, dist_per_tick
  *     set_encoder_resolution — set encoder counts per revolution
  *                            requires: n_encoder, int_value (cpr)
- *     reset_encoder        — reset one encoder count to zero
+ *     reset_encoder        — reset one encoder count to zero (quadrature mode)
  *                            requires: n_encoder
  *
  *   current limiting:
@@ -75,15 +87,15 @@
  *                            requires: n_encoder
  *
  *   read back:
- *     get_rpm              — current rpm for one motor
+ *     get_rpm              — current rpm for one motor (quadrature mode)
  *                            requires: n_encoder
- *     get_encoder_count    — raw tick count for one motor
+ *     get_encoder_count    — raw tick count for one motor (quadrature mode)
  *                            requires: n_encoder
- *     get_encoder_distance — distance traveled for one motor
+ *     get_encoder_distance — distance traveled for one motor (quadrature mode)
  *                            requires: n_encoder
  *     get_target_rpm       — target rpm for all 4 motors (comma separated)
- *     get_cypher_angle     — angle from a cypher encoder on a given port
- *                            requires: n_encoder (port index)
+ *     get_cypher_angle     — absolute angle from cypher encoder (absolute mode)
+ *                            requires: n_encoder
  *     get_limit_switch     — limit switch state for one motor and direction
  *                            requires: n_encoder, int_value (0=forward, 1=reverse)
  *     get_controller_temp  — mcu temperature in celsius
@@ -96,22 +108,33 @@
 #ifndef TITAN_COMPONENT_H
 #define TITAN_COMPONENT_H
 
+#include <array>
 #include <memory>
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/float32_multi_array.hpp"
+#include "std_msgs/msg/float64.hpp"
 
 #include "studica_control/srv/set_data.hpp"
-#include "titan.h"
+#include "titan.hpp"
 #include "VMXPi.h"
 
 namespace studica_control {
 
+enum class EncoderMode { Quadrature, Absolute };
+
+struct MotorConfig {
+    EncoderMode encoder_mode = EncoderMode::Quadrature;
+    double dist_per_tick = 1.0;
+    bool invert_motor   = false;
+    bool invert_encoder = false;
+    bool invert_rpm     = false;
+};
+
 // titan — motor controller node. one instance per physical titan board.
 class Titan : public rclcpp::Node {
 public:
-    // reads params.yaml and creates one node per titan entry in the list
+    // reads params.yaml and creates one node per titan entry in the sensors list
     static std::vector<std::shared_ptr<rclcpp::Node>> initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx);
 
     // composable node constructor — used when loading as a ros2 plugin
@@ -119,7 +142,7 @@ public:
 
     // main constructor — connects to the titan and sets up topics/services
     Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID,
-          const uint16_t &motor_freq, const std::string &topic);
+          const uint16_t &motor_freq, const std::array<MotorConfig, 4> &motor_configs);
 
     ~Titan();
 
@@ -128,26 +151,34 @@ private:
     std::shared_ptr<VMXPi> vmx_;
     uint8_t canID_;
     uint16_t motor_freq_;
-    float dist_per_tick_;
+    std::array<MotorConfig, 4> motor_configs_;
 
     float speeds_[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     bool enabled_ = false;
 
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
-    rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr publisher_;
+
+    // quadrature feedback — only created for motors in quadrature mode
+    std::array<rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr, 4> encoder_pubs_;
+    std::array<rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr, 4> rpm_pubs_;
+
+    // absolute feedback — only created for motors in absolute mode
+    std::array<rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr, 4> angle_pubs_;
+
+    // command subscribers — always created regardless of encoder mode
+    std::array<rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr, 4> cmd_subs_;
+
     rclcpp::TimerBase::SharedPtr encoder_timer_;
     rclcpp::TimerBase::SharedPtr watchdog_timer_;
 
-    // receives the raw service request and forwards it to cmd()
     void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request,
                       std::shared_ptr<studica_control::srv::SetData::Response> response);
 
-    // parses the command string and calls the appropriate titan driver function
     void cmd(std::string params, std::shared_ptr<studica_control::srv::SetData::Request> request,
              std::shared_ptr<studica_control::srv::SetData::Response> response);
 
     void publish_encoders();
-    void resend_speeds();  // resends non-zero speeds each tick to satisfy the titan CAN watchdog
+    void resend_speeds();
 };
 
 }  // namespace studica_control

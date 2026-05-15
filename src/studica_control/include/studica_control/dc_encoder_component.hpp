@@ -23,7 +23,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 
-#include "duty_cycle_encoder.h"
+#include "duty_cycle_encoder.hpp"
 #include "studica_control/msg/duty_cycle_encoder_msg.hpp"
 #include "studica_control/srv/set_data.hpp"
 #include "VMXPi.h"

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "VMXPi.h"
-#include "pwm.h"
+#include "pwm.hpp"
 #include <memory>
 #include <stdio.h>
 

@@ -15,24 +15,62 @@ control_server:
 
     # -------------------------------------------------------------------------
     # Titan — CAN bus motor controller (up to 4 motors per unit)
-    # Topic:   <topic> (std_msgs/Float32MultiArray) — encoder counts for all 4 motors
-    # Service: /<name>/titan_cmd (SetData)
-    #   Commands: enable, disable, start, stop, reset, invert_motor,
-    #             set_speed (n_encoder, speed), get_rpm, get_encoder_count,
-    #             get_encoder_distance, setup_encoder, configure_encoder
+    #
+    # Topics are auto-generated from the sensor name. For sensor "titan0":
+    #   subscribe: /titan0/m_N/cmd     (std_msgs/Float64) — duty cycle -1.0 to 1.0
+    #   publish:   /titan0/m_N/encoder (std_msgs/Float64) — encoder distance  (quadrature mode)
+    #              /titan0/m_N/rpm     (std_msgs/Float64) — rpm               (quadrature mode)
+    #              /titan0/m_N/angle   (std_msgs/Float64) — absolute degrees  (absolute mode)
+    #
+    # encoder_mode — set per motor under m_0 ... m_3:
+    #   "quadrature" (default) — incremental encoder, publishes /encoder and /rpm
+    #   "absolute"             — cypher encoder, publishes /angle only
+    #
+    # Service: /titan0/titan_cmd (SetData)
+    #   Commands: enable, disable, stop, set_speed, set_speed_all, invert_motor,
+    #             set_target_velocity, set_target_distance, set_target_angle,
+    #             configure_encoder, reset_encoder, set_current_limit,
+    #             get_rpm, get_encoder_count, get_encoder_distance, get_cypher_angle, and more.
+    #   See titan_component.h for the full command reference.
     # -------------------------------------------------------------------------
     titan:
       enabled: false
-      sensors: ["titan"]
-      titan:
+      sensors: ["titan0"]
+      titan0:
         can_id: 42          # CAN bus ID of the Titan controller
         motor_freq: 15600   # PWM frequency (Hz)
-        topic: "titan_encoders"
+        m_0:
+          encoder_mode: "quadrature"  # "quadrature" or "absolute"
+          dist_per_tick: 1.0          # metres per encoder tick (1.0 = raw counts)
+          invert_motor: false         # flip positive motor direction
+          invert_encoder: false       # flip encoder count sign
+          invert_rpm: false           # flip RPM sign
+        m_1:
+          encoder_mode: "quadrature"
+          dist_per_tick: 1.0
+          invert_motor: false
+          invert_encoder: false
+          invert_rpm: false
+        m_2:
+          encoder_mode: "quadrature"
+          dist_per_tick: 1.0
+          invert_motor: false
+          invert_encoder: false
+          invert_rpm: false
+        m_3:
+          encoder_mode: "quadrature"
+          dist_per_tick: 1.0
+          invert_motor: false
+          invert_encoder: false
+          invert_rpm: false
 
     # -------------------------------------------------------------------------
-    # IMU — onboard 9-axis IMU 
+    # IMU — onboard 9-axis IMU
     # Topic:   <topic> (sensor_msgs/Imu) — orientation, angular velocity, linear acceleration
-    # Service: /imu/get_imu_data (SetData) — returns pitch, yaw, roll as string
+    # Service: /<name>/get_imu_data (SetData)
+    #   Commands:
+    #     zero_yaw    — reset the yaw reference to zero at the current heading
+    #     (any other) — returns current pitch, yaw, roll as a string
     # -------------------------------------------------------------------------
     imu:
       enabled: false
@@ -70,9 +108,18 @@ control_server:
 
     # -------------------------------------------------------------------------
     # Servo — standard, continuous, or linear servo
-    # Topic:   <topic> (std_msgs/Float32) — last commanded angle
-    # Service: /<name>/set_servo_angle (SetData)
-    #   Command: pass target angle (degrees) as the params string, e.g. "90"
+    #
+    # Topics are auto-generated from the sensor name. For sensor "servo":
+    #   subscribe: /servo/cmd   (std_msgs/Float64) — target value
+    #   publish:   /servo/state (std_msgs/Float64) — last commanded value, 20hz
+    #
+    # Value units depend on type:
+    #   standard:   degrees (-150 to 150)
+    #   continuous: speed   (-100 to 100)
+    #   linear:     percent (0 to 100)
+    #
+    # Service: /<name>/set_servo (SetData)
+    #   initparams.speed — target value (same units as the cmd topic)
     # -------------------------------------------------------------------------
     servo:
       enabled: false
@@ -80,11 +127,10 @@ control_server:
       servo:
         port: 14                # VMX PWM channel index
         type: "standard"        # "standard", "continuous", or "linear"
-        topic: "servo_angle"
 
     # -------------------------------------------------------------------------
     # Ultrasonic — HC-SR04-style sonar range sensor
-    # Topic:   <topic> (sensor_msgs/Range) — distance in metres
+    # Topic:   /<name>/range (sensor_msgs/Range) — distance in metres, 20hz
     # Service: /<name>/ultrasonic_cmd (SetData)
     #   Commands: get_distance, get_distance_inches, get_distance_millimeters
     # -------------------------------------------------------------------------
@@ -92,13 +138,13 @@ control_server:
       enabled: false
       sensors: ["ultrasonic"]
       ultrasonic:
-        ping: 8     # VMX DIO channel for trigger
-        echo: 9     # VMX DIO channel for echo
-        topic: "ultrasonic_range"
+        ping: 8       # VMX DIO channel for trigger
+        echo: 9       # VMX DIO channel for echo
+        frame_id: "ultrasonic_link"  # TF frame for the Range message
 
     # -------------------------------------------------------------------------
     # Sharp — GP2Y-series infrared range sensor
-    # Topic:   <topic> (sensor_msgs/Range) — distance in metres
+    # Topic:   /<name>/range (sensor_msgs/Range) — distance in metres, 20hz
     # Service: /<name>/sharp_cmd (SetData)
     #   Commands: get_distance
     # -------------------------------------------------------------------------
@@ -106,14 +152,18 @@ control_server:
       enabled: false
       sensors: ["sharp"]
       sharp:
-        port: 22    # VMX analog input channel
-        topic: "ir_range"
+        port: 22      # VMX analog input channel
+        frame_id: "sharp_link"  # TF frame for the Range message
 
     # -------------------------------------------------------------------------
     # DIO — digital input or output pin
-    # Topic:   <topic> (std_msgs/Bool) — current pin state
+    #
+    # Topic (publish):   /<name>/state (std_msgs/Bool) — current pin state, 10hz
+    # Topic (subscribe): /<name>/cmd   (std_msgs/Bool) — set pin high/low (output only)
+    #
     # Service: /<name>/dio_cmd (SetData)
-    #   Commands: toggle
+    #   Commands:
+    #     toggle — flip output state (output mode only)
     # -------------------------------------------------------------------------
     dio:
       enabled: false
@@ -121,12 +171,15 @@ control_server:
       dio:
         pin: 15
         type: "output"  # "input" or "output"
-        topic: "dio_state"
 
     # -------------------------------------------------------------------------
-    # Cobra — VEX Cobra analog current sensor
-    # Topic:   <topic> (std_msgs/Float32) — voltage reading
+    # Cobra — 4-channel reflectance sensor array (I2C)
+    #
+    # Topics (publish, 20hz):
+    #   /<name>/ch_0 ... /<name>/ch_3  (std_msgs/Float32) — voltage per channel
+    #
     # Service: /<name>/cobra_cmd (SetData)
+    #   initparams.n_encoder — channel to query (0–3)
     #   Commands: get_raw, get_voltage
     # -------------------------------------------------------------------------
     cobra:
@@ -134,19 +187,23 @@ control_server:
       sensors: ["cobra"]
       cobra:
         vref: 5.0   # reference voltage (V)
-        topic: "cobra"
 
     # -------------------------------------------------------------------------
     # Gamepad — joystick/gamepad input to cmd_vel
     # Requires a joy node publishing to /joy (e.g. ros2 run joy joy_node)
     # Topic:   <cmd_vel_topic> (geometry_msgs/Twist) — velocity commands
-    # Run ros2 topic echo /joy to find your controller's axis indices
+    #
+    # Set axis index to -1 to leave that axis unmapped (outputs 0).
+    # Run 'ros2 topic echo /joy' to find your controller's axis indices.
+    #
+    # Runtime axis remap (without restart):
+    #   publish [x_axis, y_axis, z_axis] to /gamepad_axis_remap (std_msgs/Int32MultiArray)
     # -------------------------------------------------------------------------
     gamepad:
       enabled: false
-      axis_linear_x: 1      # joystick axis index for forward/back
-      axis_linear_y: 0      # joystick axis index for strafe (0 if unused)
-      axis_angular_z: 0     # joystick axis index for rotation
+      axis_linear_x: 1      # joystick axis index for forward/back (-1 = unmapped)
+      axis_linear_y: -1     # joystick axis index for strafe      (-1 = unmapped)
+      axis_angular_z: 0     # joystick axis index for rotation    (-1 = unmapped)
       button_turbo: 5       # button index that activates turbo mode
       linear_scale: 1.0     # scale factor applied to linear axes
       angular_scale: 1.0    # scale factor applied to angular axis

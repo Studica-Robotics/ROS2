@@ -34,17 +34,16 @@ include_directories( # <- #include <"">
 )
  
 set(studica_control_HDRS
-  include/studica_control/cobra_component.h
-  include/studica_control/device.h
-  include/studica_control/dc_encoder_component.h
-  include/studica_control/dio_component.h
-  include/studica_control/encoder_component.h
-  include/studica_control/gamepad_component.h
-  include/studica_control/imu_component.h
-  include/studica_control/servo_component.h
-  include/studica_control/sharp_component.h
-  include/studica_control/titan_component.h
-  include/studica_control/ultrasonic_component.h
+  include/studica_control/cobra_component.hpp
+  include/studica_control/dc_encoder_component.hpp
+  include/studica_control/dio_component.hpp
+  include/studica_control/encoder_component.hpp
+  include/studica_control/gamepad_component.hpp
+  include/studica_control/imu_component.hpp
+  include/studica_control/servo_component.hpp
+  include/studica_control/sharp_component.hpp
+  include/studica_control/titan_component.hpp
+  include/studica_control/ultrasonic_component.hpp
 )
 
 set(dependencies
@@ -139,6 +138,26 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# Re-apply hardware capabilities every build.
+# The VMX HAL needs /dev/mem (cap_sys_rawio), DMA (cap_ipc_lock), and
+# real-time scheduling (cap_sys_nice). setcap is cleared when colcon
+# replaces the executable, so we reapply it here automatically.
+install(CODE "
+    execute_process(
+        COMMAND sudo setcap cap_sys_rawio,cap_ipc_lock,cap_sys_nice+eip
+            \"${CMAKE_INSTALL_PREFIX}/lib/${PROJECT_NAME}/manual_composition\"
+        RESULT_VARIABLE _setcap_result
+    )
+    if(NOT _setcap_result EQUAL 0)
+        message(WARNING
+            \"setcap failed — node will need sudo to access hardware. \"
+            \"Either run scripts/setup_permissions.sh manually, or grant \"
+            \"passwordless setcap via sudoers (see README).\")
+    else()
+        message(STATUS \"Hardware capabilities granted to manual_composition.\")
+    endif()
+")
+
 install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION include/${PROJECT_NAME}
 )
@@ -177,5 +196,29 @@ ament_export_libraries(
 ament_export_dependencies(${dependencies})
 
 set(CMAKE_INSTALL_RPATH "/usr/local/lib/studica_drivers")
+
+# ---- C++ examples ----
+set(cpp_example_targets
+  titan_example
+  imu_example
+  servo_example
+  ultrasonic_example
+  sharp_example
+  encoder_example
+  dc_encoder_example
+  dio_example
+  cobra_example
+  gamepad_example
+)
+
+foreach(target ${cpp_example_targets})
+  add_executable(${target} src/components/examples/cpp/${target}.cpp)
+  ament_target_dependencies(${target} rclcpp std_msgs sensor_msgs geometry_msgs)
+  target_link_libraries(${target} "${cpp_typesupport_target}")
+endforeach()
+
+install(TARGETS ${cpp_example_targets}
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 ament_package()

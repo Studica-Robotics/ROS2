@@ -45,7 +45,7 @@
 #define CONFIG_CQUE_NONE 0x0003
 
 #include "VMXPi.h"
-#include "i2c.h"
+#include "i2c.hpp"
 #include <chrono>
 #include <functional>
 #include <memory>

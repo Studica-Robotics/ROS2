@@ -18,7 +18,7 @@
  *     get_total_rotation    — returns total rotation in degrees as a string
  */
 
-#include "studica_control/dc_encoder_component.h"
+#include "studica_control/dc_encoder_component.hpp"
 
 namespace studica_control {
 
@@ -65,7 +65,7 @@ DutyCycleEncoder::DutyCycleEncoder(std::shared_ptr<VMXPi> vmx, const std::string
 
     // service for reading encoder values on demand
     service_ = this->create_service<studica_control::srv::SetData>(
-        "duty_cycle_encoder_cmd",
+        name + "/duty_cycle_encoder_cmd",
         std::bind(&DutyCycleEncoder::cmd_callback, this, std::placeholders::_1, std::placeholders::_2));
 
     // publishes position and rotation data at 20hz
