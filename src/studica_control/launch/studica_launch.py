@@ -7,7 +7,13 @@ import os
 def generate_launch_description():
 
     pkg_share = get_package_share_directory('studica_control')
-    params_file = os.path.join(pkg_share, 'config', 'params.yaml')
+    default_params = os.path.join(pkg_share, 'config', 'params.yaml')
+    params_file = os.environ.get('STUDICA_PARAMS_FILE', '').strip()
+    if not params_file or not os.path.isfile(params_file):
+        params_file = default_params
+        print(f"DEBUG: Using package params: {params_file}")
+    else:
+        print(f"DEBUG: Using STUDICA_PARAMS_FILE: {params_file}")
 
     manual_composition = Node(
         package='studica_control',
