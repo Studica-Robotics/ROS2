@@ -16,6 +16,7 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
 - [Running](#running)
 - [Component Reference](#component-reference)
 - [Python Examples](#python-examples)
+- [C++ Examples](#c-examples)
 - [Standalone Driver Examples](#standalone-driver-examples)
 - [Integrating into Your Project](#integrating-into-your-project)
 
@@ -622,10 +623,10 @@ Run `ros2 topic echo /joy` and move each stick to identify which `axes[]` index 
 
 ## Examples
 
-Both Python and C++ examples are provided for every component:
+Both Python and C++ examples are provided for every component. Both are installed as `ros2 run` executables when you build the package:
 
 ```
-src/studica_control/src/components/examples/python/   ← Python scripts
+src/studica_control/src/components/examples/python/   ← Python scripts (.py)
 src/studica_control/src/components/examples/cpp/      ← C++ sources
 ```
 
@@ -639,14 +640,14 @@ ros2 launch studica_control studica_launch.py
 
 ## Python Examples
 
-Python scripts can be run directly — no build step needed.
+Python examples are installed with the package and run via `ros2 run`, the same as C++ examples.
 
 ### Titan
 
 Publishes duty cycle to `/titan0/m_0/cmd`, subscribes to `/titan0/m_0/encoder` and `/titan0/m_0/rpm`. Spins motor 0 at 80% for 3 seconds, stops for 2 seconds, repeats three times, then resets the encoder via the service.
 
 ```bash
-python3 src/studica_control/src/components/examples/python/titan_example.py
+ros2 run studica_control titan_example.py
 ```
 
 ### IMU
@@ -654,7 +655,7 @@ python3 src/studica_control/src/components/examples/python/titan_example.py
 Prints orientation quaternion, angular velocity, and linear acceleration at 20 Hz.
 
 ```bash
-python3 src/studica_control/src/components/examples/python/imu_example.py
+ros2 run studica_control imu_example.py
 ```
 
 ### Ultrasonic
@@ -662,7 +663,7 @@ python3 src/studica_control/src/components/examples/python/imu_example.py
 Prints range readings in metres as they arrive.
 
 ```bash
-python3 src/studica_control/src/components/examples/python/ultrasonic_example.py
+ros2 run studica_control ultrasonic_example.py
 ```
 
 ### Servo
@@ -670,7 +671,7 @@ python3 src/studica_control/src/components/examples/python/ultrasonic_example.py
 Subscribes to `/servo/state` and moves the servo through 90°, −90°, 0°.
 
 ```bash
-python3 src/studica_control/src/components/examples/python/servo_example.py
+ros2 run studica_control servo_example.py
 ```
 
 ### Gamepad
@@ -683,7 +684,7 @@ ros2 launch studica_control studica_launch.py
 # Terminal 2
 ros2 run joy joy_node
 # Terminal 3
-python3 src/studica_control/src/components/examples/python/gamepad_example.py
+ros2 run studica_control gamepad_example.py
 ```
 
 Additional Python examples for Encoder, DutyCycleEncoder, DIO, Sharp, and Cobra follow the same pattern.
@@ -989,9 +990,9 @@ Use these tables when assigning `port`, `pin`, `port_a`, `port_b`, `ping`, and `
 | Channel Type | Index Range | Used By |
 |---|---|---|
 | DIO | 0–21 | Encoder (A/B), DIO, Ultrasonic (ping/echo) |
-| PWM | 14–19 | Servo |
+| PWM | 0–21 | Servo |
 | Analog Input | 22–25 | Sharp |
-| Duty Cycle | 8–13 | DutyCycleEncoder |
+| Duty Cycle | 0, 2, 4, 6, 8, 10 | DutyCycleEncoder |
 
 Consult the VMX hardware documentation for the physical pin mapping on your board.
 

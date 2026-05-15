@@ -221,4 +221,22 @@ install(TARGETS ${cpp_example_targets}
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# ---- Python examples ----
+set(python_example_scripts
+  src/components/examples/python/titan_example.py
+  src/components/examples/python/imu_example.py
+  src/components/examples/python/servo_example.py
+  src/components/examples/python/ultrasonic_example.py
+  src/components/examples/python/sharp_example.py
+  src/components/examples/python/encoder_example.py
+  src/components/examples/python/dc_encoder_example.py
+  src/components/examples/python/dio_example.py
+  src/components/examples/python/cobra_example.py
+  src/components/examples/python/gamepad_example.py
+)
+
+install(PROGRAMS ${python_example_scripts}
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_package()
