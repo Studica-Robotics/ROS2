@@ -149,7 +149,7 @@ void GamepadController::gamepad_button_callback(const std_msgs::msg::Int32MultiA
 // reads raw axis values from the joystick message, applies deadzone filtering,
 // and checks the turbo button state. values are stored for use by publish_twist.
 void GamepadController::joy_callback(const sensor_msgs::msg::Joy::SharedPtr msg) {
-    if (axis_linear_x_ < 0 || axis_linear_y_ < 0 || axis_angular_z_ < 0) {
+    if (axis_linear_x_ < 0 && axis_linear_y_ < 0 && axis_angular_z_ < 0) {
         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
                              "axis mappings not set — awaiting /gamepad_buttons [x,y,z]");
         return;

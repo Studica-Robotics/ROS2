@@ -223,7 +223,10 @@ source ~/.bashrc
 ```bash
 cd ~/studica_ws
 colcon build --packages-select studica_control
+source ~/.bashrc
 ```
+
+> On a fresh image this is the first time `install/setup.bash` exists, so you must `source ~/.bashrc` after the build to activate the workspace. Subsequent builds do not require this step.
 
 ### 3. Grant hardware permissions (once)
 
