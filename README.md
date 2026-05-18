@@ -49,23 +49,11 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
 
 ### Required SDKs
 
-The ROS2 package links against two external libraries that must be installed before building.
-
-**VMX HAL** — low-level hardware access library:
-
-The HAL comes pre-installed on the official VMX OS image. Download the image and follow the flashing instructions at:
+**VMX HAL** — low-level hardware access library, pre-installed on the official VMX OS image:
 
 > https://learn.studica.com/docs/ws/vmx/os-images
 
-**Studica Drivers** — C++ hardware driver library (included in this repository's `drivers/` folder):
-
-```bash
-# From the repo root, build and install the driver library:
-cd drivers
-make
-sudo make install
-# Installs to /usr/local/lib/studica_drivers/ and /usr/local/include/studica_drivers/
-```
+**Studica Drivers** — bundled in this repository's `drivers/` folder. Install steps are in [Installation](#installation) below.
 
 ### ROS2 Dependencies
 
@@ -77,14 +65,17 @@ sudo apt install -y \
   ros-humble-sensor-msgs \
   ros-humble-geometry-msgs \
   ros-humble-std-msgs \
+  ros-humble-rmw-cyclonedds-cpp \
   ros-humble-joy          # only needed for gamepad support
 ```
+
+CycloneDDS is required because the node runs as root (for pigpio hardware access) and Fast-DDS shared memory segments created by root are not accessible to non-root ROS2 tools (`ros2 topic echo`, etc.). CycloneDDS uses UDP sockets which work correctly across privilege boundaries.
 
 ---
 
 ## Installation
 
-Clone the repository directly as your ROS2 workspace (the `src/` layout is already correct for colcon):
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/Studica-Robotics/ROS2.git ~/studica_ws
@@ -96,8 +87,18 @@ Or add the package to an existing workspace:
 ```bash
 cd ~/your_ws/src
 git clone https://github.com/Studica-Robotics/ROS2.git studica_ros2
-# Then symlink the package into your src:
 ln -s studica_ros2/src/studica_control studica_control
+```
+
+### 2. Build and install the driver library
+
+```bash
+cd ~/studica_ws/drivers
+make
+sudo make install
+# Installs headers to /usr/local/include/studica_drivers/
+# Installs library to /usr/local/lib/studica_drivers/ and runs ldconfig
+cd ~/studica_ws
 ```
 
 ---
@@ -206,18 +207,27 @@ Topics are auto-generated: `/gripper/cmd`, `/gripper/state`, `/wrist/cmd`, `/wri
 
 ## Building
 
-Source your ROS2 installation, then build from the workspace root:
+### 1. Set up your shell environment (once)
+
+Add ROS2, the workspace, and CycloneDDS to `~/.bashrc` so every terminal is ready automatically:
 
 ```bash
-source /opt/ros/humble/setup.bash
-cd ~/studica_ws
-colcon build --packages-select studica_control
-source install/setup.bash
+echo -e '\nsource /opt/ros/humble/setup.bash\n[ -f ~/studica_ws/install/setup.bash ] && source ~/studica_ws/install/setup.bash\nexport RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' >> ~/.bashrc
+source ~/.bashrc
 ```
 
-### Grant hardware permissions (first time only)
+> The workspace source is guarded — it is silently skipped on a fresh image before the first build, then activates automatically once `colcon build` has run.
 
-The VMX HAL requires access to hardware devices that are normally root-only. Run the setup script once to configure your system so the node can run as a normal user — no `sudo ros2 launch` required.
+### 2. Build
+
+```bash
+cd ~/studica_ws
+colcon build --packages-select studica_control
+```
+
+### 3. Grant hardware permissions (once)
+
+The VMX HAL uses `pigpio` for direct hardware access, which requires root. Run the setup script once after your first build:
 
 ```bash
 ./scripts/setup_permissions.sh
@@ -230,11 +240,11 @@ The VMX HAL requires access to hardware devices that are normally root-only. Run
 
 | Step | What it does | Persists? |
 |---|---|---|
-| `setcap` | Grants `/dev/mem`, DMA, and real-time scheduling access to the node executable | **Automated** — `colcon build` reapplies it every time |
-| `usermod -G i2c` | Adds your user to the `i2c` group | Yes — run once |
-| udev rule | Makes `/dev/i2c-*` group-accessible | Yes — run once |
+| sudoers rule | Allows `ros2 launch` to run the node as root without a password prompt | Yes — run once |
+| ldconfig | Registers ROS2 and workspace library paths so `sudo` can find them (sudo resets `LD_LIBRARY_PATH`) | Yes — run once |
+| udev rule | Makes `/dev/i2c-*` accessible | Yes — run once |
 
-The `setcap` step is now wired into `CMakeLists.txt` and runs automatically at the end of every `colcon build` (you will be prompted for your sudo password at that point). The group and udev steps only need to be done once.
+All steps are persistent across reboots and rebuilds. You do not need to re-run this script after `colcon build`.
 
 > **Note:** After editing `params.yaml` only, you do not need to rebuild — just relaunch.
 
@@ -249,6 +259,12 @@ ros2 launch studica_control studica_launch.py
 ```
 
 This reads `params.yaml`, initializes every enabled component, and starts publishing sensor data.
+
+To use a config file from your own project instead of the driver's default:
+
+```bash
+ros2 launch studica_control studica_launch.py params_file:=/path/to/your/params.yaml
+```
 
 ### With Gamepad Support
 

@@ -26,6 +26,8 @@ rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files (srv, msg, action)
   "srv/SetData.srv"
 )
 
+rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
+
 include_directories( # <- #include <"">
   include 
   /usr/local/include/vmxpi 
@@ -59,42 +61,52 @@ set(dependencies
 
 add_library(cobra_component SHARED src/components/cobra_component.cpp)
 ament_target_dependencies(cobra_component ${dependencies})
+target_link_libraries(cobra_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(cobra_component "studica_control::cobra")
 
 add_library(dc_encoder_component SHARED src/components/dc_encoder_component.cpp)
 ament_target_dependencies(dc_encoder_component ${dependencies})
+target_link_libraries(dc_encoder_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(dc_encoder_component "studica_control::DutyCycleEncoder")
 
 add_library(dio_component SHARED src/components/dio_component.cpp)
 ament_target_dependencies(dio_component ${dependencies})
+target_link_libraries(dio_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(dio_component "studica_control::DIO")
 
 add_library(encoder_component SHARED src/components/encoder_component.cpp)
 ament_target_dependencies(encoder_component ${dependencies})
+target_link_libraries(encoder_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(encoder_component "studica_control::encoder")
 
 add_library(gamepad_component SHARED src/components/gamepad_component.cpp)
 ament_target_dependencies(gamepad_component ${dependencies})
+target_link_libraries(gamepad_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(gamepad_component "studica_control::GamepadController")
 
 add_library(imu_component SHARED src/components/imu_component.cpp)
 ament_target_dependencies(imu_component ${dependencies})
+target_link_libraries(imu_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(imu_component "studica_control::imu")
 
 add_library(servo_component SHARED src/components/servo_component.cpp)
 ament_target_dependencies(servo_component ${dependencies})
+target_link_libraries(servo_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(servo_component "studica_control::Servo")
 
 add_library(sharp_component SHARED src/components/sharp_component.cpp)
 ament_target_dependencies(sharp_component ${dependencies})
+target_link_libraries(sharp_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(sharp_component "studica_control::sharp")
 
 add_library(titan_component SHARED src/components/titan_component.cpp)
 ament_target_dependencies(titan_component ${dependencies})
+target_link_libraries(titan_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(titan_component "studica_control::Titan")
 
 add_library(ultrasonic_component SHARED src/components/ultrasonic_component.cpp)
 ament_target_dependencies(ultrasonic_component ${dependencies})
+target_link_libraries(ultrasonic_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(ultrasonic_component "studica_control::Ultrasonic")
 
 install(TARGETS
@@ -110,10 +122,9 @@ install(TARGETS
   ultrasonic_component  
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
+    PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
   RUNTIME DESTINATION bin
 )
-
-rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 
 add_executable(manual_composition src/manual_composition.cpp)
 target_link_libraries(manual_composition
@@ -132,42 +143,23 @@ target_link_libraries(manual_composition
 )
 ament_target_dependencies(manual_composition ${dependencies})
 target_link_libraries(manual_composition "${cpp_typesupport_target}")
+# $ORIGIN/.. resolves to install/studica_control/lib/ at runtime, where the
+# component .so files live. The vmxpi and studica_drivers paths are for the
+# hardware driver libs installed system-wide.
+set_target_properties(manual_composition PROPERTIES
+  INSTALL_RPATH "$ORIGIN/..;/usr/local/lib/vmxpi;/usr/local/lib/studica_drivers"
+)
 
 install(TARGETS
   manual_composition
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# Re-apply hardware capabilities every build.
-# The VMX HAL needs /dev/mem (cap_sys_rawio), DMA (cap_ipc_lock), and
-# real-time scheduling (cap_sys_nice). setcap is cleared when colcon
-# replaces the executable, so we reapply it here automatically.
-install(CODE "
-    execute_process(
-        COMMAND sudo setcap cap_sys_rawio,cap_ipc_lock,cap_sys_nice+eip
-            \"${CMAKE_INSTALL_PREFIX}/lib/${PROJECT_NAME}/manual_composition\"
-        RESULT_VARIABLE _setcap_result
-    )
-    if(NOT _setcap_result EQUAL 0)
-        message(WARNING
-            \"setcap failed — node will need sudo to access hardware. \"
-            \"Either run scripts/setup_permissions.sh manually, or grant \"
-            \"passwordless setcap via sudoers (see README).\")
-    else()
-        message(STATUS \"Hardware capabilities granted to manual_composition.\")
-    endif()
-")
-
 install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION include/${PROJECT_NAME}
 )
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp/
   DESTINATION include/${PROJECT_NAME}
-)
-
-install(
-  DIRECTORY include/
-  DESTINATION /usr/local/include/studica_control
 )
 
 install(DIRECTORY
@@ -194,8 +186,6 @@ ament_export_libraries(
   ultrasonic_component
 )
 ament_export_dependencies(${dependencies})
-
-set(CMAKE_INSTALL_RPATH "/usr/local/lib/studica_drivers")
 
 # ---- C++ examples ----
 set(cpp_example_targets

@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# One-time system setup + post-build step to run studica_control without sudo.
+# One-time system setup for studica_control.
+# Run once after first build, then again after each 'colcon build'.
 #
-# The VMX HAL uses pigpio directly, which requires access to /dev/mem.
-# setcap grants only the specific Linux capabilities needed so the node
-# runs as a normal user without full root.
+# What this does (one-time setup — does not need to be re-run after builds):
+#   - Registers library paths with ldconfig (sudo resets LD_LIBRARY_PATH)
+#   - Installs a NOPASSWD sudoers rule so ros2 launch can run the node as
+#     root (required by pigpio to access /dev/mem and lock its PID file)
+#   - Installs a udev rule for I2C device access
 #
 # Usage:
 #   ./scripts/setup_permissions.sh              # assumes ~/studica_ws
@@ -14,46 +17,46 @@ set -e
 WS="${1:-$HOME/studica_ws}"
 EXEC="$WS/install/studica_control/lib/studica_control/manual_composition"
 
-# Verify the executable exists
 if [ ! -f "$EXEC" ]; then
     echo "ERROR: Executable not found at $EXEC"
-    echo "       Build the package first:"
-    echo "         colcon build --packages-select studica_control"
-    echo "       Then re-run this script."
+    echo "       Build first:  colcon build --packages-select studica_control"
     exit 1
 fi
 
-# Grant hardware capabilities
-# cap_sys_rawio  — access /dev/mem (required by pigpio for GPIO/peripheral registers)
-# cap_ipc_lock   — lock pages in memory (required by pigpio for DMA transfers)
-# cap_sys_nice   — raise scheduling priority (required by pigpio real-time mode)
-sudo setcap cap_sys_rawio,cap_ipc_lock,cap_sys_nice+eip "$EXEC"
-echo "OK  capabilities set on $EXEC"
+# ldconfig: register all library paths
+# 'sudo' resets LD_LIBRARY_PATH, so every library directory must be in
+# the ldconfig cache for the root-run process to find them.
+LDCONF_FILE="/etc/ld.so.conf.d/studica_ws.conf"
+cat <<EOF | sudo tee "$LDCONF_FILE" > /dev/null
+# studica_control workspace
+$WS/install/studica_control/lib
+# ROS2 Humble
+/opt/ros/humble/lib
+/opt/ros/humble/lib/aarch64-linux-gnu
+/opt/ros/humble/opt/rviz_ogre_vendor/lib
+EOF
+sudo ldconfig
+echo "OK  registered workspace and ROS2 libs with ldconfig"
 
-# I2C device access 
-if ! groups "$USER" | grep -q '\bi2c\b'; then
-    sudo usermod -a -G i2c "$USER"
-    echo "OK  added $USER to the i2c group (re-login or run: newgrp i2c)"
-else
-    echo "OK  $USER already in i2c group"
-fi
+# Sudoers rule
+# The launch file runs manual_composition via sudo so pigpio can access
+# /dev/mem and lock its PID file. This rule allows that without a prompt.
+SUDOERS_FILE=/etc/sudoers.d/studica_control
+echo "$USER ALL=(ALL) SETENV: NOPASSWD: $EXEC" | sudo tee "$SUDOERS_FILE" > /dev/null
+sudo chmod 0440 "$SUDOERS_FILE"
+echo "OK  sudoers rule: $USER may run manual_composition as root without password"
 
-# udev rule for I2C devices
+# I2C udev rule
 UDEV_RULE=/etc/udev/rules.d/99-studica.rules
 if [ ! -f "$UDEV_RULE" ]; then
-    echo 'KERNEL=="i2c-[0-9]*", GROUP="i2c", MODE="0660"' | sudo tee "$UDEV_RULE" > /dev/null
+    echo 'KERNEL=="i2c-[0-9]*", GROUP="root", MODE="0660"' | sudo tee "$UDEV_RULE" > /dev/null
     sudo udevadm control --reload-rules
     sudo udevadm trigger
-    echo "OK  udev rule installed at $UDEV_RULE"
+    echo "OK  udev rule for I2C installed"
 else
-    echo "OK  udev rule already present at $UDEV_RULE"
+    echo "OK  I2C udev rule already present"
 fi
 
 echo ""
-echo "Setup complete."
-echo ""
-echo "  NOTE: setcap is reset every time colcon replaces the executable."
-echo "  Re-run this script after each 'colcon build'."
-echo ""
-echo "  If this is your first time running setup, log out and back in"
-echo "  (or run 'newgrp i2c') for group changes to take effect."
+echo "Setup complete. You can now run:"
+echo "  ros2 launch studica_control studica_launch.py"

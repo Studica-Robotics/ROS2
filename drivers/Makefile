@@ -29,6 +29,7 @@ install: $(LIBRARY)
 	sudo cp -r $(wildcard *.hpp) $(INCLUDE_INSTALL_PATH)/
 	sudo mkdir -p $(LIB_INSTALL_PATH)
 	sudo cp $(LIBRARY) $(LIB_INSTALL_PATH)
+	sudo ldconfig
 
 clean:
 	rm -f $(OBJS) $(LIBRARY) $(DEPS)

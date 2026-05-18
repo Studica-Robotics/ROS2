@@ -1,4 +1,5 @@
 control_server:
   ros__parameters:
-    # Enable components here and configure their parameters.
-    # See params_template.yaml for the full format of each component.
+    use_sim_time: false
+    # Configure your robot here before launching.
+    # See params_template.yaml for the full parameter reference.

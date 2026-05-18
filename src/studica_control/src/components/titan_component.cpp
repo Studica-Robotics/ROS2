@@ -20,6 +20,7 @@
  */
 
 #include "studica_control/titan_component.hpp"
+#include <thread>
 
 namespace studica_control {
 
@@ -123,6 +124,11 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
     }
 
     titan_->SetPIDType(0);
+
+    // The Titan requires ~1s after initial CONFIG_MOTOR frames before it will
+    // accept the enable command. See drivers/examples/titan_example/titan_example.cpp.
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
     titan_->Enable(true);
     enabled_ = true;
 
