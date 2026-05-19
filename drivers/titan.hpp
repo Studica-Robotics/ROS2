@@ -58,6 +58,8 @@ namespace studica_driver
 #define SET_TARGET_ANGLE BASE + (OFFSET * 23)
 #define SET_POSITION_HOLD BASE + (OFFSET * 24)
 #define GET_TARGET_RPM BASE + (OFFSET * 25)
+#define SET_CAN_SENSOR_OS_DELAY BASE + (OFFSET * 26)
+#define AUTOTUNE_MOTOR BASE + (OFFSET * 27)
 #define CYPHER_OUTPUT BASE + (OFFSET * 36)
 #define ENCODER_0 BASE + (OFFSET * 37)
 #define ENCODER_1 BASE + (OFFSET * 38)
@@ -71,6 +73,20 @@ namespace studica_driver
 #define TARGET_RPM BASE + (OFFSET * 46)
 #define MCU_TEMP BASE + (OFFSET * 47)
 
+/* Titan2 PID type (SET_PID_TYPE) */
+#define TITAN_PID_TYPE_OFF 0u     /* No internal closed-loop; duty via SET_MOTOR_SPEED / open loop */
+#define TITAN_PID_TYPE_LEGACY 1u  /* user Kp/Ki/Kd path */
+#define TITAN_PID_TYPE_MCV2 2u    /* MCV2 cascade control */
+#define TITAN_PID_TYPE_MAX 2u     /* Max valid PID type (for validation) */
+/* PID type is in data[1]; data[2] signature distinguishes from legacy layout (type in data[0]). */
+#ifndef STUDICA_CAN_PIDTYPE_PAYLOAD_SIG
+#define STUDICA_CAN_PIDTYPE_PAYLOAD_SIG 0xC3u
+#define STUDICA_CAN_PIDTYPE_BROADCAST 0xFFu
+#endif
+/** RETURN_TITAN_INFO data[1] (firmware VERSION_MAJOR): 1 = original Titan, 2 = Titan2 (MCV2-capable). */
+#define TITAN_INFO_VERSION_MAJOR_1 1u
+#define TITAN_INFO_VERSION_MAJOR_2 2u
+
     class Titan
     {
         public:
@@ -83,6 +99,8 @@ namespace studica_driver
             void SetupEncoder(uint8_t encoder);
             uint8_t GetID();
             uint16_t GetFrequency();
+            /** RETURN_TITAN_INFO version_major (data[1]); 2 = Titan2. Same cache as GetFirmwareVersion(). */
+            uint8_t GetFirmwareVersionMajor();
             std::string GetFirmwareVersion();
             std::string GetHardwareVersion();
             float GetControllerTemp();
@@ -109,9 +127,12 @@ namespace studica_driver
             void InvertMotor(uint8_t motor);
 
             /** Set target RPM; negative = reverse. PID (or MCV2) drives motor via setMotorSpeed(..., inA, inB). */
-            void SetTargetVelocity(uint8_t motor, int16_t velocityRpm);
-            /** Read back current velocity targets from device (GET_TARGET_RPM). Returns true if read ok. */
-            bool GetTargetRPMFromDevice(int16_t targetRpm[4]);
+            void SetTargetVelocity(uint8_t motor, float velocityRpm);
+            /** Read back velocity targets (GET_TARGET_RPM).
+             * Device replies with four RSP_TARGET_RPM frames (same ID):
+             * data[0]=motor, data[1..4]=int32 LE RPM*100.
+             * Drains ReceiveStream until all four motors decoded or timeout (~200 ms). */
+            bool GetTargetRPMFromDevice(float targetRpm[4]);
             void SetTargetDistance(uint8_t motor, int32_t distanceCounts);
             void SetTargetAngle(uint8_t motor, double angleDeg);
             void SetPositionHold(uint8_t motor, bool hold);
@@ -119,8 +140,12 @@ namespace studica_driver
             void SetCurrentLimit(uint8_t channel, float limitAmps);
             void SetCurrentLimitMode(uint8_t channel, uint8_t mode);
             void SetMotorStopMode(uint8_t mode);
+            /** Broadcast PID mode (legacy-compatible global): same type on all motors. */
             void SetPIDType(uint8_t type);
+            /** Per-motor PID type (0=OFF, 1=legacy, 2=MCV2 cascade). */
+            void SetMotorPIDType(uint8_t motor, uint8_t type);
             void AutotuneAll();
+            void AutotuneMotor(uint8_t motor);
             void SetSensitivity(uint8_t motor, uint8_t sensitivity);
             void DisableMotor(uint8_t motor);
 

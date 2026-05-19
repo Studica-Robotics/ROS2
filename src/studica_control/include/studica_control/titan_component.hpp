@@ -45,7 +45,7 @@
  *
  *   closed loop velocity / position control (titan2 firmware):
  *     set_target_velocity  — run a motor at a target speed in rpm
- *                            requires: n_encoder, speed (rpm as float, cast to int16)
+ *                            requires: n_encoder, speed (rpm as float)
  *     set_target_distance  — drive a motor to a target position in encoder counts
  *                            requires: n_encoder, int_value (count)
  *     set_target_angle     — drive a motor to a target angle in degrees
@@ -59,6 +59,10 @@
  *     set_sensitivity      — tune how aggressively the pid responds (0–255)
  *                            requires: n_encoder, int_value
  *     autotune             — automatically tune pid for all motors
+ *     autotune_motor       — automatically tune pid for one motor
+ *                            requires: n_encoder
+ *     set_motor_pid_type   — per-motor pid type (0=OFF, 1=legacy, 2=MCV2)
+ *                            requires: n_encoder, int_value
  *
  *   encoder configuration:
  *     setup_encoder        — prepare an encoder channel for use
