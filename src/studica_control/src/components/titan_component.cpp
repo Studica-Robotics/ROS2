@@ -325,7 +325,7 @@ void Titan::cmd(std::string params,
 
     } else if (params == "get_target_rpm") {
         float targets[4] = {0.f, 0.f, 0.f, 0.f};
-        bool ok = titan_->GetTargetRPMFromDevice(targets);
+        bool ok = titan_->TryGetTargetRPMFromAll(targets);
         response->success = ok;
         response->message = std::to_string(targets[0]) + "," + std::to_string(targets[1]) + ","
                             + std::to_string(targets[2]) + "," + std::to_string(targets[3]);
@@ -376,7 +376,7 @@ void Titan::publish_encoders() {
             encoder_pubs_[i]->publish(enc_msg);
 
             std_msgs::msg::Float64 rpm_msg;
-            rpm_msg.data = static_cast<double>(titan_->GetRPM(i));
+            rpm_msg.data = static_cast<double>(titan_->GetRPM(static_cast<uint8_t>(i)));
             rpm_pubs_[i]->publish(rpm_msg);
         } else {
             std_msgs::msg::Float64 angle_msg;

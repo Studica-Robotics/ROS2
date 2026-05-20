@@ -2,7 +2,18 @@
 
 using namespace studica_driver;
 
-static constexpr float kTargetRpmWireScale = 100.0f; /* matches firmware RPM_SCALE for SET_TARGET_VELOCITY */
+static constexpr float kRpmScale = 100.0f; /* matches firmware RPM_SCALE (CAN_RPM_* and SET_TARGET_VELOCITY) */
+
+static bool UnpackRpmX100FromCanData(const uint8_t* data, float* out_rpm)
+{
+    if (out_rpm == nullptr)
+        return false;
+    *out_rpm = 0.0f;
+    int32_t raw = static_cast<int32_t>(static_cast<uint32_t>(data[0]) | (static_cast<uint32_t>(data[1]) << 8) |
+                                       (static_cast<uint32_t>(data[2]) << 16) | (static_cast<uint32_t>(data[3]) << 24));
+    *out_rpm = static_cast<float>(raw) / kRpmScale;
+    return true;
+}
 
 Titan::Titan(const uint8_t& canID, const uint16_t& motorFreq, const float& distPerTick, std::shared_ptr<VMXPi> vmx)
     : vmx_(vmx)
@@ -193,13 +204,6 @@ uint16_t Titan::GetFrequency()
     return data[0] + (data[1] << 8);
 }
 
-uint8_t Titan::GetFirmwareVersionMajor()
-{
-    if (!EnsureTitanInfoCached())
-        return 0;
-    return cached_titan_info_[1];
-}
-
 std::string Titan::GetFirmwareVersion()
 {
     if (!EnsureTitanInfoCached())
@@ -264,18 +268,18 @@ bool Titan::GetLimitSwitch(uint8_t motor, uint8_t direction)
     }
 }
 
-int16_t Titan::GetRPM(uint8_t motor)
+float Titan::GetRPM(uint8_t motor)
 {
-    int16_t v = 0;
+    float v = 0.0f;
     TryGetRPM(motor, &v);
     return v;
 }
 
-bool Titan::TryGetRPM(uint8_t motor, int16_t* out_rpm)
+bool Titan::TryGetRPM(uint8_t motor, float* out_rpm)
 {
     if (out_rpm == nullptr)
         return false;
-    *out_rpm = 0;
+    *out_rpm = 0.0f;
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     uint32_t addr;
     if (motor == 0)
@@ -290,7 +294,7 @@ bool Titan::TryGetRPM(uint8_t motor, int16_t* out_rpm)
         addr = GetAddress(CAN_RPM_0);
     if (!Read(addr, data))
         return false;
-    *out_rpm = static_cast<int16_t>(data[0] | (data[1] << 8));
+    UnpackRpmX100FromCanData(data, out_rpm);
     return true;
 }
 
@@ -576,55 +580,52 @@ void Titan::InvertMotor(uint8_t motor)
     InvertEncoderDirection(motor);
 }
 
-bool Titan::GetTargetRPMFromDevice(float targetRpm[4])
+float Titan::GetTargetRPM(uint8_t motor)
+{
+    float v = 0.f;
+    TryGetTargetRPM(motor, &v);
+    return v;
+}
+
+bool Titan::TryGetTargetRPM(uint8_t motor, float* out_rpm)
+{
+    if (out_rpm == nullptr || motor >= 4)
+        return false;
+    *out_rpm = 0.0f;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    uint32_t addr;
+    if (motor == 0)
+        addr = GetAddress(TARGET_RPM_0);
+    else if (motor == 1)
+        addr = GetAddress(TARGET_RPM_1);
+    else if (motor == 2)
+        addr = GetAddress(TARGET_RPM_2);
+    else
+        addr = GetAddress(TARGET_RPM_3);
+    if (!Read(addr, data))
+        return false;
+    UnpackRpmX100FromCanData(data, out_rpm);
+    return true;
+}
+
+bool Titan::TryGetTargetRPMFromAll(float targetRpm[4])
 {
     if (targetRpm == nullptr)
         return false;
-    for (int i = 0; i < 4; i++)
-        targetRpm[i] = 0.f;
-
-    vmx_->can.FlushRxFIFO(&vmxerr);
-
-    uint8_t req[8] = {0};
-    if (!Write(GetAddress(GET_TARGET_RPM), req, 0))
-        return false;
-
-    /* One RSP per motor; same CAN ID for all four — track which motors we've decoded. */
-    uint8_t motor_rx_complete[4] = {0, 0, 0, 0};
-    const uint32_t target_rpm_can_id = GetAddress(TARGET_RPM);
-
-    for (int round = 0; round < 200; round++)
+    bool ok = true;
+    for (int m = 0; m < 4; m++)
     {
-        VMXCANTimestampedMessage msgs[48];
-        uint32_t nread = 0;
-        if (vmx_->can.ReadReceiveStream(canrxhandle, msgs, 48, nread, &vmxerr) && nread > 0)
-        {
-            for (uint32_t k = 0; k < nread; k++)
-            {
-                if (msgs[k].messageID != target_rpm_can_id)
-                    continue;
-                const uint8_t m = msgs[k].data[0];
-                if (m >= 4)
-                    continue;
-                const int32_t raw = static_cast<int32_t>(
-                    static_cast<uint32_t>(msgs[k].data[1]) | (static_cast<uint32_t>(msgs[k].data[2]) << 8) |
-                    (static_cast<uint32_t>(msgs[k].data[3]) << 16) | (static_cast<uint32_t>(msgs[k].data[4]) << 24));
-                targetRpm[m] = static_cast<float>(raw) / kTargetRpmWireScale;
-                motor_rx_complete[m] = 1;
-            }
-        }
-        if (motor_rx_complete[0] && motor_rx_complete[1] && motor_rx_complete[2] && motor_rx_complete[3])
-            break;
-        vmx_->time.DelayMilliseconds(1);
+        if (!TryGetTargetRPM(m, &targetRpm[m]))
+            ok = false;
     }
-    return (motor_rx_complete[0] && motor_rx_complete[1] && motor_rx_complete[2] && motor_rx_complete[3]) != 0;
+    return ok;
 }
 
 void Titan::SetTargetVelocity(uint8_t motor, float velocityRpm)
 {
     if (motor >= 4)
         return;
-    float rpmScaled = velocityRpm * kTargetRpmWireScale;
+    float rpmScaled = velocityRpm * kRpmScale;
     int32_t rpm32 =
         (rpmScaled >= 0.0f) ? static_cast<int32_t>(rpmScaled + 0.5f) : static_cast<int32_t>(rpmScaled - 0.5f);
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -761,6 +762,16 @@ void Titan::SetSensitivity(uint8_t motor, uint8_t sensitivity)
     data[0] = motor;
     data[1] = sensitivity;
     Write(GetAddress(SET_SENSITIVITY), data, 0);
+}
+
+void Titan::SetCANSensorOsDelay(uint16_t periodMs)
+{
+    if (periodMs < 5u)
+        periodMs = 5u;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = static_cast<uint8_t>(periodMs & 0xFFu);
+    data[1] = static_cast<uint8_t>((periodMs >> 8) & 0xFFu);
+    Write(GetAddress(SET_CAN_SENSOR_OS_DELAY), data, 0);
 }
 
 void Titan::DisableMotor(uint8_t motor)

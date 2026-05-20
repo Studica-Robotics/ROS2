@@ -70,8 +70,11 @@ namespace studica_driver
 #define CAN_RPM_2 BASE + (OFFSET * 43)
 #define CAN_RPM_3 BASE + (OFFSET * 44)
 #define LIMIT_SWITCH BASE + (OFFSET * 45)
-#define TARGET_RPM BASE + (OFFSET * 46)
 #define MCU_TEMP BASE + (OFFSET * 47)
+#define TARGET_RPM_0 BASE + (OFFSET * 48)
+#define TARGET_RPM_1 BASE + (OFFSET * 49)
+#define TARGET_RPM_2 BASE + (OFFSET * 50)
+#define TARGET_RPM_3 BASE + (OFFSET * 51)
 
 /* Titan2 PID type (SET_PID_TYPE) */
 #define TITAN_PID_TYPE_OFF 0u     /* No internal closed-loop; duty via SET_MOTOR_SPEED / open loop */
@@ -99,16 +102,13 @@ namespace studica_driver
             void SetupEncoder(uint8_t encoder);
             uint8_t GetID();
             uint16_t GetFrequency();
-            /** RETURN_TITAN_INFO version_major (data[1]); 2 = Titan2. Same cache as GetFirmwareVersion(). */
-            uint8_t GetFirmwareVersionMajor();
             std::string GetFirmwareVersion();
             std::string GetHardwareVersion();
             float GetControllerTemp();
             bool GetLimitSwitch(uint8_t motor, uint8_t direction);
-            int16_t GetRPM(uint8_t motor);
-            /** Returns true if a RPM frame was read; false if no frame (Blackboard empty for that ID). Fills *out_rpm.
-             */
-            bool TryGetRPM(uint8_t motor, int16_t* out_rpm);
+            float GetRPM(uint8_t motor);
+            /** Returns true if a RPM frame was read; false if no frame (Blackboard empty for that ID). Fills *out_rpm (RPM×100 wire format). */
+            bool TryGetRPM(uint8_t motor, float* out_rpm);
             std::string GetSerialNumber();
             double GetEncoderDistance(uint8_t motor);
             int32_t GetEncoderCount(uint8_t motor);
@@ -128,11 +128,11 @@ namespace studica_driver
 
             /** Set target RPM; negative = reverse. PID (or MCV2) drives motor via setMotorSpeed(..., inA, inB). */
             void SetTargetVelocity(uint8_t motor, float velocityRpm);
-            /** Read back velocity targets (GET_TARGET_RPM).
-             * Device replies with four RSP_TARGET_RPM frames (same ID):
-             * data[0]=motor, data[1..4]=int32 LE RPM*100.
-             * Drains ReceiveStream until all four motors decoded or timeout (~200 ms). */
-            bool GetTargetRPMFromDevice(float targetRpm[4]);
+            /** Read back velocity target for one motor (TARGET_RPM_0..3 blackboard). data[0..3] = int32 LE RPM×100. */
+            float GetTargetRPM(uint8_t motor);
+            bool TryGetTargetRPM(uint8_t motor, float* out_rpm);
+            /** Read all four target RPMs via per-motor blackboard IDs (no GET_TARGET_RPM stream drain). */
+            bool TryGetTargetRPMFromAll(float targetRpm[4]);
             void SetTargetDistance(uint8_t motor, int32_t distanceCounts);
             void SetTargetAngle(uint8_t motor, double angleDeg);
             void SetPositionHold(uint8_t motor, bool hold);
@@ -147,6 +147,8 @@ namespace studica_driver
             void AutotuneAll();
             void AutotuneMotor(uint8_t motor);
             void SetSensitivity(uint8_t motor, uint8_t sensitivity);
+            /** Set CAN sensor transmit task period in ms (firmware minimum 5). Persisted to EEPROM. */
+            void SetCANSensorOsDelay(uint16_t periodMs);
             void DisableMotor(uint8_t motor);
 
         private:

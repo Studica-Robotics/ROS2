@@ -97,7 +97,7 @@
  *                            requires: n_encoder
  *     get_encoder_distance — distance traveled for one motor (quadrature mode)
  *                            requires: n_encoder
- *     get_target_rpm       — target rpm for all 4 motors (comma separated)
+ *     get_target_rpm       — target rpm for all 4 motors via TARGET_RPM_0..3 (comma separated)
  *     get_cypher_angle     — absolute angle from cypher encoder (absolute mode)
  *                            requires: n_encoder
  *     get_limit_switch     — limit switch state for one motor and direction
