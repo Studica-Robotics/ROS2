@@ -10,6 +10,7 @@
 #include "studica_control/encoder_component.hpp"
 #include "studica_control/gamepad_component.hpp"
 #include "studica_control/imu_component.hpp"
+#include "studica_control/light_tower_component.hpp"
 #include "studica_control/servo_component.hpp"
 #include "studica_control/sharp_component.hpp"
 #include "studica_control/titan_component.hpp"
@@ -34,6 +35,7 @@ public:
         this->declare_parameter<bool>("duty_cycle.enabled", false);
         this->declare_parameter<bool>("dio.enabled", false);
         this->declare_parameter<bool>("encoder.enabled", false);
+        this->declare_parameter<bool>("light_tower.enabled", false);
         this->declare_parameter<bool>("gamepad.enabled", false);
         this->declare_parameter<bool>("imu.enabled", false);
         this->declare_parameter<bool>("servo.enabled", false);
@@ -48,8 +50,9 @@ public:
 
         bool cobra_enabled = this->get_parameter("cobra.enabled").as_bool();
         bool duty_cycle_enabled = this->get_parameter("duty_cycle.enabled").as_bool();
-        bool dio_enabled = this->get_parameter("dio.enabled").as_bool();
-        bool encoder_enabled = this->get_parameter("encoder.enabled").as_bool();
+        bool dio_enabled          = this->get_parameter("dio.enabled").as_bool();
+        bool encoder_enabled      = this->get_parameter("encoder.enabled").as_bool();
+        bool light_tower_enabled  = this->get_parameter("light_tower.enabled").as_bool();
         bool gamepad_enabled = this->get_parameter("gamepad.enabled").as_bool();
         bool imu_enabled = this->get_parameter("imu.enabled").as_bool();
         bool servo_enabled = this->get_parameter("servo.enabled").as_bool();
@@ -85,6 +88,11 @@ public:
         if (imu_enabled) {
             auto imu_node = studica_control::Imu::initialize(this, vmx_);
             component_nodes.push_back(imu_node);
+        }
+
+        if (light_tower_enabled) {
+            auto light_tower_node = studica_control::LightTower::initialize(this, vmx_);
+            component_nodes.push_back(light_tower_node);
         }
 
         if (servo_enabled) {

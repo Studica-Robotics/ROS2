@@ -34,6 +34,7 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
 | **Ultrasonic** | Range Sensor | HC-SR04-style sonar, ~2 cm to 4 m |
 | **Sharp** | Range Sensor | GP2Y infrared rangefinder, ~10 cm to 80 cm |
 | **DIO** | Digital I/O | General-purpose digital input or output pin |
+| **Light Tower** | Indicator | 5-output LED tower — red, green, yellow, buzzer, continuous enable |
 | **Cobra** | Reflectance Array | 4-channel analog line/surface sensor over I2C |
 | **Gamepad** | Input | Joystick/gamepad to `cmd_vel` via `joy` node |
 
@@ -580,6 +581,41 @@ dio:
 
 ---
 
+### Light Tower — 5-output LED Indicator
+
+A 5-output LED tower with mutual exclusion: activating a new colour automatically clears the current one.
+
+**Service:** `/<name>/set` → `studica_control/SetData`
+
+| `params` value | Description |
+|---|---|
+| `"off"` | Everything off |
+| `"red"` / `"green"` / `"yellow"` / `"buzzer"` | Solid on |
+| `"<color>:blink"` | Software blink at `default_blink_hz` |
+| `"<color>:blink_hw"` | Hardware blink — continuous pin LOW, hardware drives rate |
+| `"<color>:<hz>"` | Software blink at a specific Hz (e.g. `"red:2.5"`) |
+
+**Topic (publishes):** `/<name>/state` → `std_msgs/String`
+- Current state string (e.g. `"off"`, `"red:solid"`, `"green:blink:1.000000"`, `"yellow:blink_hw"`).
+- Published on every state change and at 1 Hz as a heartbeat.
+
+**params.yaml:**
+```yaml
+light_tower:
+  enabled: true
+  name: "light_tower"
+  pin_continuous: 0   # HIGH = solid/on, LOW = hardware blink
+  pin_red:        1
+  pin_green:      2
+  pin_yellow:     3
+  pin_buzzer:     4
+  default_blink_hz: 1.0
+```
+
+**Pin wiring:** `continuous` must be HIGH for solid output. When set LOW the hardware automatically flashes the active colour at its own rate (`blink_hw` mode).
+
+---
+
 ### Cobra — Reflectance Sensor Array
 
 Topics are auto-generated from the sensor name. Using `"line_sensor"` as an example:
@@ -706,6 +742,14 @@ ros2 run joy joy_node
 ros2 run studica_control gamepad_example.py
 ```
 
+### Light Tower
+
+Cycles through every state (red, green, yellow, buzzer, software blink, hardware blink, custom Hz, off) via the `/light_tower/set` service every 3 seconds. Subscribes to `/light_tower/state` and prints each state change.
+
+```bash
+ros2 run studica_control light_tower_example.py
+```
+
 Additional Python examples for Encoder, DutyCycleEncoder, DIO, Sharp, and Cobra follow the same pattern.
 
 ---
@@ -814,6 +858,14 @@ Subscribes to all four `/cobra/ch_N` topics and prints voltages side by side at
 ros2 run studica_control cobra_example
 ```
 
+### Light Tower
+
+Cycles through every state (red, green, yellow, buzzer, software blink, hardware blink, custom Hz, off) via the `/light_tower/set` service every 3 seconds. Subscribes to `/light_tower/state` and prints each state change.
+
+```bash
+ros2 run studica_control light_tower_example
+```
+
 ### Gamepad
 
 Subscribes to `/cmd_vel` and prints linear and angular velocity. Also shows how to
@@ -861,6 +913,7 @@ sudo ./titan_example
 | `ultrasonic_example` | Print range readings in a loop |
 | `sharp_example` | Print IR distance readings in a loop |
 | `cobra_example` | Print reflectance voltage for all 4 channels |
+| `light_tower_example` | Cycle through solid, hardware blink, and off states for each output |
 
 **Titan example walkthrough:**
 

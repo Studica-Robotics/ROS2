@@ -42,6 +42,7 @@ set(studica_control_HDRS
   include/studica_control/encoder_component.hpp
   include/studica_control/gamepad_component.hpp
   include/studica_control/imu_component.hpp
+  include/studica_control/light_tower_component.hpp
   include/studica_control/servo_component.hpp
   include/studica_control/sharp_component.hpp
   include/studica_control/titan_component.hpp
@@ -89,6 +90,11 @@ ament_target_dependencies(imu_component ${dependencies})
 target_link_libraries(imu_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(imu_component "studica_control::imu")
 
+add_library(light_tower_component SHARED src/components/light_tower_component.cpp)
+ament_target_dependencies(light_tower_component ${dependencies})
+target_link_libraries(light_tower_component "${cpp_typesupport_target}")
+rclcpp_components_register_nodes(light_tower_component "studica_control::LightTower")
+
 add_library(servo_component SHARED src/components/servo_component.cpp)
 ament_target_dependencies(servo_component ${dependencies})
 target_link_libraries(servo_component "${cpp_typesupport_target}")
@@ -116,10 +122,11 @@ install(TARGETS
   encoder_component
   gamepad_component
   imu_component
+  light_tower_component
   servo_component
   sharp_component
   titan_component
-  ultrasonic_component  
+  ultrasonic_component
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
     PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
@@ -134,6 +141,7 @@ target_link_libraries(manual_composition
   encoder_component
   gamepad_component
   imu_component
+  light_tower_component
   servo_component
   sharp_component
   titan_component
@@ -180,6 +188,7 @@ ament_export_libraries(
   encoder_component
   gamepad_component
   imu_component
+  light_tower_component
   servo_component
   sharp_component
   titan_component
@@ -199,6 +208,7 @@ set(cpp_example_targets
   dio_example
   cobra_example
   gamepad_example
+  light_tower_example
 )
 
 foreach(target ${cpp_example_targets})
@@ -223,6 +233,7 @@ set(python_example_scripts
   src/components/examples/python/dio_example.py
   src/components/examples/python/cobra_example.py
   src/components/examples/python/gamepad_example.py
+  src/components/examples/python/light_tower_example.py
 )
 
 install(PROGRAMS ${python_example_scripts}
