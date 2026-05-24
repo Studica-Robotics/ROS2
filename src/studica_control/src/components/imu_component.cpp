@@ -101,11 +101,25 @@ void Imu::publish_data() {
 
     // NavX native frame: X=right, Y=forward, Z=up, CW+ yaw.
     // Remapped to ROS convention: X=forward, Y=left, Z=up, CCW+ yaw.
-    // Quaternion: swap X/Y, negate Y and Z to flip handedness.
-    msg.orientation.x =  imu_->GetQuaternionY();
-    msg.orientation.y = -imu_->GetQuaternionX();
-    msg.orientation.z = -imu_->GetQuaternionZ();
-    msg.orientation.w =  imu_->GetQuaternionW();
+    // Quaternion: swap X/Y axes. Z is already CCW+ in the NavX quaternion
+    // (the NavX SDK internally uses CCW+ for quaternion Z despite reporting
+    // Euler yaw as CW+), so no negation needed on Z.
+    //
+    // The NavX reports quaternions in the negative hemisphere (w<0 at rest).
+    // q and -q encode the same rotation, but ROS convention requires w>=0
+    // (canonical/shorter-arc form). Normalize here so EKFs, nav2, and tf2
+    // all receive a standard quaternion without relying on sign-handling quirks.
+    {
+        float qx =  imu_->GetQuaternionY();
+        float qy = -imu_->GetQuaternionX();
+        float qz =  imu_->GetQuaternionZ();
+        float qw =  imu_->GetQuaternionW();
+        if (qw < 0.0f) { qx = -qx; qy = -qy; qz = -qz; qw = -qw; }
+        msg.orientation.x = qx;
+        msg.orientation.y = qy;
+        msg.orientation.z = qz;
+        msg.orientation.w = qw;
+    }
 
     // raw gyro in deg/s — remap axes and negate Z for CCW+, convert to rad/s
     msg.angular_velocity.x =  imu_->GetRawGyroY() * (M_PI / 180.0);

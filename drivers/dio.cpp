@@ -16,7 +16,7 @@ DIO::DIO(VMXChannelIndex channel, PinMode mode, std::shared_ptr<VMXPi> vmx)
     VMXErrorCode vmxerr;
     if (mode == PinMode::OUTPUT)
     {
-        DIOConfig dio_config;
+        DIOConfig dio_config(DIOConfig::PUSHPULL);
         if (!vmx_->io.ActivateSinglechannelResource(VMXChannelInfo(channel, VMXChannelCapability::DigitalOutput),
                                                     &dio_config, dio_res_handle_, &vmxerr))
         {
