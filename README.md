@@ -15,6 +15,18 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
 - [Building](#building)
 - [Running](#running)
 - [Component Reference](#component-reference)
+  - [Titan](#titan--can-bus-motor-controller)
+  - [IMU](#imu--9-axis-inertial-measurement-unit)
+  - [Power](#power--battery-monitor)
+  - [Encoder](#encoder--quadrature-encoder)
+  - [DutyCycleEncoder](#dutycycleencoder--absolute-encoder)
+  - [Servo](#servo)
+  - [Ultrasonic](#ultrasonic--hc-sr04-range-sensor)
+  - [Sharp](#sharp--gp2y-infrared-range-sensor)
+  - [DIO](#dio--digital-inputoutput)
+  - [Light Tower](#light-tower--5-output-led-indicator)
+  - [Cobra](#cobra--reflectance-sensor-array)
+  - [Gamepad](#gamepad--joystick-to-cmd_vel)
 - [Python Examples](#python-examples)
 - [C++ Examples](#c-examples)
 - [Standalone Driver Examples](#standalone-driver-examples)
@@ -35,6 +47,7 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
 | **Sharp** | Range Sensor | GP2Y infrared rangefinder, ~10 cm to 80 cm |
 | **DIO** | Digital I/O | General-purpose digital input or output pin |
 | **Light Tower** | Indicator | 5-output LED tower — red, green, yellow, buzzer, continuous enable |
+| **Power** | System Monitor | Battery voltage, estimated state-of-charge, low-battery warnings — always on |
 | **Cobra** | Reflectance Array | 4-channel analog line/surface sensor over I2C |
 | **Gamepad** | Input | Joystick/gamepad to `cmd_vel` via `joy` node |
 
@@ -199,6 +212,15 @@ servo:
 ```
 
 Topics are auto-generated: `/gripper/cmd`, `/gripper/state`, `/wrist/cmd`, `/wrist/state`, etc.
+
+### Always-On Components
+
+The **power** monitor starts automatically whenever `studica_control` is running — no `enabled` flag, no `sensors` list. It has one optional parameter:
+
+```yaml
+power:
+  battery_count: 1   # 1 or 2 packs — omit entirely to use the default (1)
+```
 
 ### Single-Instance Components
 
@@ -573,10 +595,62 @@ Topics are auto-generated from the sensor name. Using `"limit_switch"` as an exa
 ```yaml
 dio:
   enabled: true
-  sensors: ["limit_switch"]
+  sensors: ["limit_switch", "estop"]
   limit_switch:
     pin: 15
-    type: "input"    # "input" or "output"
+    type: "input"              # "input" or "output"
+    interrupt_edge: "none"     # "none" (default), "rising", or "falling"
+  estop:
+    pin: 10
+    type: "input"
+    interrupt_edge: "rising"   # NC contact: pin goes HIGH when e-stop is hit (fails safe)
+    debounce_ms: 20            # ignore bounces within 20 ms (optional, default 0 = disabled)
+```
+
+**Interrupt support (input mode only):**
+
+Set `interrupt_edge` to `"rising"` or `"falling"` to attach a hardware interrupt to the pin. On a detected edge, the `/state` topic is published **immediately** in addition to the regular 10 Hz poll.
+
+The interrupt fires in a VMX background thread — the ROS2 publisher is thread-safe and handles this automatically. Keep any downstream subscribers non-blocking.
+
+**Button wiring** — all input pins have internal pull-ups. Wire buttons between the pin and GND. The correct `interrupt_edge` depends on the contact type:
+
+| Contact type | Normal state | Activated state | `interrupt_edge` | Use case |
+|---|---|---|---|---|
+| NO (Normally Open) | HIGH (pull-up) | LOW (shorted to GND) | `"falling"` | Start, Stop, Reset buttons |
+| NC (Normally Closed) | LOW (held to GND) | HIGH (contact opens, pull-up wins) | `"rising"` | E-stop |
+
+NC contacts are the correct choice for e-stops because a broken wire also releases the contact and triggers the stop — it **fails safe**. NO contacts are fine for non-safety inputs.
+
+```yaml
+dio:
+  enabled: true
+  sensors: ["estop", "start_btn"]
+  estop:
+    pin: 10
+    type: "input"
+    interrupt_edge: "rising"   # NC contact: opens (goes HIGH) when e-stop is hit
+  start_btn:
+    pin: 11
+    type: "input"
+    interrupt_edge: "falling"  # NO contact: closes (goes LOW) when pressed
+```
+
+In your safety node:
+```python
+# E-stop (NC) — pin goes HIGH when activated
+node.create_subscription(Bool, '/estop/state', on_estop, 10)
+
+def on_estop(msg):
+    if msg.data:              # HIGH = e-stop activated (NC contact opened)
+        cmd_vel_pub.publish(Twist())   # zero velocity
+
+# Start button (NO) — pin goes LOW when pressed
+node.create_subscription(Bool, '/start_btn/state', on_start, 10)
+
+def on_start(msg):
+    if not msg.data:          # LOW = button pressed
+        start_robot()
 ```
 
 ---
@@ -613,6 +687,46 @@ light_tower:
 ```
 
 **Pin wiring:** `continuous` must be HIGH for solid output. When set LOW the hardware automatically flashes the active colour at its own rate (`blink_hw` mode).
+
+---
+
+### Power — Battery Monitor
+
+Always started when `studica_control` is running. No `enabled` flag required.
+
+Reads battery voltage from the VMX onboard power monitor and estimates state-of-charge using a voltage lookup table derived from a constant-current discharge test of the Studica 10-cell NiMH pack.
+
+**Topic (publishes):** `/battery_state` → `sensor_msgs/BatteryState` — 2 Hz
+
+| Field | Value |
+|---|---|
+| `voltage` | Live battery voltage (V) |
+| `percentage` | Estimated state-of-charge, 0.0–1.0, from NiMH discharge curve |
+| `design_capacity` | `3.0 × battery_count` Ah |
+| `power_supply_technology` | `NIMH` |
+| `power_supply_status` | `DISCHARGING` |
+| `power_supply_health` | `GOOD` (≥ 11 V) / `DEAD` (< 11 V) |
+| `present` | `true` |
+| `current` / `charge` / `capacity` | `NaN` — no coulomb counter available |
+
+**Log warnings:**
+- `WARN` every 10 s when voltage drops below **11.0 V** — land or stop the robot
+- `ERROR` every 5 s when voltage drops below **10.0 V** — below safe minimum, robot shutting down
+
+> **Note on the percentage estimate:** NiMH has a flat mid-discharge plateau followed by a sharp end-of-life drop. A simple linear map from 10–14 V would read ~30% when only ~16% remains. The lookup table was calibrated from actual hardware data and correctly tracks the curve shape.
+
+**params.yaml** *(optional — omit entirely for a single-pack robot)*:
+```yaml
+power:
+  battery_count: 1   # 1 = 3.0 Ah (default)  |  2 = 6.0 Ah (two packs in parallel)
+```
+
+> Two packs wired in parallel double the capacity but keep the same voltage, so the percentage curve is identical regardless of `battery_count`.
+
+**Verify:**
+```bash
+ros2 topic echo /battery_state
+```
 
 ---
 
