@@ -43,6 +43,7 @@ set(studica_control_HDRS
   include/studica_control/gamepad_component.hpp
   include/studica_control/imu_component.hpp
   include/studica_control/light_tower_component.hpp
+  include/studica_control/power_component.hpp
   include/studica_control/servo_component.hpp
   include/studica_control/sharp_component.hpp
   include/studica_control/titan_component.hpp
@@ -95,6 +96,11 @@ ament_target_dependencies(light_tower_component ${dependencies})
 target_link_libraries(light_tower_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(light_tower_component "studica_control::LightTower")
 
+add_library(power_component SHARED src/components/power_component.cpp)
+ament_target_dependencies(power_component ${dependencies})
+target_link_libraries(power_component "${cpp_typesupport_target}")
+rclcpp_components_register_nodes(power_component "studica_control::Power")
+
 add_library(servo_component SHARED src/components/servo_component.cpp)
 ament_target_dependencies(servo_component ${dependencies})
 target_link_libraries(servo_component "${cpp_typesupport_target}")
@@ -123,6 +129,7 @@ install(TARGETS
   gamepad_component
   imu_component
   light_tower_component
+  power_component
   servo_component
   sharp_component
   titan_component
@@ -142,6 +149,7 @@ target_link_libraries(manual_composition
   gamepad_component
   imu_component
   light_tower_component
+  power_component
   servo_component
   sharp_component
   titan_component
@@ -189,6 +197,7 @@ ament_export_libraries(
   gamepad_component
   imu_component
   light_tower_component
+  power_component
   servo_component
   sharp_component
   titan_component

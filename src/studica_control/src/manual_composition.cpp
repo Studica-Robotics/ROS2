@@ -11,6 +11,7 @@
 #include "studica_control/gamepad_component.hpp"
 #include "studica_control/imu_component.hpp"
 #include "studica_control/light_tower_component.hpp"
+#include "studica_control/power_component.hpp"
 #include "studica_control/servo_component.hpp"
 #include "studica_control/sharp_component.hpp"
 #include "studica_control/titan_component.hpp"
@@ -47,6 +48,10 @@ public:
             RCLCPP_ERROR(this->get_logger(), "VMX-pi connection failed during startup. Aborting component initialization.");
             return false;
         }
+
+        // power monitor — always started (reads optional power.battery_count)
+        auto power_node = studica_control::Power::initialize(this, vmx_);
+        component_nodes.push_back(power_node);
 
         bool cobra_enabled = this->get_parameter("cobra.enabled").as_bool();
         bool duty_cycle_enabled = this->get_parameter("duty_cycle.enabled").as_bool();
