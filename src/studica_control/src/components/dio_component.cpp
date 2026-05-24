@@ -25,27 +25,30 @@ DIO::initialize(rclcpp::Node *control, std::shared_ptr<VMXPi> vmx)
     std::vector<std::string> sensor_ids = control->get_parameter("dio.sensors").as_string_array();
 
     for (const auto &sensor : sensor_ids) {
-        std::string pin_param       = "dio." + sensor + ".pin";
-        std::string type_param      = "dio." + sensor + ".type";
-        std::string int_edge_param  = "dio." + sensor + ".interrupt_edge";
+        std::string pin_param          = "dio." + sensor + ".pin";
+        std::string type_param         = "dio." + sensor + ".type";
+        std::string int_edge_param     = "dio." + sensor + ".interrupt_edge";
+        std::string debounce_param     = "dio." + sensor + ".debounce_ms";
 
         control->declare_parameter<int>(pin_param, -1);
         control->declare_parameter<std::string>(type_param, "");
         control->declare_parameter<std::string>(int_edge_param, "none");
+        control->declare_parameter<int>(debounce_param, 0);
 
         int pin                  = control->get_parameter(pin_param).as_int();
         std::string type         = control->get_parameter(type_param).as_string();
         std::string int_edge     = control->get_parameter(int_edge_param).as_string();
+        int debounce_ms          = control->get_parameter(debounce_param).as_int();
 
-        RCLCPP_INFO(control->get_logger(), "%s -> pin: %d, type: %s, interrupt_edge: %s",
-                    sensor.c_str(), pin, type.c_str(), int_edge.c_str());
+        RCLCPP_INFO(control->get_logger(), "%s -> pin: %d, type: %s, interrupt_edge: %s, debounce: %d ms",
+                    sensor.c_str(), pin, type.c_str(), int_edge.c_str(), debounce_ms);
 
         if (type == "input") {
             dio_nodes.push_back(std::make_shared<DIO>(
-                vmx, sensor, pin, studica_driver::PinMode::INPUT, int_edge));
+                vmx, sensor, pin, studica_driver::PinMode::INPUT, int_edge, debounce_ms));
         } else if (type == "output") {
             dio_nodes.push_back(std::make_shared<DIO>(
-                vmx, sensor, pin, studica_driver::PinMode::OUTPUT, int_edge));
+                vmx, sensor, pin, studica_driver::PinMode::OUTPUT, int_edge, debounce_ms));
         } else {
             RCLCPP_ERROR(control->get_logger(),
                          "invalid dio type '%s' for '%s' — use 'input' or 'output'",
@@ -61,7 +64,7 @@ DIO::DIO(const rclcpp::NodeOptions &options) : rclcpp::Node("dio", options) {}
 
 
 DIO::DIO(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex pin,
-         studica_driver::PinMode pin_mode, const std::string &interrupt_edge)
+         studica_driver::PinMode pin_mode, const std::string &interrupt_edge, int debounce_ms)
     : rclcpp::Node(name), vmx_(vmx), pin_(pin), pin_mode_(pin_mode)
 {
     dio_ = std::make_shared<studica_driver::DIO>(pin_, pin_mode_, vmx_);
@@ -94,7 +97,7 @@ DIO::DIO(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex pi
     // -----------------------------------------------------------------------
     if (pin_mode_ == studica_driver::PinMode::INPUT && interrupt_edge != "none") {
 
-        InterruptConfig::EdgeType vmx_edge;
+        InterruptConfig::InterruptEdge vmx_edge;
         if (interrupt_edge == "falling") {
             vmx_edge = InterruptConfig::FALLING;
         } else {
@@ -123,12 +126,18 @@ DIO::DIO(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex pi
                     (edge == InterruptEdgeType::RISING_EDGE_INTERRUPT) ? "rising" : "falling";
                 RCLCPP_INFO(logger, "interrupt pin %d: %s edge → %s",
                             captured_pin, edge_str, pin_state ? "HIGH" : "LOW");
-            });
+            }, debounce_ms);
 
         if (ok) {
-            RCLCPP_INFO(this->get_logger(),
-                        "hardware interrupt enabled on pin %d (%s edge)",
-                        pin_, interrupt_edge.c_str());
+            if (debounce_ms > 0) {
+                RCLCPP_INFO(this->get_logger(),
+                            "hardware interrupt enabled on pin %d (%s edge, debounce %d ms)",
+                            pin_, interrupt_edge.c_str(), debounce_ms);
+            } else {
+                RCLCPP_INFO(this->get_logger(),
+                            "hardware interrupt enabled on pin %d (%s edge, no debounce)",
+                            pin_, interrupt_edge.c_str());
+            }
         } else {
             RCLCPP_WARN(this->get_logger(),
                         "failed to enable interrupt on pin %d — falling back to polling only",

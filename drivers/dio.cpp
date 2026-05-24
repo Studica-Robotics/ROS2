@@ -67,7 +67,9 @@ DIO::~DIO()
 // Interrupt support
 // ---------------------------------------------------------------------------
 
-bool DIO::EnableInterrupt(InterruptConfig::EdgeType edge, InterruptCallback callback)
+bool DIO::EnableInterrupt(InterruptConfig::InterruptEdge edge,
+                           InterruptCallback callback,
+                           int debounce_ms)
 {
     if (!initialized_)
     {
@@ -86,11 +88,10 @@ bool DIO::EnableInterrupt(InterruptConfig::EdgeType edge, InterruptCallback call
     }
 
     interrupt_callback_ = std::move(callback);
+    debounce_ns_        = debounce_ms * 1'000'000;   // ms → ns
+    last_interrupt_ns_.store(0, std::memory_order_relaxed);
 
     VMXErrorCode vmxerr;
-    // The VMX API requires InterruptConfig's C-style function pointer.
-    // We store the std::function in interrupt_callback_ and use a static
-    // trampoline that casts param (== this) back to DIO*.
     InterruptConfig int_config(edge, interrupt_trampoline, static_cast<void *>(this));
 
     if (!vmx_->io.ActivateSinglechannelResource(
@@ -104,9 +105,16 @@ bool DIO::EnableInterrupt(InterruptConfig::EdgeType edge, InterruptCallback call
     }
 
     interrupt_enabled_ = true;
-    printf("Interrupt enabled on DIO port %d (%s edge)\n",
-           channel_,
-           (edge == InterruptConfig::RISING) ? "rising" : "falling");
+    if (debounce_ms > 0) {
+        printf("Interrupt enabled on DIO port %d (%s edge, debounce %d ms)\n",
+               channel_,
+               (edge == InterruptConfig::RISING) ? "rising" : "falling",
+               debounce_ms);
+    } else {
+        printf("Interrupt enabled on DIO port %d (%s edge, no debounce)\n",
+               channel_,
+               (edge == InterruptConfig::RISING) ? "rising" : "falling");
+    }
     return true;
 }
 
@@ -121,18 +129,33 @@ void DIO::DisableInterrupt()
 }
 
 // Static trampoline — called by the VMX HAL in its own interrupt thread.
-// Reads the current pin state (after the edge) and forwards to the stored callback.
+// Applies software debounce (if configured), then reads the pin state and
+// forwards to the stored callback.
 void DIO::interrupt_trampoline(uint32_t /*io_interrupt_num*/,
                                 InterruptEdgeType edge,
                                 void *param,
                                 uint64_t /*timestamp_us*/)
 {
     auto *self = static_cast<DIO *>(param);
-    if (self && self->interrupt_callback_)
+    if (!self || !self->interrupt_callback_)
+        return;
+
+    // software debounce — ignore edges within the configured window
+    if (self->debounce_ns_ > 0)
     {
-        bool pin_state = self->Get();
-        self->interrupt_callback_(pin_state, edge);
+        int64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                             std::chrono::steady_clock::now().time_since_epoch())
+                             .count();
+        int64_t last_ns = self->last_interrupt_ns_.load(std::memory_order_relaxed);
+
+        if (now_ns - last_ns < self->debounce_ns_)
+            return;   // within debounce window — discard
+
+        self->last_interrupt_ns_.store(now_ns, std::memory_order_relaxed);
     }
+
+    bool pin_state = self->Get();
+    self->interrupt_callback_(pin_state, edge);
 }
 
 

@@ -604,6 +604,7 @@ dio:
     pin: 10
     type: "input"
     interrupt_edge: "rising"   # NC contact: pin goes HIGH when e-stop is hit (fails safe)
+    debounce_ms: 20            # ignore bounces within 20 ms (optional, default 0 = disabled)
 ```
 
 **Interrupt support (input mode only):**

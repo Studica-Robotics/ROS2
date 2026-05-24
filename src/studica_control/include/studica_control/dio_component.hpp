@@ -52,7 +52,8 @@ public:
     explicit DIO(const rclcpp::NodeOptions &options);
 
     DIO(std::shared_ptr<VMXPi> vmx, const std::string &name, VMXChannelIndex pin,
-        studica_driver::PinMode pin_mode, const std::string &interrupt_edge = "none");
+        studica_driver::PinMode pin_mode, const std::string &interrupt_edge = "none",
+        int debounce_ms = 0);
 
     ~DIO();
 
