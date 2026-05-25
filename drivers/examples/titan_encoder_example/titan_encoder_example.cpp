@@ -1,5 +1,5 @@
 /*
- * titan_encoder_test.cpp
+ * titan_encoder_example.cpp
  *
  * Spins motor 0 at 50% duty and polls the Titan encoder in a tight loop.
  * Each iteration reads count + VMX blackboard freshness; stale reads (no new
@@ -10,11 +10,11 @@
  *   make
  *
  * Or from drivers/examples:
- *   make -C titan_encoder_test
+ *   make -C titan_encoder_example
  *
  * Run:
  *   sudo make run
- *   sudo ./titan_encoder_test [CAN_ID]
+ *   sudo ./titan_encoder_example [CAN_ID]
  */
 
 #include <chrono>

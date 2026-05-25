@@ -1,5 +1,6 @@
 CXX=g++
 CXXFLAGS=-I/usr/local/include/vmxpi -L/usr/local/lib/vmxpi -lvmxpi_hal_cpp -I/usr/local/include/studica_drivers -L/usr/local/lib/studica_drivers -lrt -lpthread -lstudica_drivers
+LDFLAGS=-Wl,-rpath,/usr/local/lib/vmxpi -Wl,-rpath,/usr/local/lib/studica_drivers
 SOURCES=$(wildcard *.cpp)
 DEPS=$(SOURCES:.cpp=.d)
 BINS=$(SOURCES:.cpp=)
@@ -13,7 +14,7 @@ all: $(patsubst %.cpp, %.out, $(SOURCES))
 
 %.out:  %.cpp Makefile
 	$(info GCC Version $(GCCVERSION))
-	$(CXX) $< -o $(@:.out=) $(CXXFLAGS)
+	$(CXX) $< -o $(@:.out=) $(CXXFLAGS) $(LDFLAGS)
 
 clean: $(patsubst %.cpp, %.clean, $(SOURCES))
 
