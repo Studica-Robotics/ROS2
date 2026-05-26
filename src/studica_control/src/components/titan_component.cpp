@@ -87,7 +87,7 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
 
         // command subscriber — always created
         cmd_subs_[i] = this->create_subscription<std_msgs::msg::Float64>(
-            prefix + "/cmd", 10,
+            prefix + "/cmd", 1,
             [this, i](std_msgs::msg::Float64::SharedPtr msg) {
                 if (!enabled_) return;
                 float speed = static_cast<float>(msg->data);

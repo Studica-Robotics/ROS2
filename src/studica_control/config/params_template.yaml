@@ -209,4 +209,5 @@ control_server:
       angular_scale: 1.0    # scale factor applied to angular axis
       deadzone: 0.05        # axis values below this are treated as zero
       turbo_multiplier: 2.0 # speed multiplier when turbo button is held
+      publish_rate: 50      # cmd_vel publish rate in Hz (higher = lower stop latency)
       cmd_vel_topic: "cmd_vel"

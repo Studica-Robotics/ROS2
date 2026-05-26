@@ -764,7 +764,7 @@ Converts joystick input from a `joy` node into `geometry_msgs/Twist` velocity co
 **Requires:** `ros2 run joy joy_node` running in a separate terminal.
 
 **Topic (publishes):** `<cmd_vel_topic>` → `geometry_msgs/Twist`
-- Published at 10 Hz regardless of joystick input rate.
+- Published at `publish_rate` Hz (default 50 Hz). Increase to reduce stop latency — at 50 Hz the worst-case delay after stick release is 20 ms vs 100 ms at 10 Hz. The `joy` node publishes at 100 Hz by default so there is no benefit going above that.
 
 **Topic (subscribes):** `/gamepad_axis_remap` → `std_msgs/Int32MultiArray`
 - Publish `[x_axis, y_axis, z_axis]` indices to remap axes at runtime without restarting. Use `-1` for any axis to leave it unmapped (outputs 0). Uses transient-local QoS so late-joining nodes receive the last mapping.
@@ -783,6 +783,7 @@ gamepad:
   angular_scale: 1.0
   deadzone: 0.05        # axis values below this are treated as zero
   turbo_multiplier: 2.0
+  publish_rate: 50      # cmd_vel publish rate in Hz (max useful: 100 — joy node rate)
   cmd_vel_topic: "cmd_vel"
 ```
 

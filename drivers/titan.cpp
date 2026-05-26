@@ -282,6 +282,11 @@ bool Titan::TryGetRPM(uint8_t motor, int16_t* out_rpm)
     if (!Read(addr, data))
         return false;
     *out_rpm = static_cast<int16_t>(data[0] | (data[1] << 8));
+    if ((motor == 0 && invertRPM0) ||
+        (motor == 1 && invertRPM1) ||
+        (motor == 2 && invertRPM2) ||
+        (motor == 3 && invertRPM3))
+        *out_rpm = -*out_rpm;
     return true;
 }
 
@@ -467,12 +472,16 @@ void Titan::SetSpeed(uint8_t motor, double speedCfg)
     if (duty < 0)
         duty = 0;
     lastDuty_[motor] = static_cast<uint8_t>(duty);
-    uint8_t inA = (speedCfg >= 0) ? 1 : 0;
-    uint8_t inB = (speedCfg >= 0) ? 0 : 1;
-    if (speedCfg >= 0)
+    uint8_t inA, inB;
+    if (speedCfg == 0.0) {
+        inA = 1; inB = 1;                        // brake: both high = H-bridge short
+    } else if (speedCfg > 0.0) {
+        inA = 1; inB = 0;                        // forward
         lastDirection_ |= (1u << motor);
-    else
+    } else {
+        inA = 0; inB = 1;                        // reverse
         lastDirection_ &= ~(1u << motor);
+    }
     /* Titan format: one frame per motor [motor, duty, inA, inB] */
     uint8_t data[8] = {motor, static_cast<uint8_t>(duty), inA, inB, 0, 0, 0, 0};
     Titan::Write(GetAddress(SET_MOTOR_SPEED), data, 0);
