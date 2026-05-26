@@ -90,9 +90,7 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
             prefix + "/cmd", 1,
             [this, i](std_msgs::msg::Float64::SharedPtr msg) {
                 if (!enabled_) return;
-                float speed = static_cast<float>(msg->data);
-                speeds_[i] = speed;
-                titan_->SetSpeed(i, speed);
+                speeds_[i] = static_cast<float>(msg->data);  // store only — resend_speeds is the sole sender
             });
 
         // feedback publishers — depend on encoder mode
@@ -112,7 +110,7 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
         std::bind(&Titan::publish_encoders, this));
 
     watchdog_timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(10),
+        std::chrono::milliseconds(20),    // 50 Hz
         std::bind(&Titan::resend_speeds, this));
 
     for (int i = 0; i < 4; i++) {
@@ -378,9 +376,7 @@ void Titan::publish_encoders() {
 void Titan::resend_speeds() {
     if (!enabled_) return;
     for (int i = 0; i < 4; i++) {
-        if (speeds_[i] != 0.0f) {
-            titan_->SetSpeed(i, speeds_[i]);
-        }
+        titan_->SetSpeed(i, speeds_[i]); 
     }
 }
 
