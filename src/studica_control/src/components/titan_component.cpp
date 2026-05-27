@@ -35,11 +35,21 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
         std::string can_id_param     = "titan." + sensor + ".can_id";
         std::string motor_freq_param = "titan." + sensor + ".motor_freq";
 
-        control->declare_parameter<int>(can_id_param, -1);
-        control->declare_parameter<int>(motor_freq_param, -1);
+        std::string encoder_rate_param      = "titan." + sensor + ".encoder_rate_hz";
+        std::string motor_update_rate_param = "titan." + sensor + ".motor_update_rate_hz";
+        std::string limit_switches_param    = "titan." + sensor + ".limit_switches";
 
-        uint8_t  can_id     = static_cast<uint8_t>(control->get_parameter(can_id_param).as_int());
-        uint16_t motor_freq = static_cast<uint16_t>(control->get_parameter(motor_freq_param).as_int());
+        control->declare_parameter<int> (can_id_param, -1);
+        control->declare_parameter<int> (motor_freq_param, -1);
+        control->declare_parameter<int> (encoder_rate_param, 20);
+        control->declare_parameter<int> (motor_update_rate_param, 50);
+        control->declare_parameter<bool>(limit_switches_param, false);
+
+        uint8_t  can_id               = static_cast<uint8_t>(control->get_parameter(can_id_param).as_int());
+        uint16_t motor_freq           = static_cast<uint16_t>(control->get_parameter(motor_freq_param).as_int());
+        int      encoder_rate_hz      = control->get_parameter(encoder_rate_param).as_int();
+        int      motor_update_rate_hz = control->get_parameter(motor_update_rate_param).as_int();
+        bool     limit_switches       = control->get_parameter(limit_switches_param).as_bool();
 
         std::array<MotorConfig, 4> motor_configs;
         for (int m = 0; m < 4; m++) {
@@ -58,10 +68,11 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
             motor_configs[m].invert_rpm     = control->get_parameter(prefix + ".invert_rpm").as_bool();
         }
 
-        RCLCPP_INFO(control->get_logger(), "%s -> can_id: %d, motor_freq: %d hz",
-                    sensor.c_str(), can_id, motor_freq);
+        RCLCPP_INFO(control->get_logger(), "%s -> can_id: %d, motor_freq: %d hz, encoder: %dHz, resend: %dHz",
+                    sensor.c_str(), can_id, motor_freq, encoder_rate_hz, motor_update_rate_hz);
 
-        auto titan = std::make_shared<Titan>(vmx, sensor, can_id, motor_freq, motor_configs);
+        auto titan = std::make_shared<Titan>(vmx, sensor, can_id, motor_freq, motor_configs,
+                                             encoder_rate_hz, motor_update_rate_hz, limit_switches);
         titan_nodes.push_back(titan);
     }
 
@@ -73,8 +84,10 @@ Titan::Titan(const rclcpp::NodeOptions &options) : Node("titan_", options) {}
 
 
 Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID,
-             const uint16_t &motor_freq, const std::array<MotorConfig, 4> &motor_configs)
-    : Node(name), vmx_(vmx), canID_(canID), motor_freq_(motor_freq), motor_configs_(motor_configs) {
+             const uint16_t &motor_freq, const std::array<MotorConfig, 4> &motor_configs,
+             int encoder_rate_hz, int motor_update_rate_hz, bool limit_switches)
+    : Node(name), vmx_(vmx), canID_(canID), motor_freq_(motor_freq), motor_configs_(motor_configs),
+      limit_switches_enabled_(limit_switches) {
 
     titan_ = std::make_shared<studica_driver::Titan>(canID_, motor_freq_, 1, vmx_);
 
@@ -87,12 +100,10 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
 
         // command subscriber — always created
         cmd_subs_[i] = this->create_subscription<std_msgs::msg::Float64>(
-            prefix + "/cmd", 10,
+            prefix + "/cmd", 1,
             [this, i](std_msgs::msg::Float64::SharedPtr msg) {
                 if (!enabled_) return;
-                float speed = static_cast<float>(msg->data);
-                speeds_[i] = speed;
-                titan_->SetSpeed(i, speed);
+                speeds_[i] = static_cast<float>(msg->data);  // store only — resend_speeds is the sole sender
             });
 
         // feedback publishers — depend on encoder mode
@@ -105,14 +116,22 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
             angle_pubs_[i] = this->create_publisher<std_msgs::msg::Float64>(prefix + "/angle", 10);
             RCLCPP_INFO(this->get_logger(), "  m_%d: absolute   -> /%s/angle", i, prefix.c_str());
         }
+
+        // limit switch publishers — only created when limit_switches: true
+        if (limit_switches_enabled_) {
+            limit_fwd_pubs_[i] = this->create_publisher<std_msgs::msg::Bool>(prefix + "/limit_fwd", 10);
+            limit_rev_pubs_[i] = this->create_publisher<std_msgs::msg::Bool>(prefix + "/limit_rev", 10);
+            RCLCPP_INFO(this->get_logger(), "  m_%d: limit switches -> /%s/limit_fwd, /%s/limit_rev",
+                        i, prefix.c_str(), prefix.c_str());
+        }
     }
 
     encoder_timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(50),
+        std::chrono::milliseconds(1000 / encoder_rate_hz),
         std::bind(&Titan::publish_encoders, this));
 
     watchdog_timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(10),
+        std::chrono::milliseconds(1000 / motor_update_rate_hz),
         std::bind(&Titan::resend_speeds, this));
 
     for (int i = 0; i < 4; i++) {
@@ -372,15 +391,21 @@ void Titan::publish_encoders() {
             angle_msg.data = titan_->GetCypherAngle(i);
             angle_pubs_[i]->publish(angle_msg);
         }
+
+        if (limit_switches_enabled_) {
+            std_msgs::msg::Bool fwd_msg, rev_msg;
+            fwd_msg.data = !titan_->GetLimitSwitch(i, 0);  // active-low: invert so true = triggered
+            rev_msg.data = !titan_->GetLimitSwitch(i, 1);
+            limit_fwd_pubs_[i]->publish(fwd_msg);
+            limit_rev_pubs_[i]->publish(rev_msg);
+        }
     }
 }
 
 void Titan::resend_speeds() {
     if (!enabled_) return;
     for (int i = 0; i < 4; i++) {
-        if (speeds_[i] != 0.0f) {
-            titan_->SetSpeed(i, speeds_[i]);
-        }
+        titan_->SetSpeed(i, speeds_[i]); 
     }
 }
 

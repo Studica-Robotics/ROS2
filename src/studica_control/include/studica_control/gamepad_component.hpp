@@ -18,7 +18,7 @@
  *   primary configuration is via params.yaml.
  *
  * topic (publishes): <cmd_vel_topic> (geometry_msgs/Twist)
- *   velocity command published at 10hz regardless of joystick input rate.
+ *   velocity command published at publish_rate hz (default 50hz, configurable in params).
  */
 
 #ifndef STUDICA_CONTROL__GAMEPAD_COMPONENT_H_
