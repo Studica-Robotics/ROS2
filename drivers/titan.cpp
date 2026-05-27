@@ -139,12 +139,60 @@ bool Titan::Read(uint32_t address, uint8_t* data)
     return true;
 }
 
+bool Titan::ReadWithFreshFlag(uint32_t address, uint8_t* data, bool& is_fresh, uint64_t* out_timestamp_us)
+{
+    VMXCANTimestampedMessage blackboard_msg;
+    uint64_t sys_timestamp;
+    bool already_retrieved = false;
+    if (!vmx_->can.GetBlackboardEntry(canrxhandle, address, blackboard_msg, sys_timestamp, already_retrieved, &vmxerr))
+    {
+        return false;
+    }
+    else
+    {
+        std::memcpy(data, blackboard_msg.data, 8);
+        if (out_timestamp_us != nullptr)
+            *out_timestamp_us = sys_timestamp;
+        is_fresh = !already_retrieved;
+        return true;
+    }
+    return true;
+}
+
+bool Titan::GetEncoderCountFresh(uint8_t motor, int32_t& count, bool& is_fresh, uint64_t* out_timestamp_us)
+{
+    uint8_t data[8] = {0};
+    uint32_t addr;
+    uint64_t timestamp_us = 0;
+
+    if (motor == 0)
+        addr = GetAddress(ENCODER_0);
+    else if (motor == 1)
+        addr = GetAddress(ENCODER_1);
+    else if (motor == 2)
+        addr = GetAddress(ENCODER_2);
+    else if (motor == 3)
+        addr = GetAddress(ENCODER_3);
+    else
+        addr = GetAddress(ENCODER_0);
+    if (!ReadWithFreshFlag(addr, data, is_fresh, out_timestamp_us))
+        return false;
+    count = static_cast<int32_t>((data[0]) | (static_cast<uint32_t>(data[1]) << 8) |
+                                 (static_cast<uint32_t>(data[2]) << 16) | (static_cast<uint32_t>(data[3]) << 24));
+    if ((motor == 0 && invertEncoder0) || (motor == 1 && invertEncoder1) || (motor == 2 && invertEncoder2) ||
+        (motor == 3 && invertEncoder3))
+    {
+        count *= -1;
+    }
+    return true;
+}
+
 void Titan::Enable(bool enable)
 {
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     if (enable)
     {
-        Titan::Write(GetAddress(ENABLED_FLAG), data, 10);
+        Titan::Write(GetAddress(ENABLED_FLAG), data, 100);
     }
     else
     {

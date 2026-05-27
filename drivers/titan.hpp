@@ -94,6 +94,8 @@ namespace studica_driver
             std::string GetSerialNumber();
             double GetEncoderDistance(uint8_t motor);
             int32_t GetEncoderCount(uint8_t motor);
+            /** Encoder read with VMX blackboard freshness. */
+            bool GetEncoderCountFresh(uint8_t motor, int32_t& out_count, bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
             void ConfigureEncoder(uint8_t motor, double cfg);
             void ResetEncoder(uint8_t motor);
             double GetCypherAngle(uint8_t port);
@@ -138,6 +140,9 @@ namespace studica_driver
             VMXErrorCode vmxerr;
             bool Write(uint32_t address, const uint8_t* data, int32_t periodMS);
             bool Read(uint32_t address, uint8_t* data);
+            /** VMX blackboard read; is_fresh=true when a new CAN frame arrived */
+            bool ReadWithFreshFlag(uint32_t address, uint8_t* data, bool& is_fresh,
+                                   uint64_t* out_timestamp_us = nullptr);
             /** Cache RETURN_TITAN_INFO so GetID/GetFirmwareVersion/GetHardwareVersion share one read (VMX Blackboard
              * may only serve one consume per ID). */
             uint8_t cached_titan_info_[8] = {0};
