@@ -348,7 +348,7 @@ Topics are auto-generated from the sensor name. Using `"titan0"` as an example:
 | `/titan0/m_2/cmd` | `std_msgs/Float64` | Duty cycle motor 2 |
 | `/titan0/m_3/cmd` | `std_msgs/Float64` | Duty cycle motor 3 |
 
-**Topics (publish) — feedback at 20 Hz, topics depend on `encoder_mode`:**
+**Topics (publish) — feedback at `encoder_rate_hz` Hz (default 20), topics depend on `encoder_mode`:**
 
 *Quadrature mode (default):*
 
@@ -364,6 +364,15 @@ Topics are auto-generated from the sensor name. Using `"titan0"` as an example:
 | `/titan0/m_N/angle` | `std_msgs/Float64` | Absolute angle in degrees |
 
 Encoder mode is set **per motor** in `params.yaml`. Only the topics for the configured mode are created — the other topics do not exist on the bus at all.
+
+*Limit switches (optional — set `limit_switches: true` to enable):*
+
+| Topic | Type | Description |
+|---|---|---|
+| `/titan0/m_N/limit_fwd` | `std_msgs/Bool` | Forward limit switch — `true` = triggered, `false` = open |
+| `/titan0/m_N/limit_rev` | `std_msgs/Bool` | Reverse limit switch — `true` = triggered, `false` = open |
+
+Inputs are pull-high with hardware debouncing (active-low). The driver inverts the raw pin state so `true` always means the switch is triggered regardless of wiring. Published at the same rate as encoder feedback (`encoder_rate_hz`). Topics are not created at all when `limit_switches: false`.
 
 **Service:** `/titan0/titan_cmd` → `studica_control/SetData`
 
@@ -389,7 +398,7 @@ Use the service for configuration and closed-loop control. Direct speed commands
 | `get_encoder_distance` | `n_encoder` | Read odometry distance |
 | `get_firmware_version` | — | Firmware version string |
 
-> **CAN Watchdog:** The Titan enters a safe (stopped) state if no speed command is received within ~150 ms. The driver automatically resends the last commanded speeds at 100 Hz to keep the controller alive.
+> **CAN Watchdog:** The Titan enters a safe (stopped) state if no speed command is received within ~150 ms. The driver resends all four motor speeds — including zeros — at `motor_update_rate_hz` (default 50 Hz) as the sole path to hardware. This ensures stopped motors receive a sustained zero rather than coasting on the last non-zero command.
 
 **params.yaml:**
 ```yaml
@@ -397,8 +406,11 @@ titan:
   enabled: true
   sensors: ["titan0"]
   titan0:
-    can_id: 42        # CAN bus ID of the Titan controller
-    motor_freq: 15600 # PWM frequency in Hz
+    can_id: 42              # CAN bus ID of the Titan controller
+    motor_freq: 15600       # PWM frequency in Hz
+    encoder_rate_hz: 20      # encoder/rpm publish rate (default 20 Hz)
+    motor_update_rate_hz: 50 # how often motor speeds are sent to hardware, in Hz (default 50)
+    limit_switches: false    # true = publish /m_N/limit_fwd and /m_N/limit_rev (std_msgs/Bool)
     m_0:
       encoder_mode: "quadrature"   # "quadrature" or "absolute"
       dist_per_tick: 0.0006830601  # metres per encoder tick (1.0 = raw counts)
@@ -415,7 +427,7 @@ titan:
       dist_per_tick: 0.0006830601
 ```
 
-All per-motor fields default to `encoder_mode: "quadrature"`, `dist_per_tick: 1.0`, and all invert flags `false` if omitted.
+All per-motor fields default to `encoder_mode: "quadrature"`, `dist_per_tick: 1.0`, and all invert flags `false` if omitted. `encoder_rate_hz` and `motor_update_rate_hz` default to `20` and `50` respectively if omitted.
 
 ---
 
