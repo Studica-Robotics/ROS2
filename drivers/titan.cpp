@@ -192,7 +192,7 @@ void Titan::Enable(bool enable)
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     if (enable)
     {
-        Titan::Write(GetAddress(ENABLED_FLAG), data, 10);
+        Titan::Write(GetAddress(ENABLED_FLAG), data, 100);
     }
     else
     {
