@@ -87,18 +87,23 @@ namespace studica_driver
             std::string GetHardwareVersion();
             float GetControllerTemp();
             bool GetLimitSwitch(uint8_t motor, uint8_t direction);
+            /** Read all 8 limit switch states (4 motors × fwd/rev) in one frame read. fwd[i] and rev[i] are raw */
+            bool GetLimitSwitchesFresh(bool fwd[4], bool rev[4], bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
             int16_t GetRPM(uint8_t motor);
-            /** Returns true if a RPM frame was read; false if no frame (Blackboard empty for that ID). Fills *out_rpm.
-             */
+            /** Returns true if a RPM frame was read; false if no frame (Blackboard empty for that ID). Fills *out_rpm. */
             bool TryGetRPM(uint8_t motor, int16_t* out_rpm);
+            /** RPM read with VMX blackboard freshness. */
+            bool GetRPMFresh(uint8_t motor, int16_t& rpm, bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
             std::string GetSerialNumber();
             double GetEncoderDistance(uint8_t motor);
             int32_t GetEncoderCount(uint8_t motor);
-            /** Encoder read with VMX blackboard freshness. */
-            bool GetEncoderCountFresh(uint8_t motor, int32_t& out_count, bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
+            /** Encoder distance (metres, distPerTick applied) with VMX blackboard freshness. Single read. */
+            bool GetEncoderDistanceFresh(uint8_t motor, double& distance, bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
             void ConfigureEncoder(uint8_t motor, double cfg);
             void ResetEncoder(uint8_t motor);
             double GetCypherAngle(uint8_t port);
+            /** Read all 4 Cypher angles in one frame read. angles[i] is in degrees. */
+            bool GetCypherAnglesFresh(double angles[4], bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
             /** SET_MOTOR_SPEED (one frame per motor). Only applied when device is enabled; resend within
              * TITAN_CAN_KEEPALIVE_MS to avoid 200 ms timeout. */
             void SetSpeed(uint8_t motor, double speedCfg);
