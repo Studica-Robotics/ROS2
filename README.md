@@ -411,6 +411,7 @@ titan:
     encoder_rate_hz: 20      # encoder/rpm publish rate (default 20 Hz)
     motor_update_rate_hz: 50 # how often motor speeds are sent to hardware, in Hz (default 50)
     limit_switches: false    # true = publish /m_N/limit_fwd and /m_N/limit_rev (std_msgs/Bool)
+    enable_freshness: false  # true = skip publish on stale CAN frames (encoder, RPM, cypher max, limit switches); warn after 5 consecutive stale reads
     m_0:
       encoder_mode: "quadrature"   # "quadrature" or "absolute"
       dist_per_tick: 0.0006830601  # metres per encoder tick (1.0 = raw counts)
