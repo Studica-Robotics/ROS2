@@ -39,6 +39,10 @@ control_server:
       titan0:
         can_id: 42          # CAN bus ID of the Titan controller
         motor_freq: 15600   # PWM frequency (Hz)
+        encoder_rate_hz: 20 # encoder/rpm feedback publish rate in Hz (default 20)
+        motor_update_rate_hz: 50  # how often motor speeds are sent to hardware, in Hz (default 50)
+        limit_switches: false     # true = publish /m_N/limit_fwd and /m_N/limit_rev (std_msgs/Bool)
+        enable_freshness: false   # true = skip publish on stale CAN frames (encoder, RPM, cypher max, limit switch); warn after 5 consecutive stale reads
         m_0:
           encoder_mode: "quadrature"  # "quadrature" or "absolute"
           dist_per_tick: 1.0          # metres per encoder tick (1.0 = raw counts)
@@ -209,4 +213,5 @@ control_server:
       angular_scale: 1.0    # scale factor applied to angular axis
       deadzone: 0.05        # axis values below this are treated as zero
       turbo_multiplier: 2.0 # speed multiplier when turbo button is held
+      publish_rate: 50      # cmd_vel publish rate in Hz (higher = lower stop latency)
       cmd_vel_topic: "cmd_vel"

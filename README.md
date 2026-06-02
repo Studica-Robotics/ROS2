@@ -15,6 +15,18 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
 - [Building](#building)
 - [Running](#running)
 - [Component Reference](#component-reference)
+  - [Titan](#titan--can-bus-motor-controller)
+  - [IMU](#imu--9-axis-inertial-measurement-unit)
+  - [Power](#power--battery-monitor)
+  - [Encoder](#encoder--quadrature-encoder)
+  - [DutyCycleEncoder](#dutycycleencoder--absolute-encoder)
+  - [Servo](#servo)
+  - [Ultrasonic](#ultrasonic--hc-sr04-range-sensor)
+  - [Sharp](#sharp--gp2y-infrared-range-sensor)
+  - [DIO](#dio--digital-inputoutput)
+  - [Light Tower](#light-tower--5-output-led-indicator)
+  - [Cobra](#cobra--reflectance-sensor-array)
+  - [Gamepad](#gamepad--joystick-to-cmd_vel)
 - [Python Examples](#python-examples)
 - [C++ Examples](#c-examples)
 - [Standalone Driver Examples](#standalone-driver-examples)
@@ -34,6 +46,8 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
 | **Ultrasonic** | Range Sensor | HC-SR04-style sonar, ~2 cm to 4 m |
 | **Sharp** | Range Sensor | GP2Y infrared rangefinder, ~10 cm to 80 cm |
 | **DIO** | Digital I/O | General-purpose digital input or output pin |
+| **Light Tower** | Indicator | 5-output LED tower — red, green, yellow, buzzer, continuous enable |
+| **Power** | System Monitor | Battery voltage, estimated state-of-charge, low-battery warnings — always on |
 | **Cobra** | Reflectance Array | 4-channel analog line/surface sensor over I2C |
 | **Gamepad** | Input | Joystick/gamepad to `cmd_vel` via `joy` node |
 
@@ -199,6 +213,15 @@ servo:
 
 Topics are auto-generated: `/gripper/cmd`, `/gripper/state`, `/wrist/cmd`, `/wrist/state`, etc.
 
+### Always-On Components
+
+The **power** monitor starts automatically whenever `studica_control` is running — no `enabled` flag, no `sensors` list. It has one optional parameter:
+
+```yaml
+power:
+  battery_count: 1   # 1 or 2 packs — omit entirely to use the default (1)
+```
+
 ### Single-Instance Components
 
 `gamepad` and `imu` have a flat configuration (no `sensors` list).
@@ -325,7 +348,7 @@ Topics are auto-generated from the sensor name. Using `"titan0"` as an example:
 | `/titan0/m_2/cmd` | `std_msgs/Float64` | Duty cycle motor 2 |
 | `/titan0/m_3/cmd` | `std_msgs/Float64` | Duty cycle motor 3 |
 
-**Topics (publish) — feedback at 20 Hz, topics depend on `encoder_mode`:**
+**Topics (publish) — feedback at `encoder_rate_hz` Hz (default 20), topics depend on `encoder_mode`:**
 
 *Quadrature mode (default):*
 
@@ -341,6 +364,15 @@ Topics are auto-generated from the sensor name. Using `"titan0"` as an example:
 | `/titan0/m_N/angle` | `std_msgs/Float64` | Absolute angle in degrees |
 
 Encoder mode is set **per motor** in `params.yaml`. Only the topics for the configured mode are created — the other topics do not exist on the bus at all.
+
+*Limit switches (optional — set `limit_switches: true` to enable):*
+
+| Topic | Type | Description |
+|---|---|---|
+| `/titan0/m_N/limit_fwd` | `std_msgs/Bool` | Forward limit switch — `true` = triggered, `false` = open |
+| `/titan0/m_N/limit_rev` | `std_msgs/Bool` | Reverse limit switch — `true` = triggered, `false` = open |
+
+Inputs are pull-high with hardware debouncing (active-low). The driver inverts the raw pin state so `true` always means the switch is triggered regardless of wiring. Published at the same rate as encoder feedback (`encoder_rate_hz`). Topics are not created at all when `limit_switches: false`.
 
 **Service:** `/titan0/titan_cmd` → `studica_control/SetData`
 
@@ -366,7 +398,7 @@ Use the service for configuration and closed-loop control. Direct speed commands
 | `get_encoder_distance` | `n_encoder` | Read odometry distance |
 | `get_firmware_version` | — | Firmware version string |
 
-> **CAN Watchdog:** The Titan enters a safe (stopped) state if no speed command is received within ~150 ms. The driver automatically resends the last commanded speeds at 100 Hz to keep the controller alive.
+> **CAN Watchdog:** The Titan enters a safe (stopped) state if no speed command is received within ~150 ms. The driver resends all four motor speeds — including zeros — at `motor_update_rate_hz` (default 50 Hz) as the sole path to hardware. This ensures stopped motors receive a sustained zero rather than coasting on the last non-zero command.
 
 **params.yaml:**
 ```yaml
@@ -374,8 +406,12 @@ titan:
   enabled: true
   sensors: ["titan0"]
   titan0:
-    can_id: 42        # CAN bus ID of the Titan controller
-    motor_freq: 15600 # PWM frequency in Hz
+    can_id: 42              # CAN bus ID of the Titan controller
+    motor_freq: 15600       # PWM frequency in Hz
+    encoder_rate_hz: 20      # encoder/rpm publish rate (default 20 Hz)
+    motor_update_rate_hz: 50 # how often motor speeds are sent to hardware, in Hz (default 50)
+    limit_switches: false    # true = publish /m_N/limit_fwd and /m_N/limit_rev (std_msgs/Bool)
+    enable_freshness: false  # true = skip publish on stale CAN frames (encoder, RPM, cypher max, limit switches); warn after 5 consecutive stale reads
     m_0:
       encoder_mode: "quadrature"   # "quadrature" or "absolute"
       dist_per_tick: 0.0006830601  # metres per encoder tick (1.0 = raw counts)
@@ -392,7 +428,7 @@ titan:
       dist_per_tick: 0.0006830601
 ```
 
-All per-motor fields default to `encoder_mode: "quadrature"`, `dist_per_tick: 1.0`, and all invert flags `false` if omitted.
+All per-motor fields default to `encoder_mode: "quadrature"`, `dist_per_tick: 1.0`, and all invert flags `false` if omitted. `encoder_rate_hz` and `motor_update_rate_hz` default to `20` and `50` respectively if omitted.
 
 ---
 
@@ -572,10 +608,137 @@ Topics are auto-generated from the sensor name. Using `"limit_switch"` as an exa
 ```yaml
 dio:
   enabled: true
-  sensors: ["limit_switch"]
+  sensors: ["limit_switch", "estop"]
   limit_switch:
     pin: 15
-    type: "input"    # "input" or "output"
+    type: "input"              # "input" or "output"
+    interrupt_edge: "none"     # "none" (default), "rising", or "falling"
+  estop:
+    pin: 10
+    type: "input"
+    interrupt_edge: "rising"   # NC contact: pin goes HIGH when e-stop is hit (fails safe)
+    debounce_ms: 20            # ignore bounces within 20 ms (optional, default 0 = disabled)
+```
+
+**Interrupt support (input mode only):**
+
+Set `interrupt_edge` to `"rising"` or `"falling"` to attach a hardware interrupt to the pin. On a detected edge, the `/state` topic is published **immediately** in addition to the regular 10 Hz poll.
+
+The interrupt fires in a VMX background thread — the ROS2 publisher is thread-safe and handles this automatically. Keep any downstream subscribers non-blocking.
+
+**Button wiring** — all input pins have internal pull-ups. Wire buttons between the pin and GND. The correct `interrupt_edge` depends on the contact type:
+
+| Contact type | Normal state | Activated state | `interrupt_edge` | Use case |
+|---|---|---|---|---|
+| NO (Normally Open) | HIGH (pull-up) | LOW (shorted to GND) | `"falling"` | Start, Stop, Reset buttons |
+| NC (Normally Closed) | LOW (held to GND) | HIGH (contact opens, pull-up wins) | `"rising"` | E-stop |
+
+NC contacts are the correct choice for e-stops because a broken wire also releases the contact and triggers the stop — it **fails safe**. NO contacts are fine for non-safety inputs.
+
+```yaml
+dio:
+  enabled: true
+  sensors: ["estop", "start_btn"]
+  estop:
+    pin: 10
+    type: "input"
+    interrupt_edge: "rising"   # NC contact: opens (goes HIGH) when e-stop is hit
+  start_btn:
+    pin: 11
+    type: "input"
+    interrupt_edge: "falling"  # NO contact: closes (goes LOW) when pressed
+```
+
+In your safety node:
+```python
+# E-stop (NC) — pin goes HIGH when activated
+node.create_subscription(Bool, '/estop/state', on_estop, 10)
+
+def on_estop(msg):
+    if msg.data:              # HIGH = e-stop activated (NC contact opened)
+        cmd_vel_pub.publish(Twist())   # zero velocity
+
+# Start button (NO) — pin goes LOW when pressed
+node.create_subscription(Bool, '/start_btn/state', on_start, 10)
+
+def on_start(msg):
+    if not msg.data:          # LOW = button pressed
+        start_robot()
+```
+
+---
+
+### Light Tower — 5-output LED Indicator
+
+A 5-output LED tower with mutual exclusion: activating a new colour automatically clears the current one.
+
+**Service:** `/<name>/set` → `studica_control/SetData`
+
+| `params` value | Description |
+|---|---|
+| `"off"` | Everything off |
+| `"red"` / `"green"` / `"yellow"` / `"buzzer"` | Solid on |
+| `"<color>:blink"` | Software blink at `default_blink_hz` |
+| `"<color>:blink_hw"` | Hardware blink — continuous pin LOW, hardware drives rate |
+| `"<color>:<hz>"` | Software blink at a specific Hz (e.g. `"red:2.5"`) |
+
+**Topic (publishes):** `/<name>/state` → `std_msgs/String`
+- Current state string (e.g. `"off"`, `"red:solid"`, `"green:blink:1.000000"`, `"yellow:blink_hw"`).
+- Published on every state change and at 1 Hz as a heartbeat.
+
+**params.yaml:**
+```yaml
+light_tower:
+  enabled: true
+  name: "light_tower"
+  pin_continuous: 0   # HIGH = solid/on, LOW = hardware blink
+  pin_red:        1
+  pin_green:      2
+  pin_yellow:     3
+  pin_buzzer:     4
+  default_blink_hz: 1.0
+```
+
+**Pin wiring:** `continuous` must be HIGH for solid output. When set LOW the hardware automatically flashes the active colour at its own rate (`blink_hw` mode).
+
+---
+
+### Power — Battery Monitor
+
+Always started when `studica_control` is running. No `enabled` flag required.
+
+Reads battery voltage from the VMX onboard power monitor and estimates state-of-charge using a voltage lookup table derived from a constant-current discharge test of the Studica 10-cell NiMH pack.
+
+**Topic (publishes):** `/battery_state` → `sensor_msgs/BatteryState` — 2 Hz
+
+| Field | Value |
+|---|---|
+| `voltage` | Live battery voltage (V) |
+| `percentage` | Estimated state-of-charge, 0.0–1.0, from NiMH discharge curve |
+| `design_capacity` | `3.0 × battery_count` Ah |
+| `power_supply_technology` | `NIMH` |
+| `power_supply_status` | `DISCHARGING` |
+| `power_supply_health` | `GOOD` (≥ 11 V) / `DEAD` (< 11 V) |
+| `present` | `true` |
+| `current` / `charge` / `capacity` | `NaN` — no coulomb counter available |
+
+**Log warnings:**
+- `WARN` every 10 s when voltage drops below **11.0 V** — land or stop the robot
+- `ERROR` every 5 s when voltage drops below **10.0 V** — below safe minimum, robot shutting down
+
+> **Note on the percentage estimate:** NiMH has a flat mid-discharge plateau followed by a sharp end-of-life drop. A simple linear map from 10–14 V would read ~30% when only ~16% remains. The lookup table was calibrated from actual hardware data and correctly tracks the curve shape.
+
+**params.yaml** *(optional — omit entirely for a single-pack robot)*:
+```yaml
+power:
+  battery_count: 1   # 1 = 3.0 Ah (default)  |  2 = 6.0 Ah (two packs in parallel)
+```
+
+> Two packs wired in parallel double the capacity but keep the same voltage, so the percentage curve is identical regardless of `battery_count`.
+
+**Verify:**
+```bash
+ros2 topic echo /battery_state
 ```
 
 ---
@@ -614,7 +777,7 @@ Converts joystick input from a `joy` node into `geometry_msgs/Twist` velocity co
 **Requires:** `ros2 run joy joy_node` running in a separate terminal.
 
 **Topic (publishes):** `<cmd_vel_topic>` → `geometry_msgs/Twist`
-- Published at 10 Hz regardless of joystick input rate.
+- Published at `publish_rate` Hz (default 50 Hz). Increase to reduce stop latency — at 50 Hz the worst-case delay after stick release is 20 ms vs 100 ms at 10 Hz. The `joy` node publishes at 100 Hz by default so there is no benefit going above that.
 
 **Topic (subscribes):** `/gamepad_axis_remap` → `std_msgs/Int32MultiArray`
 - Publish `[x_axis, y_axis, z_axis]` indices to remap axes at runtime without restarting. Use `-1` for any axis to leave it unmapped (outputs 0). Uses transient-local QoS so late-joining nodes receive the last mapping.
@@ -633,6 +796,7 @@ gamepad:
   angular_scale: 1.0
   deadzone: 0.05        # axis values below this are treated as zero
   turbo_multiplier: 2.0
+  publish_rate: 50      # cmd_vel publish rate in Hz (max useful: 100 — joy node rate)
   cmd_vel_topic: "cmd_vel"
 ```
 
@@ -704,6 +868,14 @@ ros2 launch studica_control studica_launch.py
 ros2 run joy joy_node
 # Terminal 3
 ros2 run studica_control gamepad_example.py
+```
+
+### Light Tower
+
+Cycles through every state (red, green, yellow, buzzer, software blink, hardware blink, custom Hz, off) via the `/light_tower/set` service every 3 seconds. Subscribes to `/light_tower/state` and prints each state change.
+
+```bash
+ros2 run studica_control light_tower_example.py
 ```
 
 Additional Python examples for Encoder, DutyCycleEncoder, DIO, Sharp, and Cobra follow the same pattern.
@@ -814,6 +986,14 @@ Subscribes to all four `/cobra/ch_N` topics and prints voltages side by side at
 ros2 run studica_control cobra_example
 ```
 
+### Light Tower
+
+Cycles through every state (red, green, yellow, buzzer, software blink, hardware blink, custom Hz, off) via the `/light_tower/set` service every 3 seconds. Subscribes to `/light_tower/state` and prints each state change.
+
+```bash
+ros2 run studica_control light_tower_example
+```
+
 ### Gamepad
 
 Subscribes to `/cmd_vel` and prints linear and angular velocity. Also shows how to
@@ -861,6 +1041,7 @@ sudo ./titan_example
 | `ultrasonic_example` | Print range readings in a loop |
 | `sharp_example` | Print IR distance readings in a loop |
 | `cobra_example` | Print reflectance voltage for all 4 channels |
+| `light_tower_example` | Cycle through solid, hardware blink, and off states for each output |
 
 **Titan example walkthrough:**
 

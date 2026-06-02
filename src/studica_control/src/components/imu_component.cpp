@@ -99,20 +99,38 @@ void Imu::publish_data() {
     msg.header.stamp    = this->get_clock()->now();
     msg.header.frame_id = frame_id_;
 
-    msg.orientation.x = imu_->GetQuaternionX();
-    msg.orientation.y = imu_->GetQuaternionY();
-    msg.orientation.z = imu_->GetQuaternionZ();
-    msg.orientation.w = imu_->GetQuaternionW();
+    // NavX native frame: X=right, Y=forward, Z=up, CW+ yaw.
+    // Remapped to ROS convention: X=forward, Y=left, Z=up, CCW+ yaw.
+    // Quaternion: swap X/Y axes. Z is already CCW+ in the NavX quaternion
+    // (the NavX SDK internally uses CCW+ for quaternion Z despite reporting
+    // Euler yaw as CW+), so no negation needed on Z.
+    //
+    // The NavX reports quaternions in the negative hemisphere (w<0 at rest).
+    // q and -q encode the same rotation, but ROS convention requires w>=0
+    // (canonical/shorter-arc form). Normalize here so EKFs, nav2, and tf2
+    // all receive a standard quaternion without relying on sign-handling quirks.
+    {
+        float qx =  imu_->GetQuaternionY();
+        float qy = -imu_->GetQuaternionX();
+        float qz =  imu_->GetQuaternionZ();
+        float qw =  imu_->GetQuaternionW();
+        if (qw < 0.0f) { qx = -qx; qy = -qy; qz = -qz; qw = -qw; }
+        msg.orientation.x = qx;
+        msg.orientation.y = qy;
+        msg.orientation.z = qz;
+        msg.orientation.w = qw;
+    }
 
-    // raw gyro values come in degrees per second — convert to radians per second
-    msg.angular_velocity.x = imu_->GetRawGyroX() * (M_PI / 180.0);
-    msg.angular_velocity.y = imu_->GetRawGyroY() * (M_PI / 180.0);
-    msg.angular_velocity.z = imu_->GetRawGyroZ() * (M_PI / 180.0);
+    // raw gyro in deg/s — remap axes and negate Z for CCW+, convert to rad/s
+    msg.angular_velocity.x =  imu_->GetRawGyroY() * (M_PI / 180.0);
+    msg.angular_velocity.y = -imu_->GetRawGyroX() * (M_PI / 180.0);
+    msg.angular_velocity.z = -imu_->GetRawGyroZ() * (M_PI / 180.0);
 
-    // acceleration values come in g's — convert to meters per second squared
-    msg.linear_acceleration.x = imu_->GetWorldLinearAccelX() * 9.80665;
-    msg.linear_acceleration.y = imu_->GetWorldLinearAccelY() * 9.80665;
-    msg.linear_acceleration.z = imu_->GetWorldLinearAccelZ() * 9.80665;
+    // raw body-frame acceleration in g's — remap axes, convert to m/s²
+    // (includes gravity; robot_localization removes it via imu0_remove_gravitational_acceleration)
+    msg.linear_acceleration.x =  imu_->GetRawAccelY() * 9.80665;
+    msg.linear_acceleration.y = -imu_->GetRawAccelX() * 9.80665;
+    msg.linear_acceleration.z =  imu_->GetRawAccelZ() * 9.80665;
 
     // -1 in the first covariance element means "unknown" per the ros2 imu spec
     msg.orientation_covariance[0]         = -1.0;

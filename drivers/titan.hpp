@@ -106,15 +106,23 @@ namespace studica_driver
             std::string GetHardwareVersion();
             float GetControllerTemp();
             bool GetLimitSwitch(uint8_t motor, uint8_t direction);
+            /** Read all 8 limit switch states (4 motors × fwd/rev) in one frame read. fwd[i] and rev[i] are raw */
+            bool GetLimitSwitchesFresh(bool fwd[4], bool rev[4], bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
             float GetRPM(uint8_t motor);
-            /** Returns true if a RPM frame was read; false if no frame (Blackboard empty for that ID). Fills *out_rpm (RPM×100 wire format). */
+            /** Returns true if a RPM frame was read; false if no frame (Blackboard empty for that ID). Fills *out_rpm. */
             bool TryGetRPM(uint8_t motor, float* out_rpm);
+            /** RPM read with VMX blackboard freshness. */
+            bool GetRPMFresh(uint8_t motor, float& rpm, bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
             std::string GetSerialNumber();
             double GetEncoderDistance(uint8_t motor);
             int32_t GetEncoderCount(uint8_t motor);
+            /** Encoder distance (metres, distPerTick applied) with VMX blackboard freshness. Single read. */
+            bool GetEncoderDistanceFresh(uint8_t motor, double& distance, bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
             void ConfigureEncoder(uint8_t motor, double cfg);
             void ResetEncoder(uint8_t motor);
             double GetCypherAngle(uint8_t port);
+            /** Read all 4 Cypher angles in one frame read. angles[i] is in degrees. */
+            bool GetCypherAnglesFresh(double angles[4], bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
             /** SET_MOTOR_SPEED (one frame per motor). Only applied when device is enabled; resend within
              * TITAN_CAN_KEEPALIVE_MS to avoid 200 ms timeout. */
             void SetSpeed(uint8_t motor, double speedCfg);
@@ -165,6 +173,9 @@ namespace studica_driver
             VMXErrorCode vmxerr;
             bool Write(uint32_t address, const uint8_t* data, int32_t periodMS);
             bool Read(uint32_t address, uint8_t* data);
+            /** VMX blackboard read; is_fresh=true when a new CAN frame arrived */
+            bool ReadWithFreshFlag(uint32_t address, uint8_t* data, bool& is_fresh,
+                                   uint64_t* out_timestamp_us = nullptr);
             /** Cache RETURN_TITAN_INFO so GetID/GetFirmwareVersion/GetHardwareVersion share one read (VMX Blackboard
              * may only serve one consume per ID). */
             uint8_t cached_titan_info_[8] = {0};

@@ -24,15 +24,16 @@ namespace studica_control {
 // to the GamepadController constructor. this avoids relying on a second --params-file
 // load which is unreliable inside a setuid process.
 std::shared_ptr<rclcpp::Node> GamepadController::initialize(rclcpp::Node *control) {
-    control->declare_parameter("gamepad.axis_linear_x",  1);
-    control->declare_parameter("gamepad.axis_linear_y",  0);
-    control->declare_parameter("gamepad.axis_angular_z", 0);
-    control->declare_parameter("gamepad.linear_scale",   1.0);
-    control->declare_parameter("gamepad.angular_scale",  1.0);
-    control->declare_parameter("gamepad.deadzone",       0.05);
+    control->declare_parameter("gamepad.axis_linear_x",    1);
+    control->declare_parameter("gamepad.axis_linear_y",    0);
+    control->declare_parameter("gamepad.axis_angular_z",   0);
+    control->declare_parameter("gamepad.linear_scale",     1.0);
+    control->declare_parameter("gamepad.angular_scale",    1.0);
+    control->declare_parameter("gamepad.deadzone",         0.05);
     control->declare_parameter("gamepad.turbo_multiplier", 2.0);
-    control->declare_parameter("gamepad.button_turbo",   5);
+    control->declare_parameter("gamepad.button_turbo",     5);
     control->declare_parameter<std::string>("gamepad.cmd_vel_topic", "cmd_vel");
+    control->declare_parameter<int>("gamepad.publish_rate", 50);  // Hz
 
     rclcpp::NodeOptions options;
     options.parameter_overrides({
@@ -45,6 +46,7 @@ std::shared_ptr<rclcpp::Node> GamepadController::initialize(rclcpp::Node *contro
         {"turbo_multiplier",control->get_parameter("gamepad.turbo_multiplier").as_double()},
         {"button_turbo",    control->get_parameter("gamepad.button_turbo").as_int()},
         {"cmd_vel_topic",   control->get_parameter("gamepad.cmd_vel_topic").as_string()},
+        {"publish_rate",    control->get_parameter("gamepad.publish_rate").as_int()},
     });
     return std::make_shared<GamepadController>(options);
 }
@@ -66,15 +68,18 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
     this->declare_parameter<int>("axis_linear_y", -1);
     this->declare_parameter<int>("axis_angular_z", -1);
     this->declare_parameter<int>("button_turbo", -1);
+    this->declare_parameter<int>("publish_rate", 50);
 
-    linear_scale_    = this->get_parameter("linear_scale").as_double();
-    angular_scale_   = this->get_parameter("angular_scale").as_double();
-    deadzone_        = this->get_parameter("deadzone").as_double();
+    linear_scale_     = this->get_parameter("linear_scale").as_double();
+    angular_scale_    = this->get_parameter("angular_scale").as_double();
+    deadzone_         = this->get_parameter("deadzone").as_double();
     turbo_multiplier_ = this->get_parameter("turbo_multiplier").as_double();
-    axis_linear_x_   = this->get_parameter("axis_linear_x").as_int();
-    axis_linear_y_   = this->get_parameter("axis_linear_y").as_int();
-    axis_angular_z_  = this->get_parameter("axis_angular_z").as_int();
-    button_turbo_    = this->get_parameter("button_turbo").as_int();
+    axis_linear_x_    = this->get_parameter("axis_linear_x").as_int();
+    axis_linear_y_    = this->get_parameter("axis_linear_y").as_int();
+    axis_angular_z_   = this->get_parameter("axis_angular_z").as_int();
+    button_turbo_     = this->get_parameter("button_turbo").as_int();
+    int publish_rate  = this->get_parameter("publish_rate").as_int();
+    if (publish_rate < 1) publish_rate = 50;
 
     // subscribe to raw joystick input
     joy_subscription_ = this->create_subscription<sensor_msgs::msg::Joy>(
@@ -91,14 +96,15 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
 
     std::string cmd_vel_topic = this->get_parameter("cmd_vel_topic").as_string();
 
-    cmd_vel_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>(cmd_vel_topic, 10);
+    cmd_vel_publisher_ = this->create_publisher<geometry_msgs::msg::Twist>(cmd_vel_topic, 1);
 
-    // publish velocity at 10hz regardless of joystick input rate
+    // publish velocity at configurable rate (default 50hz) regardless of joystick input rate
     timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(100),
+        std::chrono::milliseconds(1000 / publish_rate),
         std::bind(&GamepadController::publish_twist, this));
 
-    RCLCPP_INFO(this->get_logger(), "gamepad controller ready. publishing to: %s", cmd_vel_topic.c_str());
+    RCLCPP_INFO(this->get_logger(), "gamepad controller ready. publishing to: %s at %d hz",
+                cmd_vel_topic.c_str(), publish_rate);
     RCLCPP_INFO(this->get_logger(), "gamepad controls: axis[%d/%d] = movement, axis[%d] = rotation, button[%d] = turbo",
                 axis_linear_x_, axis_linear_y_, axis_angular_z_, button_turbo_);
 

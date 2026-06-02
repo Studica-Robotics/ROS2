@@ -117,6 +117,7 @@
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/float64.hpp"
 
 #include "studica_control/srv/set_data.hpp"
@@ -146,7 +147,9 @@ public:
 
     // main constructor — connects to the titan and sets up topics/services
     Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID,
-          const uint16_t &motor_freq, const std::array<MotorConfig, 4> &motor_configs);
+          const uint16_t &motor_freq, const std::array<MotorConfig, 4> &motor_configs,
+          int encoder_rate_hz = 20, int motor_update_rate_hz = 50,
+          bool limit_switches = false, bool enable_freshness = false);
 
     ~Titan();
 
@@ -159,6 +162,12 @@ private:
 
     float speeds_[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     bool enabled_ = false;
+    bool limit_switches_enabled_ = false;
+    bool freshness_enabled_ = false;
+    uint8_t stale_count_[4]     = {0, 0, 0, 0};
+    uint8_t rpm_stale_count_[4] = {0, 0, 0, 0};
+    uint8_t cypher_stale_count_ = 0;
+    uint8_t ls_stale_count_     = 0;
 
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
 
@@ -168,6 +177,10 @@ private:
 
     // absolute feedback — only created for motors in absolute mode
     std::array<rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr, 4> angle_pubs_;
+
+    // limit switch feedback — only created when limit_switches: true in params.yaml
+    std::array<rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr, 4> limit_fwd_pubs_;
+    std::array<rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr, 4> limit_rev_pubs_;
 
     // command subscribers — always created regardless of encoder mode
     std::array<rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr, 4> cmd_subs_;

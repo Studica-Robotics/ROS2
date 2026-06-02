@@ -152,12 +152,58 @@ bool Titan::Read(uint32_t address, uint8_t* data)
     return true;
 }
 
+bool Titan::ReadWithFreshFlag(uint32_t address, uint8_t* data, bool& is_fresh, uint64_t* out_timestamp_us)
+{
+    VMXCANTimestampedMessage blackboard_msg;
+    uint64_t sys_timestamp;
+    bool already_retrieved = false;
+    if (!vmx_->can.GetBlackboardEntry(canrxhandle, address, blackboard_msg, sys_timestamp, already_retrieved, &vmxerr))
+    {
+        return false;
+    }
+    else
+    {
+        std::memcpy(data, blackboard_msg.data, 8);
+        if (out_timestamp_us != nullptr)
+            *out_timestamp_us = sys_timestamp;
+        is_fresh = !already_retrieved;
+        return true;
+    }
+    return true;
+}
+
+bool Titan::GetEncoderDistanceFresh(uint8_t motor, double& distance, bool& is_fresh, uint64_t* out_timestamp_us)
+{
+    uint8_t data[8] = {0};
+    uint32_t addr;
+    if      (motor == 0) addr = GetAddress(ENCODER_0);
+    else if (motor == 1) addr = GetAddress(ENCODER_1);
+    else if (motor == 2) addr = GetAddress(ENCODER_2);
+    else if (motor == 3) addr = GetAddress(ENCODER_3);
+    else                 addr = GetAddress(ENCODER_0);
+    if (!ReadWithFreshFlag(addr, data, is_fresh, out_timestamp_us))
+        return false;
+    int32_t count = static_cast<int32_t>(
+        data[0] | (static_cast<uint32_t>(data[1]) << 8) |
+        (static_cast<uint32_t>(data[2]) << 16) | (static_cast<uint32_t>(data[3]) << 24));
+    if ((motor == 0 && invertEncoder0) || (motor == 1 && invertEncoder1) ||
+        (motor == 2 && invertEncoder2) || (motor == 3 && invertEncoder3))
+        count *= -1;
+    double dpt = 0.0;
+    if      (motor == 0) dpt = distPerTick_0;
+    else if (motor == 1) dpt = distPerTick_1;
+    else if (motor == 2) dpt = distPerTick_2;
+    else if (motor == 3) dpt = distPerTick_3;
+    distance = count * dpt;
+    return true;
+}
+
 void Titan::Enable(bool enable)
 {
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     if (enable)
     {
-        Titan::Write(GetAddress(ENABLED_FLAG), data, 10);
+        Titan::Write(GetAddress(ENABLED_FLAG), data, 100);
     }
     else
     {
@@ -268,6 +314,18 @@ bool Titan::GetLimitSwitch(uint8_t motor, uint8_t direction)
     }
 }
 
+bool Titan::GetLimitSwitchesFresh(bool fwd[4], bool rev[4], bool& is_fresh, uint64_t* out_timestamp_us)
+{
+    uint8_t data[8] = {0};
+    if (!ReadWithFreshFlag(GetAddress(LIMIT_SWITCH), data, is_fresh, out_timestamp_us))
+        return false;
+    for (int i = 0; i < 4; i++) {
+        fwd[i] = (data[i * 2]     == 1);
+        rev[i] = (data[i * 2 + 1] == 1);
+    }
+    return true;
+}
+
 float Titan::GetRPM(uint8_t motor)
 {
     float v = 0.0f;
@@ -295,6 +353,37 @@ bool Titan::TryGetRPM(uint8_t motor, float* out_rpm)
     if (!Read(addr, data))
         return false;
     UnpackRpmX100FromCanData(data, out_rpm);
+    if ((motor == 0 && invertRPM0) ||
+        (motor == 1 && invertRPM1) ||
+        (motor == 2 && invertRPM2) ||
+        (motor == 3 && invertRPM3))
+        *out_rpm = -*out_rpm;
+    return true;
+}
+
+bool Titan::GetRPMFresh(uint8_t motor, float& rpm, bool& is_fresh, uint64_t* out_timestamp_us)
+{
+    rpm = 0.0f;
+    uint8_t data[8] = {0};
+    uint32_t addr;
+    if (motor == 0)
+        addr = GetAddress(CAN_RPM_0);
+    else if (motor == 1)
+        addr = GetAddress(CAN_RPM_1);
+    else if (motor == 2)
+        addr = GetAddress(CAN_RPM_2);
+    else if (motor == 3)
+        addr = GetAddress(CAN_RPM_3);
+    else
+        addr = GetAddress(CAN_RPM_0);
+    if (!ReadWithFreshFlag(addr, data, is_fresh, out_timestamp_us))
+        return false;
+    UnpackRpmX100FromCanData(data, &rpm);
+    if ((motor == 0 && invertRPM0) ||
+        (motor == 1 && invertRPM1) ||
+        (motor == 2 && invertRPM2) ||
+        (motor == 3 && invertRPM3))
+        rpm = -rpm;
     return true;
 }
 
@@ -457,6 +546,16 @@ double Titan::GetCypherAngle(uint8_t port)
     return ((static_cast<double>(data[index]) + (static_cast<double>(data[index + 1] << 8))) / 100.0);
 }
 
+bool Titan::GetCypherAnglesFresh(double angles[4], bool& is_fresh, uint64_t* out_timestamp_us)
+{
+    uint8_t data[8] = {0};
+    if (!ReadWithFreshFlag(GetAddress(CYPHER_OUTPUT), data, is_fresh, out_timestamp_us))
+        return false;
+    for (int i = 0; i < 4; i++)
+        angles[i] = (static_cast<double>(data[i * 2]) + static_cast<double>(data[i * 2 + 1] << 8)) / 100.0;
+    return true;
+}
+
 void Titan::SetSpeed(uint8_t motor, double speedCfg)
 {
     if (motor > 3)
@@ -480,12 +579,16 @@ void Titan::SetSpeed(uint8_t motor, double speedCfg)
     if (duty < 0)
         duty = 0;
     lastDuty_[motor] = static_cast<uint8_t>(duty);
-    uint8_t inA = (speedCfg >= 0) ? 1 : 0;
-    uint8_t inB = (speedCfg >= 0) ? 0 : 1;
-    if (speedCfg >= 0)
+    uint8_t inA, inB;
+    if (speedCfg == 0.0) {
+        inA = 1; inB = 1;                        // brake: both high = H-bridge short
+    } else if (speedCfg > 0.0) {
+        inA = 1; inB = 0;                        // forward
         lastDirection_ |= (1u << motor);
-    else
+    } else {
+        inA = 0; inB = 1;                        // reverse
         lastDirection_ &= ~(1u << motor);
+    }
     /* Titan format: one frame per motor [motor, duty, inA, inB] */
     uint8_t data[8] = {motor, static_cast<uint8_t>(duty), inA, inB, 0, 0, 0, 0};
     Titan::Write(GetAddress(SET_MOTOR_SPEED), data, 0);
