@@ -2,6 +2,19 @@
 
 using namespace studica_driver;
 
+static constexpr float kRpmScale = 100.0f; /* matches firmware RPM_SCALE (CAN_RPM_* and SET_TARGET_VELOCITY) */
+
+static bool UnpackRpmX100FromCanData(const uint8_t* data, float* out_rpm)
+{
+    if (out_rpm == nullptr)
+        return false;
+    *out_rpm = 0.0f;
+    int32_t raw = static_cast<int32_t>(static_cast<uint32_t>(data[0]) | (static_cast<uint32_t>(data[1]) << 8) |
+                                       (static_cast<uint32_t>(data[2]) << 16) | (static_cast<uint32_t>(data[3]) << 24));
+    *out_rpm = static_cast<float>(raw) / kRpmScale;
+    return true;
+}
+
 Titan::Titan(const uint8_t& canID, const uint16_t& motorFreq, const float& distPerTick, std::shared_ptr<VMXPi> vmx)
     : vmx_(vmx)
     , canID_(canID)
@@ -313,18 +326,18 @@ bool Titan::GetLimitSwitchesFresh(bool fwd[4], bool rev[4], bool& is_fresh, uint
     return true;
 }
 
-int16_t Titan::GetRPM(uint8_t motor)
+float Titan::GetRPM(uint8_t motor)
 {
-    int16_t v = 0;
+    float v = 0.0f;
     TryGetRPM(motor, &v);
     return v;
 }
 
-bool Titan::TryGetRPM(uint8_t motor, int16_t* out_rpm)
+bool Titan::TryGetRPM(uint8_t motor, float* out_rpm)
 {
     if (out_rpm == nullptr)
         return false;
-    *out_rpm = 0;
+    *out_rpm = 0.0f;
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     uint32_t addr;
     if (motor == 0)
@@ -339,7 +352,7 @@ bool Titan::TryGetRPM(uint8_t motor, int16_t* out_rpm)
         addr = GetAddress(CAN_RPM_0);
     if (!Read(addr, data))
         return false;
-    *out_rpm = static_cast<int16_t>(data[0] | (data[1] << 8));
+    UnpackRpmX100FromCanData(data, out_rpm);
     if ((motor == 0 && invertRPM0) ||
         (motor == 1 && invertRPM1) ||
         (motor == 2 && invertRPM2) ||
@@ -348,9 +361,9 @@ bool Titan::TryGetRPM(uint8_t motor, int16_t* out_rpm)
     return true;
 }
 
-bool Titan::GetRPMFresh(uint8_t motor, int16_t& rpm, bool& is_fresh, uint64_t* out_timestamp_us)
+bool Titan::GetRPMFresh(uint8_t motor, float& rpm, bool& is_fresh, uint64_t* out_timestamp_us)
 {
-    rpm = 0;
+    rpm = 0.0f;
     uint8_t data[8] = {0};
     uint32_t addr;
     if (motor == 0)
@@ -365,7 +378,7 @@ bool Titan::GetRPMFresh(uint8_t motor, int16_t& rpm, bool& is_fresh, uint64_t* o
         addr = GetAddress(CAN_RPM_0);
     if (!ReadWithFreshFlag(addr, data, is_fresh, out_timestamp_us))
         return false;
-    rpm = static_cast<int16_t>(data[0] | (data[1] << 8));
+    UnpackRpmX100FromCanData(data, &rpm);
     if ((motor == 0 && invertRPM0) ||
         (motor == 1 && invertRPM1) ||
         (motor == 2 && invertRPM2) ||
@@ -670,38 +683,60 @@ void Titan::InvertMotor(uint8_t motor)
     InvertEncoderDirection(motor);
 }
 
-bool Titan::GetTargetRPMFromDevice(int16_t targetRpm[4])
+float Titan::GetTargetRPM(uint8_t motor)
+{
+    float v = 0.f;
+    TryGetTargetRPM(motor, &v);
+    return v;
+}
+
+bool Titan::TryGetTargetRPM(uint8_t motor, float* out_rpm)
+{
+    if (out_rpm == nullptr || motor >= 4)
+        return false;
+    *out_rpm = 0.0f;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    uint32_t addr;
+    if (motor == 0)
+        addr = GetAddress(TARGET_RPM_0);
+    else if (motor == 1)
+        addr = GetAddress(TARGET_RPM_1);
+    else if (motor == 2)
+        addr = GetAddress(TARGET_RPM_2);
+    else
+        addr = GetAddress(TARGET_RPM_3);
+    if (!Read(addr, data))
+        return false;
+    UnpackRpmX100FromCanData(data, out_rpm);
+    return true;
+}
+
+bool Titan::TryGetTargetRPMFromAll(float targetRpm[4])
 {
     if (targetRpm == nullptr)
         return false;
-    for (int i = 0; i < 4; i++)
-        targetRpm[i] = 0;
-    uint8_t req[8] = {0};
-    Write(GetAddress(GET_TARGET_RPM), req, 0);
-    /* Device also sends RSP_TARGET_RPM every 100ms; wait then read so we get either reply or periodic frame */
-    vmx_->time.DelayMilliseconds(80);
-    uint8_t data[8] = {0};
-    for (int attempt = 0; attempt < 5; attempt++)
+    bool ok = true;
+    for (int m = 0; m < 4; m++)
     {
-        if (Read(GetAddress(TARGET_RPM), data))
-        {
-            for (int i = 0; i < 4; i++)
-                targetRpm[i] = static_cast<int16_t>(data[i * 2] | (data[i * 2 + 1] << 8));
-            return true;
-        }
-        vmx_->time.DelayMilliseconds(25);
+        if (!TryGetTargetRPM(m, &targetRpm[m]))
+            ok = false;
     }
-    return false;
+    return ok;
 }
 
-void Titan::SetTargetVelocity(uint8_t motor, int16_t velocityRpm)
+void Titan::SetTargetVelocity(uint8_t motor, float velocityRpm)
 {
     if (motor >= 4)
         return;
+    float rpmScaled = velocityRpm * kRpmScale;
+    int32_t rpm32 =
+        (rpmScaled >= 0.0f) ? static_cast<int32_t>(rpmScaled + 0.5f) : static_cast<int32_t>(rpmScaled - 0.5f);
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     data[0] = motor;
-    data[1] = static_cast<uint8_t>(velocityRpm & 0xFF);
-    data[2] = static_cast<uint8_t>((velocityRpm >> 8) & 0xFF);
+    data[1] = static_cast<uint8_t>(rpm32 & 0xFF);
+    data[2] = static_cast<uint8_t>((rpm32 >> 8) & 0xFF);
+    data[3] = static_cast<uint8_t>((rpm32 >> 16) & 0xFF);
+    data[4] = static_cast<uint8_t>((rpm32 >> 24) & 0xFF);
     Write(GetAddress(SET_TARGET_VELOCITY), data, 0);
 }
 
@@ -788,10 +823,23 @@ void Titan::SetMotorStopMode(uint8_t mode)
 
 void Titan::SetPIDType(uint8_t type)
 {
-    if (type > 1)
+    if (type > TITAN_PID_TYPE_MAX)
         return;
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-    data[0] = type;
+    data[0] = STUDICA_CAN_PIDTYPE_BROADCAST;
+    data[1] = type;
+    data[2] = STUDICA_CAN_PIDTYPE_PAYLOAD_SIG;
+    Write(GetAddress(SET_PID_TYPE), data, 0);
+}
+
+void Titan::SetMotorPIDType(uint8_t motor, uint8_t type)
+{
+    if (motor >= 4 || type > TITAN_PID_TYPE_MAX)
+        return;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = motor;
+    data[1] = type;
+    data[2] = STUDICA_CAN_PIDTYPE_PAYLOAD_SIG;
     Write(GetAddress(SET_PID_TYPE), data, 0);
 }
 
@@ -799,6 +847,14 @@ void Titan::AutotuneAll()
 {
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     Write(GetAddress(AUTOTUNE_ALL), data, 0);
+}
+
+void Titan::AutotuneMotor(uint8_t motor)
+{
+    if (motor >= 4)
+        return;
+    uint8_t data[8] = {motor, 0, 0, 0, 0, 0, 0, 0};
+    Write(GetAddress(AUTOTUNE_MOTOR), data, 0);
 }
 
 void Titan::SetSensitivity(uint8_t motor, uint8_t sensitivity)
@@ -809,6 +865,16 @@ void Titan::SetSensitivity(uint8_t motor, uint8_t sensitivity)
     data[0] = motor;
     data[1] = sensitivity;
     Write(GetAddress(SET_SENSITIVITY), data, 0);
+}
+
+void Titan::SetCANSensorOsDelay(uint16_t periodMs)
+{
+    if (periodMs < 5u)
+        periodMs = 5u;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = static_cast<uint8_t>(periodMs & 0xFFu);
+    data[1] = static_cast<uint8_t>((periodMs >> 8) & 0xFFu);
+    Write(GetAddress(SET_CAN_SENSOR_OS_DELAY), data, 0);
 }
 
 void Titan::DisableMotor(uint8_t motor)

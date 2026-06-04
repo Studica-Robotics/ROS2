@@ -223,7 +223,7 @@ void Titan::cmd(std::string params,
     // --- closed loop velocity / position control (titan2 firmware) ---
 
     } else if (params == "set_target_velocity") {
-        int16_t rpm = static_cast<int16_t>(request->initparams.speed);
+        float rpm = request->initparams.speed;
         titan_->SetTargetVelocity(motor, rpm);
         response->success = true;
         response->message = "motor " + std::to_string(motor) + " target velocity set to " + std::to_string(rpm) + " rpm";
@@ -263,6 +263,17 @@ void Titan::cmd(std::string params,
         titan_->AutotuneAll();
         response->success = true;
         response->message = "autotune started on all motors";
+
+    } else if (params == "autotune_motor") {
+        titan_->AutotuneMotor(motor);
+        response->success = true;
+        response->message = "autotune started on motor " + std::to_string(motor);
+
+    } else if (params == "set_motor_pid_type") {
+        titan_->SetMotorPIDType(motor, static_cast<uint8_t>(request->initparams.int_value));
+        response->success = true;
+        response->message = "motor " + std::to_string(motor) + " pid type set to "
+                            + std::to_string(request->initparams.int_value);
 
     // --- encoder configuration ---
 
@@ -338,8 +349,8 @@ void Titan::cmd(std::string params,
         response->message = std::to_string(titan_->GetEncoderDistance(motor));
 
     } else if (params == "get_target_rpm") {
-        int16_t targets[4] = {0, 0, 0, 0};
-        bool ok = titan_->GetTargetRPMFromDevice(targets);
+        float targets[4] = {0.f, 0.f, 0.f, 0.f};
+        bool ok = titan_->TryGetTargetRPMFromAll(targets);
         response->success = ok;
         response->message = std::to_string(targets[0]) + "," + std::to_string(targets[1]) + ","
                             + std::to_string(targets[2]) + "," + std::to_string(targets[3]);
@@ -433,7 +444,7 @@ void Titan::publish_encoders() {
     // RPM
     for (int i = 0; i < 4; i++) {
         if (freshness_enabled_) {
-            int16_t rpm_val; bool rpm_fresh;
+            float rpm_val; bool rpm_fresh;
             titan_->GetRPMFresh(i, rpm_val, rpm_fresh, nullptr);
             if (rpm_fresh) {
                 rpm_stale_count_[i] = 0;

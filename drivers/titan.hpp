@@ -58,6 +58,8 @@ namespace studica_driver
 #define SET_TARGET_ANGLE BASE + (OFFSET * 23)
 #define SET_POSITION_HOLD BASE + (OFFSET * 24)
 #define GET_TARGET_RPM BASE + (OFFSET * 25)
+#define SET_CAN_SENSOR_OS_DELAY BASE + (OFFSET * 26)
+#define AUTOTUNE_MOTOR BASE + (OFFSET * 27)
 #define CYPHER_OUTPUT BASE + (OFFSET * 36)
 #define ENCODER_0 BASE + (OFFSET * 37)
 #define ENCODER_1 BASE + (OFFSET * 38)
@@ -68,8 +70,25 @@ namespace studica_driver
 #define CAN_RPM_2 BASE + (OFFSET * 43)
 #define CAN_RPM_3 BASE + (OFFSET * 44)
 #define LIMIT_SWITCH BASE + (OFFSET * 45)
-#define TARGET_RPM BASE + (OFFSET * 46)
 #define MCU_TEMP BASE + (OFFSET * 47)
+#define TARGET_RPM_0 BASE + (OFFSET * 48)
+#define TARGET_RPM_1 BASE + (OFFSET * 49)
+#define TARGET_RPM_2 BASE + (OFFSET * 50)
+#define TARGET_RPM_3 BASE + (OFFSET * 51)
+
+/* Titan2 PID type (SET_PID_TYPE) */
+#define TITAN_PID_TYPE_OFF 0u     /* No internal closed-loop; duty via SET_MOTOR_SPEED / open loop */
+#define TITAN_PID_TYPE_LEGACY 1u  /* user Kp/Ki/Kd path */
+#define TITAN_PID_TYPE_MCV2 2u    /* MCV2 cascade control */
+#define TITAN_PID_TYPE_MAX 2u     /* Max valid PID type (for validation) */
+/* PID type is in data[1]; data[2] signature distinguishes from legacy layout (type in data[0]). */
+#ifndef STUDICA_CAN_PIDTYPE_PAYLOAD_SIG
+#define STUDICA_CAN_PIDTYPE_PAYLOAD_SIG 0xC3u
+#define STUDICA_CAN_PIDTYPE_BROADCAST 0xFFu
+#endif
+/** RETURN_TITAN_INFO data[1] (firmware VERSION_MAJOR): 1 = original Titan, 2 = Titan2 (MCV2-capable). */
+#define TITAN_INFO_VERSION_MAJOR_1 1u
+#define TITAN_INFO_VERSION_MAJOR_2 2u
 
     class Titan
     {
@@ -89,11 +108,11 @@ namespace studica_driver
             bool GetLimitSwitch(uint8_t motor, uint8_t direction);
             /** Read all 8 limit switch states (4 motors × fwd/rev) in one frame read. fwd[i] and rev[i] are raw */
             bool GetLimitSwitchesFresh(bool fwd[4], bool rev[4], bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
-            int16_t GetRPM(uint8_t motor);
+            float GetRPM(uint8_t motor);
             /** Returns true if a RPM frame was read; false if no frame (Blackboard empty for that ID). Fills *out_rpm. */
-            bool TryGetRPM(uint8_t motor, int16_t* out_rpm);
+            bool TryGetRPM(uint8_t motor, float* out_rpm);
             /** RPM read with VMX blackboard freshness. */
-            bool GetRPMFresh(uint8_t motor, int16_t& rpm, bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
+            bool GetRPMFresh(uint8_t motor, float& rpm, bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
             std::string GetSerialNumber();
             double GetEncoderDistance(uint8_t motor);
             int32_t GetEncoderCount(uint8_t motor);
@@ -116,9 +135,12 @@ namespace studica_driver
             void InvertMotor(uint8_t motor);
 
             /** Set target RPM; negative = reverse. PID (or MCV2) drives motor via setMotorSpeed(..., inA, inB). */
-            void SetTargetVelocity(uint8_t motor, int16_t velocityRpm);
-            /** Read back current velocity targets from device (GET_TARGET_RPM). Returns true if read ok. */
-            bool GetTargetRPMFromDevice(int16_t targetRpm[4]);
+            void SetTargetVelocity(uint8_t motor, float velocityRpm);
+            /** Read back velocity target for one motor (TARGET_RPM_0..3 blackboard). data[0..3] = int32 LE RPM×100. */
+            float GetTargetRPM(uint8_t motor);
+            bool TryGetTargetRPM(uint8_t motor, float* out_rpm);
+            /** Read all four target RPMs via per-motor blackboard IDs (no GET_TARGET_RPM stream drain). */
+            bool TryGetTargetRPMFromAll(float targetRpm[4]);
             void SetTargetDistance(uint8_t motor, int32_t distanceCounts);
             void SetTargetAngle(uint8_t motor, double angleDeg);
             void SetPositionHold(uint8_t motor, bool hold);
@@ -126,9 +148,15 @@ namespace studica_driver
             void SetCurrentLimit(uint8_t channel, float limitAmps);
             void SetCurrentLimitMode(uint8_t channel, uint8_t mode);
             void SetMotorStopMode(uint8_t mode);
+            /** Broadcast PID mode (legacy-compatible global): same type on all motors. */
             void SetPIDType(uint8_t type);
+            /** Per-motor PID type (0=OFF, 1=legacy, 2=MCV2 cascade). */
+            void SetMotorPIDType(uint8_t motor, uint8_t type);
             void AutotuneAll();
+            void AutotuneMotor(uint8_t motor);
             void SetSensitivity(uint8_t motor, uint8_t sensitivity);
+            /** Set CAN sensor transmit task period in ms (firmware minimum 5). Persisted to EEPROM. */
+            void SetCANSensorOsDelay(uint16_t periodMs);
             void DisableMotor(uint8_t motor);
 
         private:
