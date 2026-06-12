@@ -160,7 +160,7 @@ control_server:
         frame_id: "sharp_link"  # TF frame for the Range message
 
     # -------------------------------------------------------------------------
-    # Parsec — multi-zone ToF sensor (VL53L8CX, 16 or 64 zones)
+    # Parsec — multi-zone ToF sensor (16 or 64 zones)
     #
     # transport: can (default, VMX CAN bus) or usb (Pi USB port, /dev/ttyACM0)
     #
