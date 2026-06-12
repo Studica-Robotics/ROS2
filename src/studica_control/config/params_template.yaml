@@ -3,8 +3,8 @@
 # Full reference for all available components.
 # Copy any section into params.yaml and set enabled: true to activate it.
 #
-# Multi-instance components (cobra, duty_cycle, dio, encoder, servo, sharp,
-# titan, ultrasonic) support multiple sensors by adding names to the
+# Multi-instance components (cobra, duty_cycle, dio, encoder, parsec, servo,
+# sharp, titan, ultrasonic) support multiple sensors by adding names to the
 # "sensors" list and adding a matching config block for each name.
 #
 # Single-instance components (gamepad, imu) have a flat config.
@@ -159,6 +159,34 @@ control_server:
         port: 22      # VMX analog input channel
         frame_id: "sharp_link"  # TF frame for the Range message
 
+    # -------------------------------------------------------------------------
+    # Parsec — multi-zone ToF sensor (VL53L8CX, 16 or 64 zones)
+    #
+    # transport: can (default, VMX CAN bus) or usb (Pi USB port, /dev/ttyACM0)
+    #
+    # Topics (publish):
+    #   /<name>/min_range (sensor_msgs/Range) — always on; nearest valid zone in metres
+    # Optional outputs (publish_outputs — pick one, two, or all three):
+    #   zones      — /<name>/zones      (studica_control/ParsecZoneMsg) int16[] mm, easy debug
+    #   depth      — /<name>/depth      (sensor_msgs/Image, 16UC1) 4x4 or 8x8 grid for RViz
+    #   pointcloud — /<name>/pointcloud (sensor_msgs/PointCloud2) 3D points in frame_id
+    #
+    # Service: /<name>/parsec_cmd (SetData)
+    #   Commands: get_config, get_zone_distance, get_min_distance
+    #   get_zone_distance uses initparams.n_encoder as the zone index (0..zones-1)
+    #
+    # USB on Pi: add user to dialout — sudo usermod -aG dialout $USER (re-login)
+    # -------------------------------------------------------------------------
+    parsec:
+      enabled: true
+      sensors: ["front_tof"]
+      front_tof:
+        transport: can            # can | usb
+        can_id: 5                 # CAN only - must match device CANID (0..63)
+        serial_port: /dev/ttyACM0 # USB only - use 'ls /dev/ttyACM*' to find your port
+        frame_id: "parsec_front_link"
+        publish_rate_hz: 15
+        publish_outputs: ["zones", "depth", "pointcloud"]  # any of: zones, depth, pointcloud
     # -------------------------------------------------------------------------
     # DIO — digital input or output pin
     #
