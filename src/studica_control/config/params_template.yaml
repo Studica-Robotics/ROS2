@@ -158,6 +158,40 @@ control_server:
       sharp:
         port: 22      # VMX analog input channel
         frame_id: "sharp_link"  # TF frame for the Range message
+        
+    # -------------------------------------------------------------------------
+    # Colore — color sensor (STM32G4 + TCS3448)
+    #
+    # transport: can (XYZ telemetry only) or usb (full color formats, /dev/ttyACM0)
+    #
+    # Topics (publish):
+    #   /<name>/color (std_msgs/ColorRGBA) — always on, normalized 0..1
+    # Optional outputs (publish_outputs):
+    #   info — /<name>/color_info   (studica_control/ColoreColorMsg) easy debug
+    #   xyz  — /<name>/xyz          (geometry_msgs/Vector3Stamped) CIE XYZ
+    #   raw  — /<name>/raw_spectrum (studica_control/ColoreRawMsg) 18ch, USB only
+    #
+    # color_format: srgb (default) | xyz | hex | rgb | raw  (which data is live)
+    #
+    # Service: /<name>/colore_cmd (SetData)
+    #   get_config, set_brightness, set_measmode_auto, set_measmode_off
+    #
+    # USB on Pi: sudo usermod -aG dialout $USER (re-login)
+    # CAN: export COLORE_CAN_BITRATE=1000 (must match device; 1Mbps default)
+    # -------------------------------------------------------------------------
+    colore:
+      enabled: true
+      sensors: ["color0"]
+      color0:
+        transport: usb            # can | usb
+        can_id: 0                 # CAN only
+        serial_port: /dev/ttyACM0 # USB only
+        frame_id: "colore_link"
+        publish_rate_hz: 10
+        publish_outputs: ["info", "xyz"]
+        color_format: "srgb"      # srgb | xyz | hex | rgb | raw
+        brightness: 50            # white LED 0-100
+        sample_time_ms: 200       # 20-2000
 
     # -------------------------------------------------------------------------
     # DIO — digital input or output pin

@@ -19,11 +19,14 @@ find_package(geometry_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files (srv, msg, action)
+  "msg/ColoreColorMsg.msg"
+  "msg/ColoreRawMsg.msg"
   "msg/DutyCycleEncoderMsg.msg"
   "msg/EncoderMsg.msg"
   "msg/InitializeParams.msg"
   "srv/ControlImu.srv"
   "srv/SetData.srv"
+  DEPENDENCIES std_msgs
 )
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
@@ -48,6 +51,7 @@ set(studica_control_HDRS
   include/studica_control/sharp_component.hpp
   include/studica_control/titan_component.hpp
   include/studica_control/ultrasonic_component.hpp
+  include/studica_control/colore_component.hpp
 )
 
 set(dependencies
@@ -121,6 +125,12 @@ ament_target_dependencies(ultrasonic_component ${dependencies})
 target_link_libraries(ultrasonic_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(ultrasonic_component "studica_control::Ultrasonic")
 
+add_library(colore_component SHARED src/components/colore_component.cpp)
+ament_target_dependencies(colore_component ${dependencies})
+target_link_libraries(colore_component "${cpp_typesupport_target}")
+rclcpp_components_register_nodes(colore_component "studica_control::Colore")
+
+
 install(TARGETS
   cobra_component
   dc_encoder_component
@@ -134,6 +144,7 @@ install(TARGETS
   sharp_component
   titan_component
   ultrasonic_component
+  colore_component
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
     PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
@@ -154,6 +165,7 @@ target_link_libraries(manual_composition
   sharp_component
   titan_component
   ultrasonic_component
+  colore_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
   /usr/local/lib/studica_drivers/libstudica_drivers.so
 )
@@ -202,6 +214,7 @@ ament_export_libraries(
   sharp_component
   titan_component
   ultrasonic_component
+  colore_component
 )
 ament_export_dependencies(${dependencies})
 
