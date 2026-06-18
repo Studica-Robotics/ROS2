@@ -178,7 +178,7 @@ control_server:
     # USB on Pi: add user to dialout — sudo usermod -aG dialout $USER (re-login)
     # -------------------------------------------------------------------------
     parsec:
-      enabled: true
+      enabled: false
       sensors: ["parsec"]
       parsec:
         transport: can            # can | usb
