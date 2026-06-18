@@ -596,16 +596,16 @@ The **Parsec** is a Studica multi-zone time-of-flight sensor. It reports distanc
 for each cell in a **4×4 (16 zones)** or **8×8 (64 zones)** grid. Connect over **CAN**
 (default) or **USB** on the Pi (`/dev/ttyACM0`).
 
-Topics are auto-generated from the sensor name. Using `"front_tof"` as an example:
+Topics are auto-generated from the sensor name. Using `"parsec"` as an example:
 
 **Topics (publish) — optional outputs via `publish_outputs`:**
 
 | Topic | Type | Units / encoding | Best for |
 |---|---|---|---|
-| `/front_tof/zones` | `studica_control/ParsecZoneMsg` | `fdist[]` in **mm** (`int16`) | Debug, logging, custom nodes — readable in `ros2 topic echo` |
-| `/front_tof/depth` | `sensor_msgs/Image` (`16UC1`) | **mm per pixel**, 4×4 or 8×8 grid | RViz Image, OpenCV / cv_bridge |
-| `/front_tof/pointcloud` | `sensor_msgs/PointCloud2` (`xyz`) | **metres** (`float32` x, y, z) | RViz 3D, PCL, fusion with your own TF/odom |
-| `/front_tof/min_range` | `sensor_msgs/Range` | **metres** — nearest valid zone | Simple obstacle / “closest hit” (always published) |
+| `/parsec/zones` | `studica_control/ParsecZoneMsg` | `fdist[]` in **mm** (`int16`) | Debug, logging, custom nodes — readable in `ros2 topic echo` |
+| `/parsec/depth` | `sensor_msgs/Image` (`16UC1`) | **mm per pixel**, 4×4 or 8×8 grid | RViz Image, OpenCV / cv_bridge |
+| `/parsec/pointcloud` | `sensor_msgs/PointCloud2` (`xyz`) | **metres** (`float32` x, y, z) | RViz 3D, PCL, fusion with your own TF/odom |
+| `/parsec/min_range` | `sensor_msgs/Range` | **metres** — nearest valid zone | Simple obstacle / “closest hit” (always published) |
 
 Rate: `publish_rate_hz` (default 15 Hz).
 
@@ -652,7 +652,7 @@ img_mm = bridge.imgmsg_to_cv2(msg, desired_encoding='16UC1')  # numpy uint16, sh
 The driver does **not** publish TF. Set `frame_id` in `params.yaml` and provide your own
 `static_transform_publisher` or robot URDF if you need the cloud on the robot model.
 
-**Service:** `/front_tof/parsec_cmd` → `studica_control/SetData`
+**Service:** `/parsec/parsec_cmd` → `studica_control/SetData`
 
 | Command | Required fields | Description |
 |---|---|---|
@@ -665,12 +665,12 @@ The driver does **not** publish TF. Set `frame_id` in `params.yaml` and provide 
 ```yaml
 parsec:
   enabled: true
-  sensors: ["front_tof"]
-  front_tof:
+  sensors: ["parsec"]
+  parsec:
     transport: can            # "can" (VMX CAN bus) or "usb" (Pi serial)
     can_id: 5                 # CAN only — must match device CANID (0..63)
     serial_port: /dev/ttyACM0 # USB only — run: ls /dev/ttyACM*
-    frame_id: "parsec_front_link"
+    frame_id: "parsec_link"
     publish_rate_hz: 15
     publish_outputs: ["zones", "depth", "pointcloud"]  # any of: zones, depth, pointcloud
 ```
@@ -679,21 +679,21 @@ parsec:
 
 ```bash
 # Raw per-zone distances in mm (easiest to read in the terminal)
-ros2 topic echo /front_tof/zones --once
+ros2 topic echo /parsec/zones --once
 
 # Nearest hit in metres
-ros2 topic echo /front_tof/min_range --once
+ros2 topic echo /parsec/min_range --once
 
 # On-demand zone query (zone 0, mm)
-ros2 service call /front_tof/parsec_cmd studica_control/srv/SetData \
+ros2 service call /parsec/parsec_cmd studica_control/srv/SetData \
   "{params: 'get_zone_distance', initparams: {n_encoder: 0, speed: 0.0, int_value: 0, hold: false}}"
 ```
 
 **RViz:**
 
-- **Image:** add `/front_tof/depth`, encoding `16UC1`. For a colour heatmap, convert to
+- **Image:** add `/parsec/depth`, encoding `16UC1`. For a colour heatmap, convert to
   another encoding in your node or use the point cloud view below.
-- **PointCloud2:** add `/front_tof/pointcloud`, set **Fixed Frame** to `frame_id` (or your
+- **PointCloud2:** add `/parsec/pointcloud`, set **Fixed Frame** to `frame_id` (or your
   map/odom frame if you publish TF). Colour by **Axis → Z** for distance.
 
 > **Note:** `ros2 topic echo` on `/depth` shows raw bytes (e.g. `94, 1` = 350 mm). Use
@@ -1263,7 +1263,7 @@ node.create_subscription(Range, '/front/range', lambda msg: ..., 10)
 
 # Parsec multi-zone ToF — raw mm per cell (easiest to consume)
 from studica_control.msg import ParsecZoneMsg
-node.create_subscription(ParsecZoneMsg, '/front_tof/zones', lambda msg: ..., 10)
+node.create_subscription(ParsecZoneMsg, '/parsec/zones', lambda msg: ..., 10)
 
 # Cobra per-channel voltage
 node.create_subscription(Float32, '/line_sensor/ch_0', lambda msg: ..., 10)

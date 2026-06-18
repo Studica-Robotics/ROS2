@@ -179,12 +179,12 @@ control_server:
     # -------------------------------------------------------------------------
     parsec:
       enabled: true
-      sensors: ["front_tof"]
-      front_tof:
+      sensors: ["parsec"]
+      parsec:
         transport: can            # can | usb
         can_id: 5                 # CAN only - must match device CANID (0..63)
         serial_port: /dev/ttyACM0 # USB only - use 'ls /dev/ttyACM*' to find your port
-        frame_id: "parsec_front_link"
+        frame_id: "parsec_link"
         publish_rate_hz: 15
         publish_outputs: ["zones", "depth", "pointcloud"]  # any of: zones, depth, pointcloud
     # -------------------------------------------------------------------------

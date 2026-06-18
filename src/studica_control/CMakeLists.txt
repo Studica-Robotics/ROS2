@@ -229,6 +229,7 @@ set(cpp_example_targets
   cobra_example
   gamepad_example
   light_tower_example
+  parsec_example
 )
 
 foreach(target ${cpp_example_targets})
@@ -254,6 +255,7 @@ set(python_example_scripts
   src/components/examples/python/cobra_example.py
   src/components/examples/python/gamepad_example.py
   src/components/examples/python/light_tower_example.py
+  src/components/examples/python/parsec_example.py
 )
 
 install(PROGRAMS ${python_example_scripts}
