@@ -23,6 +23,7 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
   - [Servo](#servo)
   - [Ultrasonic](#ultrasonic--hc-sr04-range-sensor)
   - [Sharp](#sharp--gp2y-infrared-range-sensor)
+  - [Parsec](#parsec--multi-zone-tof-sensor)
   - [DIO](#dio--digital-inputoutput)
   - [Light Tower](#light-tower--5-output-led-indicator)
   - [Cobra](#cobra--reflectance-sensor-array)
@@ -45,6 +46,7 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
 | **Servo** | Actuator | Standard (position), continuous (velocity), or linear |
 | **Ultrasonic** | Range Sensor | HC-SR04-style sonar, ~2 cm to 4 m |
 | **Sharp** | Range Sensor | GP2Y infrared rangefinder, ~10 cm to 80 cm |
+| **Parsec** | Range Sensor | Multi-zone ToF, 16 (4×4) or 64 (8×8) distance cells, CAN or USB |
 | **DIO** | Digital I/O | General-purpose digital input or output pin |
 | **Light Tower** | Indicator | 5-output LED tower — red, green, yellow, buzzer, continuous enable |
 | **Power** | System Monitor | Battery voltage, estimated state-of-charge, low-battery warnings — always on |
@@ -194,7 +196,7 @@ control_server:
 
 The following components support multiple instances by adding names to the `sensors` list and providing a config block for each name:
 
-`cobra`, `duty_cycle`, `dio`, `encoder`, `servo`, `sharp`, `titan`, `ultrasonic`
+`cobra`, `duty_cycle`, `dio`, `encoder`, `parsec`, `servo`, `sharp`, `titan`, `ultrasonic`
 
 ```yaml
 servo:
@@ -585,6 +587,121 @@ sharp:
     port: 22                  # VMX analog input channel
     frame_id: "side_ir_link"  # TF frame for the Range message header
 ```
+
+---
+
+### Parsec — Multi-Zone ToF Sensor
+
+The **Parsec** is a Studica multi-zone time-of-flight sensor. It reports distance
+for each cell in a **4×4 (16 zones)** or **8×8 (64 zones)** grid. Connect over **CAN**
+(default) or **USB** on the Pi (`/dev/ttyACM0`).
+
+Topics are auto-generated from the sensor name. Using `"parsec"` as an example:
+
+**Topics (publish) — optional outputs via `publish_outputs`:**
+
+| Topic | Type | Units / encoding | Best for |
+|---|---|---|---|
+| `/parsec/zones` | `studica_control/ParsecZoneMsg` | `fdist[]` in **mm** (`int16`) | **`ros2 topic echo`** — human-readable mm per cell |
+| `/parsec/grid` | `sensor_msgs/Image` (`16UC1`) | mm encoded as **raw uint16 pixels** (4×4 or 8×8) | RViz / cv_bridge — **not** readable in `topic echo` (shows byte pairs) |
+| `/parsec/pointcloud` | `sensor_msgs/PointCloud2` (`xyz`) | **metres** (`float32` x, y, z) | RViz 3D, PCL, fusion with your own TF/odom |
+| `/parsec/min_range` | `sensor_msgs/Range` | **metres** — nearest valid zone | Simple obstacle / “closest hit” (always published) |
+
+Rate: `publish_rate_hz` (default 15 Hz).
+
+All three optional topics carry the **same underlying grid** — different ROS message packaging.
+Enable any combination in `publish_outputs`. If omitted or empty, **`grid`** is published by default.
+
+> **Terminal debugging:** use **`/zones`** for mm you can read directly. **`/grid`** is a
+> `sensor_msgs/Image` — distances are mm per pixel, but `ros2 topic echo` only shows raw
+> bytes (decode with the snippet below, or use RViz / cv_bridge).
+
+**Zone values (`fdist`, mm):**
+
+| Value | Meaning |
+|---|---|
+| `0` – `4000` | Valid distance in millimetres |
+| `-1` | Zone disabled (zone mask) |
+| `-2` | Invalid / no return |
+
+On `/grid`, disabled and invalid zones are published as pixel value `0`.
+
+**Zone index layout** — row-major, top row first (index 0 = top-left). Grid is 4×4 or 8×8
+depending on firmware resolution (`RESOLUTION,16` or `RESOLUTION,64` on the device).
+
+**Decoding `/grid` (`16UC1`):**
+
+Each pixel is a uint16 distance in mm, stored as **2 bytes little-endian** in `image.data`:
+
+```python
+# pixel index i (0 .. width*height-1)
+mm = msg.data[2 * i] + (msg.data[2 * i + 1] << 8)
+```
+
+With **cv_bridge** (recommended for image pipelines):
+
+```python
+from cv_bridge import CvBridge
+import numpy as np
+
+bridge = CvBridge()
+img_mm = bridge.imgmsg_to_cv2(msg, desired_encoding='16UC1')  # numpy uint16, shape (H, W)
+```
+
+**`/pointcloud` coordinates** — one point per valid zone, in `header.frame_id` (metres):
+
+- **z** — measured range for a cell (forward, in metres)
+- **x**, **y** — left/right and up/down offset from the sensor center, estimated from each cell’s position in the grid and the ~65° FOV
+
+The driver does **not** publish TF. Set `frame_id` in `params.yaml` and provide your own
+`static_transform_publisher` or robot URDF if you need the cloud on the robot model.
+
+**Service:** `/parsec/parsec_cmd` → `studica_control/SetData`
+
+| Command | Required fields | Description |
+|---|---|---|
+| `get_config` | — | Device settings as a string in `response.message`. **USB:** full line from firmware (serial, resolution, CAN ID, zone mask, etc.). **CAN:** short summary only (`version=…, fdist_en=…, can_id=…`) — Classic CAN returns 8 bytes, not the full config |
+| `get_zone_distance` | `initparams.n_encoder` = zone index (0..zones−1) | Distance for one zone (**mm**) |
+| `get_min_distance` | — | Nearest valid zone distance (**mm**) |
+
+**params.yaml:**
+
+```yaml
+parsec:
+  enabled: true
+  sensors: ["parsec"]
+  parsec:
+    transport: can            # "can" (VMX CAN bus) or "usb" (Pi serial)
+    can_id: 5                 # CAN only — must match device CANID (0..63)
+    serial_port: /dev/ttyACM0 # USB only — run: ls /dev/ttyACM*
+    frame_id: "parsec_link"
+    publish_rate_hz: 15
+    publish_outputs: ["zones", "grid", "pointcloud"]  # any of: zones, grid, pointcloud
+```
+
+**Verify:**
+
+```bash
+# Raw per-zone distances in mm (easiest to read in the terminal)
+ros2 topic echo /parsec/zones --once
+
+# Nearest hit in metres
+ros2 topic echo /parsec/min_range --once
+
+# On-demand zone query (zone 0, mm)
+ros2 service call /parsec/parsec_cmd studica_control/srv/SetData \
+  "{params: 'get_zone_distance', initparams: {n_encoder: 0, speed: 0.0, int_value: 0, hold: false}}"
+```
+
+**RViz:**
+
+- **Image:** add `/parsec/grid`, encoding `16UC1`. For a colour heatmap, convert to
+  another encoding in your node or use the point cloud view below.
+- **PointCloud2:** add `/parsec/pointcloud`, set **Fixed Frame** to `frame_id` (or your
+  map/odom frame if you publish TF). Colour by **Axis → Z** for distance.
+
+> **Note:** `ros2 topic echo` on `/grid` shows raw bytes (e.g. `94, 1` = 350 mm). Use
+> `/zones` for human-readable mm values, or decode the image as shown above.
 
 ---
 
@@ -1147,6 +1264,10 @@ node.create_subscription(Float64, '/titan0/m_2/angle', lambda msg: ..., 10)
 
 # Ultrasonic range (/<name>/range)
 node.create_subscription(Range, '/front/range', lambda msg: ..., 10)
+
+# Parsec multi-zone ToF — raw mm per cell (easiest to consume)
+from studica_control.msg import ParsecZoneMsg
+node.create_subscription(ParsecZoneMsg, '/parsec/zones', lambda msg: ..., 10)
 
 # Cobra per-channel voltage
 node.create_subscription(Float32, '/line_sensor/ch_0', lambda msg: ..., 10)

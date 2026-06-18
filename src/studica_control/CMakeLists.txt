@@ -22,8 +22,10 @@ rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files (srv, msg, action)
   "msg/DutyCycleEncoderMsg.msg"
   "msg/EncoderMsg.msg"
   "msg/InitializeParams.msg"
+  "msg/ParsecZoneMsg.msg"
   "srv/ControlImu.srv"
   "srv/SetData.srv"
+  DEPENDENCIES std_msgs
 )
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
@@ -48,6 +50,7 @@ set(studica_control_HDRS
   include/studica_control/sharp_component.hpp
   include/studica_control/titan_component.hpp
   include/studica_control/ultrasonic_component.hpp
+  include/studica_control/parsec_component.hpp
 )
 
 set(dependencies
@@ -121,6 +124,11 @@ ament_target_dependencies(ultrasonic_component ${dependencies})
 target_link_libraries(ultrasonic_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(ultrasonic_component "studica_control::Ultrasonic")
 
+add_library(parsec_component SHARED src/components/parsec_component.cpp)
+ament_target_dependencies(parsec_component ${dependencies})
+target_link_libraries(parsec_component "${cpp_typesupport_target}")
+rclcpp_components_register_nodes(parsec_component "studica_control::Parsec")
+
 install(TARGETS
   cobra_component
   dc_encoder_component
@@ -134,6 +142,7 @@ install(TARGETS
   sharp_component
   titan_component
   ultrasonic_component
+  parsec_component
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
     PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
@@ -154,6 +163,7 @@ target_link_libraries(manual_composition
   sharp_component
   titan_component
   ultrasonic_component
+  parsec_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
   /usr/local/lib/studica_drivers/libstudica_drivers.so
 )
@@ -202,6 +212,7 @@ ament_export_libraries(
   sharp_component
   titan_component
   ultrasonic_component
+  parsec_component
 )
 ament_export_dependencies(${dependencies})
 
@@ -218,6 +229,7 @@ set(cpp_example_targets
   cobra_example
   gamepad_example
   light_tower_example
+  parsec_example
 )
 
 foreach(target ${cpp_example_targets})
@@ -243,6 +255,7 @@ set(python_example_scripts
   src/components/examples/python/cobra_example.py
   src/components/examples/python/gamepad_example.py
   src/components/examples/python/light_tower_example.py
+  src/components/examples/python/parsec_example.py
 )
 
 install(PROGRAMS ${python_example_scripts}
