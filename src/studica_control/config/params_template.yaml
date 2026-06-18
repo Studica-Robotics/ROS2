@@ -167,8 +167,8 @@ control_server:
     # Topics (publish):
     #   /<name>/min_range (sensor_msgs/Range) — always on; nearest valid zone in metres
     # Optional outputs (publish_outputs — pick one, two, or all three):
-    #   zones      — /<name>/zones      (studica_control/ParsecZoneMsg) int16[] mm, easy debug
-    #   depth      — /<name>/depth      (sensor_msgs/Image, 16UC1) 4x4 or 8x8 grid for RViz
+    #   zones      — /<name>/zones      (ParsecZoneMsg) int16[] mm — human-readable in topic echo
+    #   grid       — /<name>/grid       (sensor_msgs/Image 16UC1) mm as raw pixels — use RViz/cv_bridge, not topic echo
     #   pointcloud — /<name>/pointcloud (sensor_msgs/PointCloud2) 3D points in frame_id
     #
     # Service: /<name>/parsec_cmd (SetData)
@@ -186,7 +186,7 @@ control_server:
         serial_port: /dev/ttyACM0 # USB only - use 'ls /dev/ttyACM*' to find your port
         frame_id: "parsec_link"
         publish_rate_hz: 15
-        publish_outputs: ["zones", "depth", "pointcloud"]  # any of: zones, depth, pointcloud
+        publish_outputs: ["zones", "grid", "pointcloud"]  # any of: zones, grid, pointcloud
     # -------------------------------------------------------------------------
     # DIO — digital input or output pin
     #

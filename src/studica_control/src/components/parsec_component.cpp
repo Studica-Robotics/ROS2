@@ -54,7 +54,7 @@ std::vector<std::shared_ptr<rclcpp::Node>> Parsec::initialize(
         control->declare_parameter<std::string>(frame_id_param, sensor);
         control->declare_parameter<int>(publish_rate_param, 15);
         control->declare_parameter<std::vector<std::string>>(
-            publish_outputs_param, std::vector<std::string>{"depth"});
+            publish_outputs_param, std::vector<std::string>{"grid"});
 
         const ParsecTransport transport =
             parse_transport(control->get_parameter(transport_param).as_string());
@@ -136,8 +136,8 @@ Parsec::Parsec(std::shared_ptr<VMXPi> vmx, const std::string &name,
         zones_publisher_ =
             this->create_publisher<studica_control::msg::ParsecZoneMsg>(name + "/zones", 10);
     }
-    if (outputs_.depth) {
-        depth_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(name + "/depth", 10);
+    if (outputs_.grid) {
+        grid_publisher_ = this->create_publisher<sensor_msgs::msg::Image>(name + "/grid", 10);
     }
     if (outputs_.pointcloud) {
         pointcloud_publisher_ =
@@ -174,8 +174,8 @@ Parsec::Parsec(std::shared_ptr<VMXPi> vmx, const std::string &name,
     if (outputs_.zones) {
         topics << "/" << name << "/zones ";
     }
-    if (outputs_.depth) {
-        topics << "/" << name << "/depth ";
+    if (outputs_.grid) {
+        topics << "/" << name << "/grid ";
     }
     if (outputs_.pointcloud) {
         topics << "/" << name << "/pointcloud ";
@@ -206,15 +206,15 @@ ParsecPublishOutputs Parsec::parse_publish_outputs(const std::vector<std::string
         const std::string key = to_lower(name);
         if (key == "zones") {
             outputs.zones = true;
-        } else if (key == "depth") {
-            outputs.depth = true;
+        } else if (key == "grid") {
+            outputs.grid = true;
         } else if (key == "pointcloud" || key == "points" || key == "cloud") {
             outputs.pointcloud = true;
         }
     }
 
-    if (!outputs.zones && !outputs.depth && !outputs.pointcloud) {
-        outputs.depth = true;
+    if (!outputs.zones && !outputs.grid && !outputs.pointcloud) {
+        outputs.grid = true;
     }
     return outputs;
 }
@@ -343,7 +343,7 @@ void Parsec::grid_size_from_zones(int resolution_zones, uint32_t &width, uint32_
 }
 
 
-sensor_msgs::msg::Image Parsec::build_depth_image(
+sensor_msgs::msg::Image Parsec::build_grid_image(
     const rclcpp::Time &stamp, const std::string &frame_id,
     const int16_t *fdist, int resolution_zones)
 {
@@ -483,8 +483,8 @@ void Parsec::publish_zones()
         zones_msg.fdist.assign(fdist, fdist + resolution_zones);
         zones_publisher_->publish(zones_msg);
     }
-    if (outputs_.depth && depth_publisher_) {
-        depth_publisher_->publish(build_depth_image(stamp, frame_id_, fdist, resolution_zones));
+    if (outputs_.grid && grid_publisher_) {
+        grid_publisher_->publish(build_grid_image(stamp, frame_id_, fdist, resolution_zones));
     }
     if (outputs_.pointcloud && pointcloud_publisher_) {
         pointcloud_publisher_->publish(build_point_cloud(stamp, frame_id_, fdist, resolution_zones));

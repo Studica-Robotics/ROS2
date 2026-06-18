@@ -602,15 +602,19 @@ Topics are auto-generated from the sensor name. Using `"parsec"` as an example:
 
 | Topic | Type | Units / encoding | Best for |
 |---|---|---|---|
-| `/parsec/zones` | `studica_control/ParsecZoneMsg` | `fdist[]` in **mm** (`int16`) | Debug, logging, custom nodes — readable in `ros2 topic echo` |
-| `/parsec/depth` | `sensor_msgs/Image` (`16UC1`) | **mm per pixel**, 4×4 or 8×8 grid | RViz Image, OpenCV / cv_bridge |
+| `/parsec/zones` | `studica_control/ParsecZoneMsg` | `fdist[]` in **mm** (`int16`) | **`ros2 topic echo`** — human-readable mm per cell |
+| `/parsec/grid` | `sensor_msgs/Image` (`16UC1`) | mm encoded as **raw uint16 pixels** (4×4 or 8×8) | RViz / cv_bridge — **not** readable in `topic echo` (shows byte pairs) |
 | `/parsec/pointcloud` | `sensor_msgs/PointCloud2` (`xyz`) | **metres** (`float32` x, y, z) | RViz 3D, PCL, fusion with your own TF/odom |
 | `/parsec/min_range` | `sensor_msgs/Range` | **metres** — nearest valid zone | Simple obstacle / “closest hit” (always published) |
 
 Rate: `publish_rate_hz` (default 15 Hz).
 
 All three optional topics carry the **same underlying grid** — different ROS message packaging.
-Enable any combination in `publish_outputs`. If omitted or empty, **`depth`** is published by default.
+Enable any combination in `publish_outputs`. If omitted or empty, **`grid`** is published by default.
+
+> **Terminal debugging:** use **`/zones`** for mm you can read directly. **`/grid`** is a
+> `sensor_msgs/Image` — distances are mm per pixel, but `ros2 topic echo` only shows raw
+> bytes (decode with the snippet below, or use RViz / cv_bridge).
 
 **Zone values (`fdist`, mm):**
 
@@ -620,12 +624,12 @@ Enable any combination in `publish_outputs`. If omitted or empty, **`depth`** is
 | `-1` | Zone disabled (zone mask) |
 | `-2` | Invalid / no return |
 
-On `/depth`, disabled and invalid zones are published as pixel value `0`.
+On `/grid`, disabled and invalid zones are published as pixel value `0`.
 
 **Zone index layout** — row-major, top row first (index 0 = top-left). Grid is 4×4 or 8×8
 depending on firmware resolution (`RESOLUTION,16` or `RESOLUTION,64` on the device).
 
-**Decoding `/depth` (`16UC1`):**
+**Decoding `/grid` (`16UC1`):**
 
 Each pixel is a uint16 distance in mm, stored as **2 bytes little-endian** in `image.data`:
 
@@ -672,7 +676,7 @@ parsec:
     serial_port: /dev/ttyACM0 # USB only — run: ls /dev/ttyACM*
     frame_id: "parsec_link"
     publish_rate_hz: 15
-    publish_outputs: ["zones", "depth", "pointcloud"]  # any of: zones, depth, pointcloud
+    publish_outputs: ["zones", "grid", "pointcloud"]  # any of: zones, grid, pointcloud
 ```
 
 **Verify:**
@@ -691,12 +695,12 @@ ros2 service call /parsec/parsec_cmd studica_control/srv/SetData \
 
 **RViz:**
 
-- **Image:** add `/parsec/depth`, encoding `16UC1`. For a colour heatmap, convert to
+- **Image:** add `/parsec/grid`, encoding `16UC1`. For a colour heatmap, convert to
   another encoding in your node or use the point cloud view below.
 - **PointCloud2:** add `/parsec/pointcloud`, set **Fixed Frame** to `frame_id` (or your
   map/odom frame if you publish TF). Colour by **Axis → Z** for distance.
 
-> **Note:** `ros2 topic echo` on `/depth` shows raw bytes (e.g. `94, 1` = 350 mm). Use
+> **Note:** `ros2 topic echo` on `/grid` shows raw bytes (e.g. `94, 1` = 350 mm). Use
 > `/zones` for human-readable mm values, or decode the image as shown above.
 
 ---

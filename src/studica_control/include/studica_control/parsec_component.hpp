@@ -4,8 +4,8 @@
  * ROS2 component for the Studica Parsec multi-zone ToF sensor (CAN or USB).
  *
  * topics (publish, optional via publish_outputs):
- *   /<name>/zones      (studica_control/ParsecZoneMsg) - int16[] fdist in mm
- *   /<name>/depth      (sensor_msgs/Image, 16UC1) - 4x4 or 8x8 grid, mm per pixel
+ *   /<name>/zones      (studica_control/ParsecZoneMsg) - int16[] fdist in mm (readable in topic echo)
+ *   /<name>/grid       (sensor_msgs/Image, 16UC1) - 4x4 or 8x8 grid; mm per pixel as raw bytes (use RViz/cv_bridge)
  *   /<name>/pointcloud (sensor_msgs/PointCloud2) - one point per zone in frame_id
  *   /<name>/min_range  (sensor_msgs/Range) - nearest valid zone distance in metres
  *
@@ -18,7 +18,7 @@
  *   transport     - can (default) or usb
  *   can_id        - CAN only; device CAN ID 0..63
  *   serial_port   - USB only; e.g. /dev/ttyACM0
- *   publish_outputs - zones, depth, pointcloud (any combination)
+ *   publish_outputs - zones, grid, pointcloud (any combination)
  */
 
 #ifndef PARSEC_COMPONENT_H
@@ -50,7 +50,7 @@ enum class ParsecTransport {
 
 struct ParsecPublishOutputs {
     bool zones{false};
-    bool depth{false};
+    bool grid{false};
     bool pointcloud{false};
 };
 
@@ -82,7 +82,7 @@ private:
     uint8_t last_zones_{0};
 
     rclcpp::Publisher<studica_control::msg::ParsecZoneMsg>::SharedPtr zones_publisher_;
-    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr depth_publisher_;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr grid_publisher_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_publisher_;
     rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr min_range_publisher_;
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
@@ -104,7 +104,7 @@ private:
     static int16_t find_min_valid_distance(const int16_t *fdist, int count);
     static int resolution_zone_count(uint8_t zones_reported);
     static void grid_size_from_zones(int resolution_zones, uint32_t &width, uint32_t &height);
-    static sensor_msgs::msg::Image build_depth_image(
+    static sensor_msgs::msg::Image build_grid_image(
         const rclcpp::Time &stamp, const std::string &frame_id,
         const int16_t *fdist, int resolution_zones);
     static sensor_msgs::msg::PointCloud2 build_point_cloud(
