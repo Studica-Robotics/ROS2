@@ -15,10 +15,10 @@
  *     /titan0/m_N/angle    (std_msgs/Float64) — absolute angle in degrees, 20hz
  *
  * command topics (always present regardless of encoder mode):
- *     /titan0/m_0/cmd  (std_msgs/Float64) — duty cycle motor 0, -1.0 to 1.0
+ *     /titan0/m_0/cmd      (std_msgs/Float64) — duty cycle motor 0, -1.0 to 1.0 (pid type 0)
+ *     /titan0/m_0/rpm_cmd  (std_msgs/Float64) — target rpm (pid type 1 or 2)
  *     /titan0/m_1/cmd  ...
- *     /titan0/m_2/cmd  ...
- *     /titan0/m_3/cmd  ...
+ *     /titan0/m_1/rpm_cmd  ...
  *
  * service: /titan0/titan_cmd (studica_control/SetData)
  *   use the service for configuration and closed-loop control.
@@ -58,8 +58,10 @@
  *                            requires: int_value
  *     set_sensitivity      — tune how aggressively the pid responds (0–255)
  *                            requires: n_encoder, int_value
- *     autotune             — automatically tune pid for all motors
- *     autotune_motor       — automatically tune pid for one motor
+ *     autotune             — autotune duty->rpm feedforward curve, all motors (lifted / forward-only)
+ *     autotune_symmetric   — symmetric back-and-forth autotune on the ground; signs from
+ *                            each motor's invert_motor param (studica_params.yaml).
+ *     autotune_motor       — autotune one motor
  *                            requires: n_encoder
  *     set_motor_pid_type   — per-motor pid type (0=OFF, 1=legacy, 2=MCV2)
  *                            requires: n_encoder, int_value
@@ -149,7 +151,8 @@ public:
     Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID,
           const uint16_t &motor_freq, const std::array<MotorConfig, 4> &motor_configs,
           int encoder_rate_hz = 20, int motor_update_rate_hz = 50,
-          bool limit_switches = false, bool enable_freshness = false);
+          bool limit_switches = false, bool enable_freshness = false,
+          uint8_t default_pid_type = 0, uint8_t scurve_profile = 0);
 
     ~Titan();
 
@@ -161,6 +164,13 @@ private:
     std::array<MotorConfig, 4> motor_configs_;
 
     float speeds_[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    float target_rpm_[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    // per-motor pid type (0=OFF, 1=Manual, 2=S-Curve).
+    // resend_speeds(): pid 0 -> SetSpeed(speeds_); pid 1/2 -> SetTargetVelocity(target_rpm_).
+    uint8_t pid_type_[4] = {0, 0, 0, 0};
+    // One-shot position/hold: suppress velocity keepalives until next duty/velocity command.
+    std::array<bool, 4> position_active_ = {false, false, false, false};
+    std::array<bool, 4> cmd_rejected_warned_ = {false, false, false, false};
     bool enabled_ = false;
     bool limit_switches_enabled_ = false;
     bool freshness_enabled_ = false;
@@ -184,9 +194,12 @@ private:
 
     // command subscribers — always created regardless of encoder mode
     std::array<rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr, 4> cmd_subs_;
+    std::array<rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr, 4> rpm_cmd_subs_;
 
     rclcpp::TimerBase::SharedPtr encoder_timer_;
     rclcpp::TimerBase::SharedPtr watchdog_timer_;
+
+    void resume_motion_resend(int motor, bool all_motors);
 
     void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request,
                       std::shared_ptr<studica_control::srv::SetData::Response> response);

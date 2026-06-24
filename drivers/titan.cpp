@@ -728,6 +728,14 @@ void Titan::SetTargetVelocity(uint8_t motor, float velocityRpm)
 {
     if (motor >= 4)
         return;
+    if (motor == 0 && invertMotor0)
+        velocityRpm *= -1.0f;
+    else if (motor == 1 && invertMotor1)
+        velocityRpm *= -1.0f;
+    else if (motor == 2 && invertMotor2)
+        velocityRpm *= -1.0f;
+    else if (motor == 3 && invertMotor3)
+        velocityRpm *= -1.0f;
     float rpmScaled = velocityRpm * kRpmScale;
     int32_t rpm32 =
         (rpmScaled >= 0.0f) ? static_cast<int32_t>(rpmScaled + 0.5f) : static_cast<int32_t>(rpmScaled - 0.5f);
@@ -843,9 +851,13 @@ void Titan::SetMotorPIDType(uint8_t motor, uint8_t type)
     Write(GetAddress(SET_PID_TYPE), data, 0);
 }
 
-void Titan::AutotuneAll()
+void Titan::AutotuneAll(const char *signs)
 {
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    if (signs) {
+        for (int i = 0; i < 4; i++)
+            data[i] = (signs[i] == '-') ? (uint8_t)'-' : (uint8_t)'+';
+    }
     Write(GetAddress(AUTOTUNE_ALL), data, 0);
 }
 
@@ -865,6 +877,15 @@ void Titan::SetSensitivity(uint8_t motor, uint8_t sensitivity)
     data[0] = motor;
     data[1] = sensitivity;
     Write(GetAddress(SET_SENSITIVITY), data, 0);
+}
+
+void Titan::SetRampProfile(uint8_t profile)
+{
+    if (profile > 1)   // 0 = nav (symmetric S-curve), 1 = teleop (smooth accel, instant decel)
+        return;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = profile;
+    Write(GetAddress(SET_RAMP_PROFILE), data, 0);
 }
 
 void Titan::SetCANSensorOsDelay(uint16_t periodMs)

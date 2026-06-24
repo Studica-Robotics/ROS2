@@ -60,6 +60,7 @@ namespace studica_driver
 #define GET_TARGET_RPM BASE + (OFFSET * 25)
 #define SET_CAN_SENSOR_OS_DELAY BASE + (OFFSET * 26)
 #define AUTOTUNE_MOTOR BASE + (OFFSET * 27)
+#define SET_RAMP_PROFILE BASE + (OFFSET * 28)
 #define CYPHER_OUTPUT BASE + (OFFSET * 36)
 #define ENCODER_0 BASE + (OFFSET * 37)
 #define ENCODER_1 BASE + (OFFSET * 38)
@@ -152,9 +153,13 @@ namespace studica_driver
             void SetPIDType(uint8_t type);
             /** Per-motor PID type (0=OFF, 1=legacy, 2=MCV2 cascade). */
             void SetMotorPIDType(uint8_t motor, uint8_t type);
-            void AutotuneAll();
+            /** signs=nullptr: forward-only sweep (use with robot lifted). 
+            signs[4] of '+','-': symmetric sweep (can use with robot on the ground). */
+            void AutotuneAll(const char *signs = nullptr);
             void AutotuneMotor(uint8_t motor);
             void SetSensitivity(uint8_t motor, uint8_t sensitivity);
+            /** Velocity ramp profile (MCV2): 0=nav (symmetric S-curve), 1=teleop (smooth accel, instant decel). Global, runtime only. */
+            void SetRampProfile(uint8_t profile);
             /** Set CAN sensor transmit task period in ms (firmware minimum 5). Persisted to EEPROM. */
             void SetCANSensorOsDelay(uint16_t periodMs);
             void DisableMotor(uint8_t motor);
