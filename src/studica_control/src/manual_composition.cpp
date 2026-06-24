@@ -17,6 +17,7 @@
 #include "studica_control/titan_component.hpp"
 #include "studica_control/ultrasonic_component.hpp"
 #include "studica_control/colore_component.hpp"
+#include "studica_control/parsec_component.hpp"
 #include "VMXPi.h"
 
 class ControlServer : public rclcpp::Node {
@@ -45,6 +46,7 @@ public:
         this->declare_parameter<bool>("titan.enabled", false);
         this->declare_parameter<bool>("ultrasonic.enabled", false);
         this->declare_parameter<bool>("colore.enabled", false);
+        this->declare_parameter<bool>("parsec.enabled", false);
 
         if (!vmx_ready_) {
             RCLCPP_ERROR(this->get_logger(), "VMX-pi connection failed during startup. Aborting component initialization.");
@@ -67,6 +69,7 @@ public:
         bool titan_enabled = this->get_parameter("titan.enabled").as_bool();
         bool ultrasonic_enabled = this->get_parameter("ultrasonic.enabled").as_bool();
         bool colore_enabled = this->get_parameter("colore.enabled").as_bool();
+        bool parsec_enabled = this->get_parameter("parsec.enabled").as_bool();
 
         if (cobra_enabled) {
             auto cobra_nodes = studica_control::Cobra::initialize(this, vmx_);
@@ -126,6 +129,9 @@ public:
         if (colore_enabled) {
             auto colore_nodes = studica_control::Colore::initialize(this, vmx_);
             component_nodes.insert(component_nodes.end(), colore_nodes.begin(), colore_nodes.end());
+        if (parsec_enabled) {
+            auto parsec_nodes = studica_control::Parsec::initialize(this, vmx_);
+            component_nodes.insert(component_nodes.end(), parsec_nodes.begin(), parsec_nodes.end());
         }
 
         for (const auto &node : component_nodes) {
