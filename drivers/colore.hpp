@@ -70,6 +70,7 @@ namespace studica_driver {
 
 class Colore {
 public:
+    // Values match the firmware COLORFORMAT codes
     enum class ColorFormat : uint8_t {
         RGB  = 0,
         RAW  = 1,
@@ -96,8 +97,8 @@ public:
     static uint32_t GetConfigAckAddressForCanID(uint8_t canID);
 
     bool SetMeasureModeOff(uint32_t* ackValue = nullptr);
-    bool SetMeasureModeAuto(bool ambient, uint32_t* ackValue = nullptr);
-    bool SetMeasureModeFixed(float zUserMm, bool ambient, uint32_t* ackValue = nullptr);
+    bool SetMeasureModeAuto(uint32_t* ackValue = nullptr);
+    bool SetMeasureModeFixed(float zUserMm, uint32_t* ackValue = nullptr);
 
     bool SetColorFormat(ColorFormat fmt, uint32_t* ackValue = nullptr);
     bool SetSampleTimeMs(uint16_t ms, uint32_t* ackValue = nullptr);
@@ -113,7 +114,7 @@ public:
     uint8_t GetCanID() const { return canID_; }
 
     /** False if VMX OpenReceiveStream failed (no ACKs possible until fixed). */
-    bool IsCanReceiveStreamOpen() const { return canrxhandle_ != 0u; }
+    bool IsCanReceiveStreamOpen() const { return can_rx_stream_open_; }
 
     /** True if RX stream accepts multiple IDs (0x0409xxxx family mask or catch-all); ACK matched in software. */
     bool IsWideCanReceiveFilter() const { return can_rx_multi_id_; }
@@ -153,6 +154,8 @@ private:
     VMXCAN* vmx_can_iface_{nullptr};
     uint8_t canID_;
     unsigned int canrxhandle_{0};
+    /** VMX may return handle 0 on success; track open state separately from the handle value. */
+    bool can_rx_stream_open_{false};
     /** Same as Parsec: COLORE_BASE + 0x1FFF0000 or catch-all → many IDs per stream. */
     bool can_rx_multi_id_{false};
     /** VMX-pi CAN port 0 or 1 (must match RetrieveAllCANData, see Parsec PARSEC_CAN_CHANNEL). */

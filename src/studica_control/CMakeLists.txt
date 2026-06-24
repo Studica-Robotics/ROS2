@@ -20,7 +20,7 @@ find_package(std_srvs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME} # <- SRV files (srv, msg, action)
   "msg/ColoreColorMsg.msg"
-  "msg/ColoreRawMsg.msg"
+  "msg/ColoreMatch.msg"
   "msg/DutyCycleEncoderMsg.msg"
   "msg/EncoderMsg.msg"
   "msg/InitializeParams.msg"
@@ -229,6 +229,7 @@ set(cpp_example_targets
   dc_encoder_example
   dio_example
   cobra_example
+  colore_example
   gamepad_example
   light_tower_example
 )
@@ -254,6 +255,7 @@ set(python_example_scripts
   src/components/examples/python/dc_encoder_example.py
   src/components/examples/python/dio_example.py
   src/components/examples/python/cobra_example.py
+  src/components/examples/python/colore_example.py
   src/components/examples/python/gamepad_example.py
   src/components/examples/python/light_tower_example.py
 )

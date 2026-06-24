@@ -1,6 +1,3 @@
-std_msgs/Header header
-string format
-float32 dist_mm
 uint16 seq
 uint8 r
 uint8 g
@@ -9,6 +6,3 @@ string hex
 float32 x
 float32 y
 float32 z
-uint16 fz
-uint16 fy
-uint16 fxl

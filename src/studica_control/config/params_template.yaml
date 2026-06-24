@@ -160,38 +160,37 @@ control_server:
         frame_id: "sharp_link"  # TF frame for the Range message
         
     # -------------------------------------------------------------------------
-    # Colore — color sensor (STM32G4 + TCS3448)
-    #
-    # transport: can (XYZ telemetry only) or usb (full color formats, /dev/ttyACM0)
+    # Colore — color sensor (CAN or USB)
     #
     # Topics (publish):
-    #   /<name>/color (std_msgs/ColorRGBA) — always on, normalized 0..1
-    # Optional outputs (publish_outputs):
-    #   info — /<name>/color_info   (studica_control/ColoreColorMsg) easy debug
-    #   xyz  — /<name>/xyz          (geometry_msgs/Vector3Stamped) CIE XYZ
-    #   raw  — /<name>/raw_spectrum (studica_control/ColoreRawMsg) 18ch, USB only
-    #
-    # color_format: srgb (default) | xyz | hex | rgb | raw  (which data is live)
+    #   /<name>/color       (std_msgs/ColorRGBA)             — always on, color as RGB 0.0-1.0
+    #   /<name>/color_info  (studica_control/ColoreColorMsg) — optional ("info"),  extra detail
+    #   /<name>/color_match (studica_control/ColoreMatch)    — optional ("match"), nearest taught color
     #
     # Service: /<name>/colore_cmd (SetData)
-    #   get_config, set_brightness, set_measmode_auto, set_measmode_off
+    #   get_config, set_brightness, learn_color,<name>
     #
-    # USB on Pi: sudo usermod -aG dialout $USER (re-login)
-    # CAN: export COLORE_CAN_BITRATE=1000 (must match device; 1Mbps default)
+    # See the README for color matching, rate, and measmode (advanced) details.
+    # USB port: ls /dev/ttyACM*
     # -------------------------------------------------------------------------
     colore:
       enabled: true
       sensors: ["color0"]
       color0:
-        transport: usb            # can | usb
+        transport: can            # can | usb
         can_id: 0                 # CAN only
         serial_port: /dev/ttyACM0 # USB only
-        frame_id: "colore_link"
-        publish_rate_hz: 10
-        publish_outputs: ["info", "xyz"]
-        color_format: "srgb"      # srgb | xyz | hex | rgb | raw
+        publish_rate_hz: 10       # readings per second (Hz); also sets the sensor sample rate. (Max useful 20 Hz)
+        publish_outputs: ["info"] # add "match" to detect named colors
         brightness: 50            # white LED 0-100
-        sample_time_ms: 200       # 20-2000
+        measmode: "off"           # advanced: leave "off" for normal use (see README)
+        # measmode_z_mm: -1.0     # sensor distance in mm, use only when measmode: "fixed"
+        # --- color matching (only when "match" is in publish_outputs; see README) ---
+        # match_threshold: 0.05
+        # match_references: ["red", "blue", "yellow"]
+        # match_red_xy:    [0.64, 0.33]   # teach with learn_color, then paste the reply
+        # match_blue_xy:   [0.15, 0.06]
+        # match_yellow_xy: [0.45, 0.48]
 
     # -------------------------------------------------------------------------
     # DIO — digital input or output pin

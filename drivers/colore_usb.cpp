@@ -14,12 +14,14 @@ namespace studica_driver {
 
 namespace {
 
+// Uppercases a string (e.g. for COLORFORMAT command).
 std::string to_upper(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(),
                    [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
     return s;
 }
 
+// Trims leading/trailing whitespace from a string
 std::string trim(const std::string& s) {
     size_t a = s.find_first_not_of(" \t\r\n");
     if (a == std::string::npos) return "";
@@ -27,6 +29,7 @@ std::string trim(const std::string& s) {
     return s.substr(a, b - a + 1);
 }
 
+// Splits comma-separated values, trimming whitespace (e.g. for SRGB: 255, 0, 128, outputs ["255", "0", "128"]).
 std::vector<std::string> split_csv(const std::string& s) {
     std::vector<std::string> out;
     std::stringstream ss(s);
@@ -37,6 +40,7 @@ std::vector<std::string> split_csv(const std::string& s) {
 
 }  // namespace
 
+// Constructor opens the port and starts the reader thread.
 ColoreUsb::ColoreUsb(const std::string& port, int baud) : port_(port) {
     fd_ = ::open(port.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fd_ < 0) return;
@@ -54,21 +58,25 @@ ColoreUsb::ColoreUsb(const std::string& port, int baud) : port_(port) {
     startReader();
 }
 
+// Destructor stops the reader thread and closes the port.
 ColoreUsb::~ColoreUsb() {
     stopReader();
     if (fd_ >= 0) ::close(fd_);
 }
 
+// Starts the reader thread. 
 void ColoreUsb::startReader() {
     running_ = true;
     reader_ = std::thread(&ColoreUsb::readerLoop, this);
 }
 
+// Stops the reader thread.
 void ColoreUsb::stopReader() {
     running_ = false;
     if (reader_.joinable()) reader_.join();
 }
 
+// Sends a command to the device.
 bool ColoreUsb::SendCommand(const std::string& cmd) {
     if (fd_ < 0) return false;
     std::string out = cmd + "\r\n";
@@ -76,6 +84,7 @@ bool ColoreUsb::SendCommand(const std::string& cmd) {
     return n == static_cast<ssize_t>(out.size());
 }
 
+// Configures the streaming of data from the device.
 bool ColoreUsb::ConfigureStreaming(const std::string& color_format, int sample_ms) {
     if (fd_ < 0) return false;
     bool ok = SendCommand("COLORFORMAT," + to_upper(color_format));
@@ -83,6 +92,7 @@ bool ColoreUsb::ConfigureStreaming(const std::string& color_format, int sample_m
     return ok;
 }
 
+// Requests the configuration of the device.
 bool ColoreUsb::RequestConfig(std::string* response_out) {
     if (fd_ < 0) return false;
     if (!SendCommand("GETCONFIG")) return false;
@@ -100,6 +110,7 @@ bool ColoreUsb::RequestConfig(std::string* response_out) {
     return true;
 }
 
+// Reads the latest sample from the device.
 bool ColoreUsb::ReadLatest(Sample* out) {
     std::lock_guard<std::mutex> lk(sample_mutex_);
     if (!has_sample_ || out == nullptr) return false;
@@ -126,6 +137,7 @@ bool ColoreUsb::readLineBlocking(std::string* line_out, int timeout_ms) {
     return !acc.empty();
 }
 
+// The reader thread continuously reads from the USB port and parses lines.
 void ColoreUsb::readerLoop() {
     char buf[256];
     while (running_) {
@@ -142,6 +154,7 @@ void ColoreUsb::readerLoop() {
     }
 }
 
+// Parses a single line of text from the device, updating the latest sample.
 void ColoreUsb::parseLine(const std::string& raw_line) {
     if (raw_line.empty()) return;
     std::string line = raw_line;
@@ -197,15 +210,6 @@ void ColoreUsb::parseLine(const std::string& raw_line) {
             s.fz  = static_cast<uint16_t>(std::strtol(v[0].c_str(), nullptr, 10));
             s.fy  = static_cast<uint16_t>(std::strtol(v[1].c_str(), nullptr, 10));
             s.fxl = static_cast<uint16_t>(std::strtol(v[2].c_str(), nullptr, 10));
-            got = true;
-        }
-    } else if (line.rfind("RAW", 0) == 0) {   // "RAW:" or "RAW@<pct>:"
-        auto v = split_csv(after_colon(line));
-        if (!v.empty()) {
-            s.has_raw = true;
-            s.raw_n = std::min(static_cast<int>(v.size()), kMaxChannels);
-            for (int i = 0; i < s.raw_n; ++i)
-                s.raw[i] = static_cast<uint16_t>(std::strtol(v[i].c_str(), nullptr, 10));
             got = true;
         }
     }

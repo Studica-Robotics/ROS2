@@ -7,7 +7,6 @@
 #include "studica_control/colore_component.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -42,30 +41,52 @@ std::vector<std::shared_ptr<rclcpp::Node>> Colore::initialize(
         control->declare_parameter<std::string>(p + ".transport", "can");
         control->declare_parameter<int>(p + ".can_id", 0);
         control->declare_parameter<std::string>(p + ".serial_port", "/dev/ttyACM0");
-        control->declare_parameter<std::string>(p + ".frame_id", sensor);
         control->declare_parameter<int>(p + ".publish_rate_hz", 10);
         control->declare_parameter<std::vector<std::string>>(p + ".publish_outputs",
                                                              std::vector<std::string>{"info"});
-        control->declare_parameter<std::string>(p + ".color_format", "srgb");
         control->declare_parameter<int>(p + ".brightness", 50);
-        control->declare_parameter<int>(p + ".sample_time_ms", 200);
+        control->declare_parameter<std::string>(p + ".measmode", "off");
+        control->declare_parameter<double>(p + ".measmode_z_mm", -1.0);
+        control->declare_parameter<std::vector<std::string>>(p + ".match_references", std::vector<std::string>{});
+        control->declare_parameter<double>(p + ".match_threshold", 0.05);
 
         const ColoreTransport transport = parse_transport(control->get_parameter(p + ".transport").as_string());
         const uint8_t can_id = static_cast<uint8_t>(control->get_parameter(p + ".can_id").as_int());
         const std::string serial_port = control->get_parameter(p + ".serial_port").as_string();
-        const std::string frame_id = control->get_parameter(p + ".frame_id").as_string();
         const int rate = control->get_parameter(p + ".publish_rate_hz").as_int();
         const auto outputs = control->get_parameter(p + ".publish_outputs").as_string_array();
-        const std::string fmt = control->get_parameter(p + ".color_format").as_string();
         const int brightness = control->get_parameter(p + ".brightness").as_int();
-        const int sample_ms = control->get_parameter(p + ".sample_time_ms").as_int();
+        const std::string measmode = control->get_parameter(p + ".measmode").as_string();
+        const double measmode_z_mm = control->get_parameter(p + ".measmode_z_mm").as_double();
+        const double match_threshold = control->get_parameter(p + ".match_threshold").as_double();
 
-        RCLCPP_INFO(control->get_logger(), "%s -> transport: %s, frame_id: %s, format: %s, rate: %d Hz",
-                    sensor.c_str(), transport == ColoreTransport::Usb ? "usb" : "can",
-                    frame_id.c_str(), fmt.c_str(), rate);
+        // Reference colors for matching: each name in match_references needs a
+        // matching match_<name>_xy: [x, y] entry (declared lazily here).
+        // NB: copy the array into a named local first — iterating directly over
+        // get_parameter(...).as_string_array() dangles, because as_string_array()
+        // returns a reference into the temporary Parameter, which is destroyed
+        // before the loop body runs (range-for only extends the final temporary).
+        const std::vector<std::string> ref_names =
+            control->get_parameter(p + ".match_references").as_string_array();
+        std::vector<ColoreReference> references;
+        for (const auto &rname : ref_names) {
+            const std::string key = p + ".match_" + rname + "_xy";
+            control->declare_parameter<std::vector<double>>(key, std::vector<double>{});
+            const auto xy = control->get_parameter(key).as_double_array();
+            if (xy.size() == 2)
+                references.push_back({rname, static_cast<float>(xy[0]), static_cast<float>(xy[1])});
+            else
+                RCLCPP_WARN(control->get_logger(), "colore %s: %s must be [x, y]; skipping",
+                            sensor.c_str(), key.c_str());
+        }
+
+        RCLCPP_INFO(control->get_logger(), "%s -> transport: %s, rate: %d Hz",
+                    sensor.c_str(), transport == ColoreTransport::Usb ? "usb" : "can", rate);
 
         nodes.push_back(std::make_shared<Colore>(vmx, sensor, transport, can_id, serial_port,
-                                                 frame_id, rate, outputs, fmt, brightness, sample_ms));
+                                                 rate, outputs, brightness,
+                                                 measmode, static_cast<float>(measmode_z_mm),
+                                                 references, static_cast<float>(match_threshold)));
     }
     return nodes;
 }
@@ -76,24 +97,32 @@ Colore::Colore(const rclcpp::NodeOptions &options) : Node("colore", options) {}
 
 Colore::Colore(std::shared_ptr<VMXPi> vmx, const std::string &name,
                ColoreTransport transport, uint8_t can_id, const std::string &serial_port,
-               const std::string &frame_id, int publish_rate_hz,
+               int publish_rate_hz,
                const std::vector<std::string> &publish_outputs,
-               const std::string &color_format, int brightness, int sample_time_ms)
+               int brightness,
+               const std::string &measmode, float measmode_z_mm,
+               const std::vector<ColoreReference> &references, float match_threshold)
     : Node(name),
       transport_(transport),
       vmx_(vmx),
-      frame_id_(frame_id),
-      color_format_(to_lower(color_format)),
       publish_rate_hz_(publish_rate_hz > 0 ? publish_rate_hz : 10),
-      outputs_(parse_publish_outputs(publish_outputs))
+      outputs_(parse_publish_outputs(publish_outputs)),
+      references_(references),
+      match_threshold_(match_threshold > 0.0f ? match_threshold : 0.05f)
 {
+    // One knob: the publish rate also sets how often the sensor samples, so CAN/USB
+    // traffic matches the publish rate. Clamp to the firmware's 20-2000 ms window.
+    const int sample_ms = std::max(20, std::min(2000, 1000 / publish_rate_hz_));
+
     if (transport_ == ColoreTransport::Usb) {
         colore_usb_ = std::make_shared<studica_driver::ColoreUsb>(serial_port);
         if (!colore_usb_->IsOpen()) {
             RCLCPP_ERROR(this->get_logger(), "Colore USB failed to open %s", serial_port.c_str());
             return;
         }
-        colore_usb_->ConfigureStreaming(color_format_, sample_time_ms);
+        // ROS always streams XYZ; the host derives sRGB/hex and colour-matching from it.
+        // (Other USB clients can still request SRGB/HEX/RGB/RAW directly from the firmware.)
+        colore_usb_->ConfigureStreaming("xyz", sample_ms);
         if (brightness >= 0) colore_usb_->SendCommand("BRIGHTNESS," + std::to_string(brightness));
         std::string cfg;
         if (colore_usb_->RequestConfig(&cfg))
@@ -104,20 +133,23 @@ Colore::Colore(std::shared_ptr<VMXPi> vmx, const std::string &name,
             RCLCPP_ERROR(this->get_logger(), "Colore CAN driver failed to init for ID %u", can_id);
             return;
         }
-        colore_can_->SetColorFormat(parse_color_format(color_format_));
-        if (sample_time_ms > 0) colore_can_->SetSampleTimeMs(static_cast<uint16_t>(sample_time_ms));
-        if (brightness >= 0)    colore_can_->SetBrightness(static_cast<uint8_t>(brightness));
-        if (outputs_.raw)
-            RCLCPP_WARN(this->get_logger(), "%s: raw_spectrum not available over CAN (USB only)", name.c_str());
+        // Force the onboard status LED to render calibrated colour (CAN telemetry
+        // is XYZ regardless; this only affects the sensor's own indicator LED).
+        colore_can_->SetColorFormat(studica_driver::Colore::ColorFormat::XYZ);
+        colore_can_->SetSampleTimeMs(static_cast<uint16_t>(sample_ms));
+        if (brightness >= 0) colore_can_->SetBrightness(static_cast<uint8_t>(brightness));
     }
+
+    // Measurement mode is a startup parameter (off|auto|fixed), not a runtime
+    // command: the firmware-driven multi-flash mode is a streaming setting, so
+    // it is applied once here like brightness and the sample rate.
+    apply_measmode(measmode, measmode_z_mm);
 
     color_publisher_ = this->create_publisher<std_msgs::msg::ColorRGBA>(name + "/color", 10);
     if (outputs_.info)
         info_publisher_ = this->create_publisher<studica_control::msg::ColoreColorMsg>(name + "/color_info", 10);
-    if (outputs_.xyz)
-        xyz_publisher_ = this->create_publisher<geometry_msgs::msg::Vector3Stamped>(name + "/xyz", 10);
-    if (outputs_.raw)
-        raw_publisher_ = this->create_publisher<studica_control::msg::ColoreRawMsg>(name + "/raw_spectrum", 10);
+    if (outputs_.match)
+        match_publisher_ = this->create_publisher<studica_control::msg::ColoreMatch>(name + "/color_match", 10);
 
     service_ = this->create_service<studica_control::srv::SetData>(
         name + "/colore_cmd",
@@ -127,8 +159,8 @@ Colore::Colore(std::shared_ptr<VMXPi> vmx, const std::string &name,
     timer_ = this->create_wall_timer(std::chrono::milliseconds(period_ms),
                                      std::bind(&Colore::publish_color, this));
 
-    RCLCPP_INFO(this->get_logger(), "Colore topics: /%s/color (+info=%d xyz=%d raw=%d) at %d Hz",
-                name.c_str(), outputs_.info, outputs_.xyz, outputs_.raw, publish_rate_hz_);
+    RCLCPP_INFO(this->get_logger(), "Colore topics: /%s/color (+info=%d match=%d/%zu refs) at %d Hz",
+                name.c_str(), outputs_.info, outputs_.match, references_.size(), publish_rate_hz_);
 }
 
 
@@ -146,21 +178,9 @@ ColorePublishOutputs Colore::parse_publish_outputs(const std::vector<std::string
     for (const auto &n : names) {
         const std::string k = to_lower(n);
         if (k == "info" || k == "color_info") o.info = true;
-        else if (k == "xyz") o.xyz = true;
-        else if (k == "raw" || k == "raw_spectrum") o.raw = true;
+        else if (k == "match" || k == "color_match") o.match = true;
     }
     return o;
-}
-
-
-studica_driver::Colore::ColorFormat Colore::parse_color_format(const std::string &v) {
-    using CF = studica_driver::Colore::ColorFormat;
-    const std::string k = to_lower(v);
-    if (k == "rgb") return CF::RGB;
-    if (k == "raw") return CF::RAW;
-    if (k == "hex") return CF::HEX;
-    if (k == "xyz") return CF::XYZ;
-    return CF::SRGB;
 }
 
 
@@ -176,44 +196,66 @@ void Colore::xyz_to_srgb(float X, float Y, float Z, float &r, float &g, float &b
 }
 
 
-void Colore::publish_color() {
-    const auto stamp = this->get_clock()->now();
+bool Colore::xyz_to_xy(float X, float Y, float Z, float &x, float &y) {
+    const float sum = X + Y + Z;
+    if (sum <= 1e-6f) return false;   // no light -> chromaticity undefined
+    x = X / sum;
+    y = Y / sum;
+    return true;
+}
 
+
+void Colore::publish_match(float x, float y) {
+    studica_control::msg::ColoreMatch m;
+    m.x = x;
+    m.y = y;
+
+    float best = 1e9f;
+    const ColoreReference *hit = nullptr;
+    for (const auto &ref : references_) {
+        const float d = std::hypot(x - ref.x, y - ref.y);
+        if (d < best) { best = d; hit = &ref; }
+    }
+    if (hit && best <= match_threshold_) {
+        m.label = hit->label;
+        m.confidence = std::max(0.0f, 1.0f - best / match_threshold_);
+    } else {
+        m.label = "unknown";
+        m.confidence = 0.0f;
+    }
+    match_publisher_->publish(m);
+}
+
+
+void Colore::publish_color() {
     std_msgs::msg::ColorRGBA color;
     color.a = 1.0f;
     studica_control::msg::ColoreColorMsg info;
-    info.header.stamp = stamp;
-    info.header.frame_id = frame_id_;
-    info.format = color_format_;
-    info.dist_mm = -1.f;
     bool have_color = false, have_xyz = false;
+
+    // Both transports carry CIE XYZ as the source of truth; the host derives
+    // /color (normalized sRGB) and the debug r/g/b/hex from it identically.
+    auto fill_from_xyz = [&](float X, float Y, float Z) {
+        info.x = X; info.y = Y; info.z = Z; have_xyz = true;
+        xyz_to_srgb(X, Y, Z, color.r, color.g, color.b);
+        info.r = static_cast<uint8_t>(color.r * 255.0f);
+        info.g = static_cast<uint8_t>(color.g * 255.0f);
+        info.b = static_cast<uint8_t>(color.b * 255.0f);
+        info.hex = hex_from_rgb(info.r, info.g, info.b);
+        have_color = true;
+    };
 
     if (transport_ == ColoreTransport::Usb) {
         if (!colore_usb_) return;
         studica_driver::ColoreUsb::Sample s;
         if (!colore_usb_->ReadLatest(&s)) return;
         info.seq = static_cast<uint16_t>(s.seq);
-
-        if (s.has_srgb) {
-            color.r = s.r / 255.0f; color.g = s.g / 255.0f; color.b = s.b / 255.0f;
-            info.r = s.r; info.g = s.g; info.b = s.b; info.hex = hex_from_rgb(s.r, s.g, s.b);
-            have_color = true;
+        if (!s.has_xyz) {
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                "colore: samples arriving (seq=%u) but no XYZ line — not publishing", s.seq);
+            return;   // XYZ is always streamed; nothing to publish without it yet
         }
-        if (s.has_hex) info.hex = s.hex;
-        if (s.has_xyz) {
-            info.x = s.x; info.y = s.y; info.z = s.z; have_xyz = true;
-            if (!have_color) { xyz_to_srgb(s.x, s.y, s.z, color.r, color.g, color.b); have_color = true; }
-        }
-        if (s.has_tristim) { info.fz = s.fz; info.fy = s.fy; info.fxl = s.fxl; }
-        if (s.has_dist) info.dist_mm = s.dist_mm;
-
-        if (outputs_.raw && raw_publisher_ && s.has_raw) {
-            studica_control::msg::ColoreRawMsg raw;
-            raw.header.stamp = stamp; raw.header.frame_id = frame_id_;
-            raw.seq = static_cast<uint16_t>(s.seq);
-            raw.channels.assign(s.raw.begin(), s.raw.begin() + s.raw_n);
-            raw_publisher_->publish(raw);
-        }
+        fill_from_xyz(s.x, s.y, s.z);
     } else {
         if (!colore_can_) return;
         uint8_t buf[8] = {0};
@@ -225,25 +267,17 @@ void Colore::publish_color() {
         };
         const float scale = 10000.0f;
         info.seq = seq;
-        info.x = i16(buf[2], buf[3]) / scale;
-        info.y = i16(buf[4], buf[5]) / scale;
-        info.z = i16(buf[6], buf[7]) / scale;
-        have_xyz = true;
-        xyz_to_srgb(info.x, info.y, info.z, color.r, color.g, color.b);
-        info.r = static_cast<uint8_t>(color.r * 255.0f);
-        info.g = static_cast<uint8_t>(color.g * 255.0f);
-        info.b = static_cast<uint8_t>(color.b * 255.0f);
-        info.hex = hex_from_rgb(info.r, info.g, info.b);
-        have_color = true;
+        fill_from_xyz(i16(buf[2], buf[3]) / scale,
+                      i16(buf[4], buf[5]) / scale,
+                      i16(buf[6], buf[7]) / scale);
     }
 
     if (have_color) color_publisher_->publish(color);
     if (outputs_.info && info_publisher_) info_publisher_->publish(info);
-    if (outputs_.xyz && xyz_publisher_ && have_xyz) {
-        geometry_msgs::msg::Vector3Stamped v;
-        v.header.stamp = stamp; v.header.frame_id = frame_id_;
-        v.vector.x = info.x; v.vector.y = info.y; v.vector.z = info.z;
-        xyz_publisher_->publish(v);
+    // Chromaticity matching needs XYZ. Cache the latest xy so learn_color can snapshot it.
+    if (have_xyz && xyz_to_xy(info.x, info.y, info.z, last_x_, last_y_)) {
+        have_last_xy_ = true;
+        if (outputs_.match && match_publisher_) publish_match(last_x_, last_y_);
     }
 }
 
@@ -281,17 +315,51 @@ void Colore::cmd(const std::string &params,
             return colore_can_->SetBrightness(static_cast<uint8_t>(b)) ? ok("brightness set") : err("ack failed");
         return err("driver not initialized");
     }
-    if (params == "set_measmode_auto") {
-        if (colore_can_) return colore_can_->SetMeasureModeAuto(false) ? ok("measmode auto") : err("ack failed");
-        if (colore_usb_) return colore_usb_->SendCommand("MEASMODE,-1,0") ? ok("measmode auto") : err("send failed");
-        return err("driver not initialized");
+    if (params.rfind("learn_color", 0) == 0) {
+        // learn_color,<name> — snapshot the current chromaticity as reference <name>.
+        const auto comma = params.find(',');
+        if (comma == std::string::npos || comma + 1 >= params.size())
+            return err("usage: learn_color,<name>");
+        if (!have_last_xy_)
+            return err("no chromaticity yet — no color data received from the sensor");
+        const std::string label = params.substr(comma + 1);
+        const std::string xy = "xy=(" + std::to_string(last_x_) + ", " + std::to_string(last_y_) + ")";
+        for (auto &ref : references_) {
+            if (ref.label == label) {
+                ref.x = last_x_; ref.y = last_y_;
+                return ok("updated " + label + " " + xy);
+            }
+        }
+        references_.push_back({label, last_x_, last_y_});
+        return ok("learned " + label + " " + xy);
     }
-    if (params == "set_measmode_off") {
-        if (colore_can_) return colore_can_->SetMeasureModeOff() ? ok("measmode off") : err("ack failed");
-        if (colore_usb_) return colore_usb_->SendCommand("MEASMODE,OFF") ? ok("measmode off") : err("send failed");
-        return err("driver not initialized");
+    err("unknown command '" + params + "' — use get_config, set_brightness, learn_color,<name> "
+        "(measmode is a startup parameter, not a command)");
+}
+
+
+void Colore::apply_measmode(const std::string &mode, float z_mm) {
+    const std::string m = to_lower(mode);
+
+    if (m != "off" && m != "auto" && m != "fixed") {
+        RCLCPP_WARN(this->get_logger(), "colore: unknown measmode '%s' — using off "
+                    "(valid: off, auto, fixed)", mode.c_str());
     }
-    err("unknown command '" + params + "' — use get_config, set_brightness, set_measmode_auto, set_measmode_off");
+
+    if (transport_ == ColoreTransport::Usb) {
+        if (!colore_usb_) return;
+        if (m == "auto")
+            colore_usb_->SendCommand("MEASMODE,-1,0");
+        else if (m == "fixed")
+            colore_usb_->SendCommand("MEASMODE," + std::to_string(z_mm) + ",0");
+        else
+            colore_usb_->SendCommand("MEASMODE,OFF");
+    } else {
+        if (!colore_can_) return;
+        if (m == "auto")        colore_can_->SetMeasureModeAuto();
+        else if (m == "fixed")  colore_can_->SetMeasureModeFixed(z_mm);
+        else                    colore_can_->SetMeasureModeOff();
+    }
 }
 
 

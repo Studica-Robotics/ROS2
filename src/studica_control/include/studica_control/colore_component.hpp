@@ -4,18 +4,19 @@
  * ROS2 component for the Studica Colore color sensor (CAN or USB).
  *
  * topics (publish):
- *   /<name>/color        (std_msgs/ColorRGBA)            - always on, normalized 0..1
- *   /<name>/color_info   (studica_control/ColoreColorMsg) - optional, debug/echo
- *   /<name>/xyz          (geometry_msgs/Vector3Stamped)   - optional, CIE XYZ
- *   /<name>/raw_spectrum (studica_control/ColoreRawMsg)   - optional, 18ch (USB only)
+ *   /<name>/color        (std_msgs/ColorRGBA)             - always on, normalized 0..1
+ *   /<name>/color_info   (studica_control/ColoreColorMsg) - optional, debug/echo (incl. CIE XYZ)
+ *   /<name>/color_match  (studica_control/ColoreMatch)    - optional, nearest reference color in xy
  *
  * service: /<name>/colore_cmd (studica_control/SetData)
- *   get_config, set_brightness, set_format, set_sample_time,
- *   set_measmode_auto, set_measmode_off, get_color
+ *   get_config, set_brightness,
+ *   learn_color,<name> (snapshot current xy as a reference for matching)
  *
  * params (per sensor):
- *   transport (can|usb), can_id, serial_port, frame_id, publish_rate_hz,
- *   publish_outputs, color_format, brightness, sample_time_ms
+ *   transport (can|usb), can_id, serial_port, publish_rate_hz,
+ *   publish_outputs, brightness,
+ *   measmode (off|auto|fixed), measmode_z_mm,
+ *   match_references, match_<name>_xy, match_threshold
  */
 #ifndef COLORE_COMPONENT_H
 #define COLORE_COMPONENT_H
@@ -27,12 +28,11 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/color_rgba.hpp>
-#include <geometry_msgs/msg/vector3_stamped.hpp>
 
 #include "colore.hpp"
 #include "colore_usb.hpp"
 #include "studica_control/msg/colore_color_msg.hpp"
-#include "studica_control/msg/colore_raw_msg.hpp"
+#include "studica_control/msg/colore_match.hpp"
 #include "studica_control/srv/set_data.hpp"
 #include "VMXPi.h"
 
@@ -42,9 +42,10 @@ enum class ColoreTransport { Can, Usb };
 
 struct ColorePublishOutputs {
     bool info{false};
-    bool xyz{false};
-    bool raw{false};
+    bool match{false};
 };
+
+struct ColoreReference { std::string label; float x,y; };
 
 class Colore : public rclcpp::Node {
 public:
@@ -55,9 +56,11 @@ public:
 
     Colore(std::shared_ptr<VMXPi> vmx, const std::string &name,
            ColoreTransport transport, uint8_t can_id, const std::string &serial_port,
-           const std::string &frame_id, int publish_rate_hz,
+           int publish_rate_hz,
            const std::vector<std::string> &publish_outputs,
-           const std::string &color_format, int brightness, int sample_time_ms);
+           int brightness,
+           const std::string &measmode, float measmode_z_mm,
+           const std::vector<ColoreReference> &references = {}, float match_threshold = 0.05f);
 
     ~Colore();
 
@@ -66,15 +69,17 @@ private:
     std::shared_ptr<studica_driver::Colore> colore_can_;
     std::shared_ptr<studica_driver::ColoreUsb> colore_usb_;
     std::shared_ptr<VMXPi> vmx_;
-    std::string frame_id_;
-    std::string color_format_;
     int publish_rate_hz_;
     ColorePublishOutputs outputs_;
+    std::vector<ColoreReference> references_;
+    float match_threshold_{0.05f};
+    // Latest chromaticity, cached so the learn_color command can snapshot it.
+    float last_x_{0.0f}, last_y_{0.0f};
+    bool have_last_xy_{false};
 
     rclcpp::Publisher<std_msgs::msg::ColorRGBA>::SharedPtr color_publisher_;
     rclcpp::Publisher<studica_control::msg::ColoreColorMsg>::SharedPtr info_publisher_;
-    rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr xyz_publisher_;
-    rclcpp::Publisher<studica_control::msg::ColoreRawMsg>::SharedPtr raw_publisher_;
+    rclcpp::Publisher<studica_control::msg::ColoreMatch>::SharedPtr match_publisher_;
     rclcpp::Service<studica_control::srv::SetData>::SharedPtr service_;
     rclcpp::TimerBase::SharedPtr timer_;
 
@@ -86,11 +91,18 @@ private:
 
     void publish_color();
 
+    // Apply the measurement mode at startup. mode is off|auto|fixed (case-insensitive);
+    // z_mm is the fixed user Z (used only for "fixed").
+    void apply_measmode(const std::string &mode, float z_mm);
+
     static ColoreTransport parse_transport(const std::string &value);
     static ColorePublishOutputs parse_publish_outputs(const std::vector<std::string> &names);
-    static studica_driver::Colore::ColorFormat parse_color_format(const std::string &value);
     // Standard CIE XYZ (D65) -> sRGB 0..1, gamma-encoded.
     static void xyz_to_srgb(float X, float Y, float Z, float &r, float &g, float &b);
+    // CIE XYZ -> xy chromaticity. Returns false if X+Y+Z ~ 0 (no light).
+    static bool xyz_to_xy(float X, float Y, float Z, float &x, float &y);
+    // Classify cached chromaticity against references_ and publish ColoreMatch.
+    void publish_match(float x, float y);
 };
 
 } // namespace studica_control

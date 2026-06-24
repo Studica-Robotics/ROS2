@@ -138,8 +138,10 @@ Colore::Colore(uint8_t canID, std::shared_ptr<VMXPi> vmx)
 
     auto try_parsec_order = [this, baseId, ackId, bitrate](VMXCAN& bus, const char* tag) -> bool {
         canrxhandle_ = 0u;
+        can_rx_stream_open_ = false;
         if (!colore_open_rx_stream(bus, baseId, ackId, can_rx_multi_id_, canrxhandle_))
             return false;
+        can_rx_stream_open_ = true;
         vmx_can_iface_ = &bus;
         std::fprintf(stdout, "Colore: OpenReceiveStream OK [%s] handle=%u\n", tag, canrxhandle_);
         std::fflush(stdout);
@@ -186,6 +188,7 @@ Colore::Colore(uint8_t canID, std::shared_ptr<VMXPi> vmx)
         canrxhandle_ = 0u;
         if (colore_open_rx_stream(c0, baseId, ackId, can_rx_multi_id_, canrxhandle_)) {
             opened = true;
+            can_rx_stream_open_ = true;
             std::fprintf(stdout, "Colore: OpenReceiveStream OK [NORMAL then open, vmx.can] handle=%u\n", canrxhandle_);
             std::fflush(stdout);
         }
@@ -201,6 +204,7 @@ Colore::Colore(uint8_t canID, std::shared_ptr<VMXPi> vmx)
         canrxhandle_ = 0u;
         if (colore_open_rx_stream(*c1, baseId, ackId, can_rx_multi_id_, canrxhandle_)) {
             opened = true;
+            can_rx_stream_open_ = true;
             std::fprintf(stdout, "Colore: OpenReceiveStream OK [NORMAL then open, getCAN] handle=%u\n", canrxhandle_);
             std::fflush(stdout);
         }
@@ -284,7 +288,7 @@ int Colore::Read(uint32_t address, uint8_t* data, size_t maxLen)
 
 int Colore::ReadCached(uint32_t address, uint8_t* data, size_t maxLen)
 {
-    if (!vmx_ || !vmx_->IsOpen() || canrxhandle_ == 0u || data == nullptr || maxLen == 0u)
+    if (!vmx_ || !vmx_->IsOpen() || !can_rx_stream_open_ || data == nullptr || maxLen == 0u)
         return 0;
 
     VMXCANTimestampedMessage msg;
@@ -308,7 +312,7 @@ int Colore::ReadCached(uint32_t address, uint8_t* data, size_t maxLen)
 
 void Colore::DumpReceiveStream(unsigned maxMessages)
 {
-    if (!vmx_ || !vmx_->IsOpen() || canrxhandle_ == 0u)
+    if (!vmx_ || !vmx_->IsOpen() || !can_rx_stream_open_)
         return;
     PullCANData();
     const unsigned cap = maxMessages > 32u ? 32u : maxMessages;
@@ -330,15 +334,15 @@ bool Colore::SetMeasureModeOff(uint32_t* ackValue)
     return SendCmdWithAck(COLORE_CMD_SET_MEASMODE, p, 1u, ackValue);
 }
 
-bool Colore::SetMeasureModeAuto(bool ambient, uint32_t* ackValue)
+bool Colore::SetMeasureModeAuto(uint32_t* ackValue)
 {
-    uint8_t p[2] = {1u, static_cast<uint8_t>(ambient ? 1u : 0u)};
+    uint8_t p[2] = {1u, 0u};
     return SendCmdWithAck(COLORE_CMD_SET_MEASMODE, p, 2u, ackValue);
 }
 
-bool Colore::SetMeasureModeFixed(float zUserMm, bool ambient, uint32_t* ackValue)
+bool Colore::SetMeasureModeFixed(float zUserMm, uint32_t* ackValue)
 {
-    uint8_t p[6] = {2u, static_cast<uint8_t>(ambient ? 1u : 0u), 0u, 0u, 0u, 0u};
+    uint8_t p[6] = {2u, 0u, 0u, 0u, 0u, 0u};
     std::memcpy(&p[2], &zUserMm, sizeof(float));
     return SendCmdWithAck(COLORE_CMD_SET_MEASMODE, p, 6u, ackValue);
 }
@@ -421,7 +425,7 @@ bool Colore::WaitConfigAck(uint8_t expectedCmdByte,
                            uint8_t& statusOut,
                            uint32_t timeoutMs)
 {
-    if (canrxhandle_ == 0u)
+    if (!can_rx_stream_open_)
         return false;
 
     const VMXCANReceiveStreamHandle h = static_cast<VMXCANReceiveStreamHandle>(canrxhandle_);
