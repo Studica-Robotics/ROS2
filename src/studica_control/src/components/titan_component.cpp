@@ -43,6 +43,7 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
         std::string enable_freshness_param   = "titan." + sensor + ".enable_freshness";
         std::string default_pid_type_param   = "titan." + sensor + ".default_pid_type";
         std::string scurve_profile_param      = "titan." + sensor + ".scurve_profile";
+        std::string autotune_distance_param   = "titan." + sensor + ".autotune_distance_m";
 
         control->declare_parameter<int> (can_id_param, -1);
         control->declare_parameter<int> (motor_freq_param, -1);
@@ -52,6 +53,7 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
         control->declare_parameter<bool>(enable_freshness_param, false);
         control->declare_parameter<int> (default_pid_type_param, 0);
         control->declare_parameter<int> (scurve_profile_param, 0);   // 0=nav (symmetric S-curve), 1=teleop
+        control->declare_parameter<double>(autotune_distance_param, 1.0);  // autotune forward cap (m), 0.5-5.0
 
         uint8_t  can_id               = static_cast<uint8_t>(control->get_parameter(can_id_param).as_int());
         uint16_t motor_freq           = static_cast<uint16_t>(control->get_parameter(motor_freq_param).as_int());
@@ -61,6 +63,7 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
         bool     enable_freshness     = control->get_parameter(enable_freshness_param).as_bool();
         uint8_t  default_pid_type     = static_cast<uint8_t>(control->get_parameter(default_pid_type_param).as_int());
         uint8_t  scurve_profile       = static_cast<uint8_t>(control->get_parameter(scurve_profile_param).as_int());
+        double   autotune_distance_m  = control->get_parameter(autotune_distance_param).as_double();
 
         std::array<MotorConfig, 4> motor_configs;
         for (int m = 0; m < 4; m++) {
@@ -85,7 +88,7 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
         auto titan = std::make_shared<Titan>(vmx, sensor, can_id, motor_freq, motor_configs,
                                              encoder_rate_hz, motor_update_rate_hz,
                                              limit_switches, enable_freshness, default_pid_type,
-                                             scurve_profile);
+                                             scurve_profile, autotune_distance_m);
         titan_nodes.push_back(titan);
     }
 
@@ -99,9 +102,14 @@ Titan::Titan(const rclcpp::NodeOptions &options) : Node("titan_", options) {}
 Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID,
              const uint16_t &motor_freq, const std::array<MotorConfig, 4> &motor_configs,
              int encoder_rate_hz, int motor_update_rate_hz, bool limit_switches, bool enable_freshness,
-             uint8_t default_pid_type, uint8_t scurve_profile)
+             uint8_t default_pid_type, uint8_t scurve_profile, double autotune_distance_m)
     : Node(name), vmx_(vmx), canID_(canID), motor_freq_(motor_freq), motor_configs_(motor_configs),
       limit_switches_enabled_(limit_switches), freshness_enabled_(enable_freshness) {
+
+    // Clamp the autotune distance cap to the supported range; the firmware applies its own bound too.
+    if (autotune_distance_m < 0.5) autotune_distance_m = 0.5;
+    if (autotune_distance_m > 5.0) autotune_distance_m = 5.0;
+    autotune_distance_m_ = static_cast<float>(autotune_distance_m);
 
     for (int i = 0; i < 4; i++)
         pid_type_[i] = default_pid_type;
@@ -388,13 +396,10 @@ void Titan::cmd(std::string params,
         response->message = "motor " + std::to_string(motor) + " sensitivity set to "
                             + std::to_string(request->initparams.int_value);
 
-    } else if (params == "set_scurve_profile") {
-        uint8_t profile = static_cast<uint8_t>(request->initparams.int_value);  // 0=nav, 1=teleop (global)
-        titan_->SetRampProfile(profile);
-        response->success = true;
-        response->message = std::string("scurve profile set to ") + (profile ? "teleop" : "nav");
-
     } else if (params == "autotune") {
+        // Push the configured forward-distance cap first; ignored by firmware on a forward-only
+        // (lifted) sweep, but keeps the device's value in sync with the param.
+        titan_->SetAutotuneDistance(autotune_distance_m_);
         titan_->AutotuneAll();
         response->success = true;
         response->message = "autotune started on all motors";
@@ -406,11 +411,16 @@ void Titan::cmd(std::string params,
             signs[i] = motor_configs_[i].invert_motor ? '-' : '+';
             signs_str += signs[i];
         }
+        // Forward travel per duty point is capped at autotune_distance_m_ (the on-ground sweep
+        // rolls forward to sample, then closed-loop returns home).
+        titan_->SetAutotuneDistance(autotune_distance_m_);
         titan_->AutotuneAll(signs);
         response->success = true;
-        response->message = "symmetric autotune started (" + signs_str + " from invert_motor)";
+        response->message = "symmetric autotune started (" + signs_str + " from invert_motor), cap "
+                            + std::to_string(autotune_distance_m_) + " m";
 
     } else if (params == "autotune_motor") {
+        titan_->SetAutotuneDistance(autotune_distance_m_);
         titan_->AutotuneMotor(motor);
         response->success = true;
         response->message = "autotune started on motor " + std::to_string(motor);

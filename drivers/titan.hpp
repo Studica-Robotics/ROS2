@@ -61,6 +61,9 @@ namespace studica_driver
 #define SET_CAN_SENSOR_OS_DELAY BASE + (OFFSET * 26)
 #define AUTOTUNE_MOTOR BASE + (OFFSET * 27)
 #define SET_RAMP_PROFILE BASE + (OFFSET * 28)
+#define SET_RAMP_PROFILE           BASE + (OFFSET * 28)
+#define SET_WHEEL_DIAMETER         BASE + (OFFSET * 29)
+#define SET_AUTOTUNE_DISTANCE      BASE + (OFFSET * 30)
 #define CYPHER_OUTPUT BASE + (OFFSET * 36)
 #define ENCODER_0 BASE + (OFFSET * 37)
 #define ENCODER_1 BASE + (OFFSET * 38)
@@ -158,8 +161,15 @@ namespace studica_driver
             void AutotuneAll(const char *signs = nullptr);
             void AutotuneMotor(uint8_t motor);
             void SetSensitivity(uint8_t motor, uint8_t sensitivity);
-            /** Velocity ramp profile (MCV2): 0=nav (symmetric S-curve), 1=teleop (smooth accel, instant decel). Global, runtime only. */
+            /** Velocity ramp profile (MCV2): 0=nav (symmetric S-curve), 1=teleop (smooth accel, fast jerk-limited decel). Global, runtime only. */
             void SetRampProfile(uint8_t profile);
+            /** Autotune forward-distance cap (symmetric sweep), in metres. Clamped to 0.5–5.0 m before
+                transmit; applied at the next AutotuneAll/AutotuneMotor start. Runtime only (no EEPROM). */
+            void SetAutotuneDistance(float metres);
+            /** Autotune wheel diameter, in metres (metres→encoder-counts conversion). Clamped to 0.01–1.0 m
+            before transmit; applied at the next AutotuneAll/AutotuneMotor start. Runtime only (no EEPROM).
+            Default on device is 100 mm (Studica wheel); ROS does not set this today. */
+            void SetWheelDiameter(float metres);
             /** Set CAN sensor transmit task period in ms (firmware minimum 5). Persisted to EEPROM. */
             void SetCANSensorOsDelay(uint16_t periodMs);
             void DisableMotor(uint8_t motor);

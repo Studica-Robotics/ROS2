@@ -343,10 +343,10 @@ Topics are auto-generated from the sensor name. Using `"titan0"` as an example:
 
 | Topic | Type | Description |
 |---|---|---|
-| `/titan0/m_0/cmd` | `std_msgs/Float64` | Duty cycle motor 0, −1.0 to 1.0 |
-| `/titan0/m_1/cmd` | `std_msgs/Float64` | Duty cycle motor 1 |
-| `/titan0/m_2/cmd` | `std_msgs/Float64` | Duty cycle motor 2 |
-| `/titan0/m_3/cmd` | `std_msgs/Float64` | Duty cycle motor 3 |
+| `/titan0/m_N/cmd` | `std_msgs/Float64` | PWM duty cycle, −1.0 to 1.0 (signed for direction). Used when the motor is in PID type 0. |
+| `/titan0/m_N/rpm_cmd` | `std_msgs/Float64` | Target speed in RPM. Used when the motor is in PID type 1 or 2 (closed loop velocity). |
+
+`N` is the motor index, 0 to 3. Every motor listens on both topics, but only the one matching its current PID type takes effect; a command sent to the wrong topic is ignored with a warning. See [Motor Control Modes](#motor-control-modes-pid-types-ramp-profiles-and-autotune) below.
 
 **Topics (publish) — feedback at `encoder_rate_hz` Hz (default 20), topics depend on `encoder_mode`:**
 
@@ -390,6 +390,16 @@ Use the service for configuration and closed-loop control. Direct speed commands
 | `set_target_distance` | `n_encoder`, `int_value` | Closed-loop position in encoder counts |
 | `set_target_angle` | `n_encoder`, `speed` | Drive to target angle in degrees |
 | `set_position_hold` | `n_encoder`, `hold` | Lock motor at current position |
+| `set_pid_type` | `int_value` | Set the control mode for all motors (0 = duty cycle, 1 = manual velocity, 2 = MCV2 velocity) |
+| `set_motor_pid_type` | `n_encoder`, `int_value` | Set the control mode for one motor |
+| `set_sensitivity` | `n_encoder`, `int_value` | How aggressively velocity control reacts (0 to 255) |
+| `set_motor_stop_mode` | `int_value` | How a stopped motor behaves: 0 = coast, 1 = brake |
+| `set_current_limit` | `n_encoder`, `speed` (amps) | Limit how many amps a motor may draw |
+| `autotune` | — | Learn each motor's duty cycle to speed relationship with the robot lifted (wheels spin freely) |
+| `autotune_symmetric` | — | Same, but with the robot on the ground; each motor drives forward then back. Forward travel per step is capped by `autotune_distance_m` |
+| `autotune_motor` | `n_encoder` | Autotune a single motor |
+| `get_target_rpm` | — | Read the target RPM of all 4 motors |
+| `get_controller_temp` | — | Read the controller temperature in Celsius |
 | `configure_encoder` | `n_encoder`, `dist_per_tick` | Override distance per tick at runtime (normally set in params.yaml) |
 | `reset_encoder` | `n_encoder` | Zero one encoder |
 | `invert_motor` | `n_encoder` | Flip positive direction at runtime (normally set in params.yaml) |
@@ -412,6 +422,9 @@ titan:
     motor_update_rate_hz: 50 # how often motor speeds are sent to hardware, in Hz (default 50)
     limit_switches: false    # true = publish /m_N/limit_fwd and /m_N/limit_rev (std_msgs/Bool)
     enable_freshness: false  # true = skip publish on stale CAN frames (encoder, RPM, cypher max, limit switches); warn after 5 consecutive stale reads
+    default_pid_type: 0      # starting control mode for all motors: 0 = duty cycle, 1 = manual velocity, 2 = MCV2 velocity (default 0)
+    scurve_profile: 0        # speed ramp shape for MCV2 velocity: 0 = nav (smooth speed up and slow down), 1 = teleop (smooth speed up, quick stop) (default 0)
+    autotune_distance_m: 1.0 # max forward travel per step during on the ground autotune, in metres, 0.5 to 5.0 (default 1.0)
     m_0:
       encoder_mode: "quadrature"   # "quadrature" or "absolute"
       dist_per_tick: 0.0006830601  # metres per encoder tick (1.0 = raw counts)
@@ -428,7 +441,32 @@ titan:
       dist_per_tick: 0.0006830601
 ```
 
-All per-motor fields default to `encoder_mode: "quadrature"`, `dist_per_tick: 1.0`, and all invert flags `false` if omitted. `encoder_rate_hz` and `motor_update_rate_hz` default to `20` and `50` respectively if omitted.
+All per-motor fields default to `encoder_mode: "quadrature"`, `dist_per_tick: 1.0`, and all invert flags `false` if omitted. `encoder_rate_hz` and `motor_update_rate_hz` default to `20` and `50` respectively if omitted. `default_pid_type` and `scurve_profile` default to `0`, and `autotune_distance_m` defaults to `1.0`.
+
+#### Motor Control Modes: PID Types, Ramp Profiles, and Autotune
+
+**PID type** Pick the starting mode with `default_pid_type`, or change it while running with the `set_pid_type` (all motors) or `set_motor_pid_type` (one motor) service command.
+
+| PID type | Send commands to | What it does |
+|---|---|---|
+| `0` duty cycle (open loop) | `/m_N/cmd` | You set the PWM duty cycle directly, −1.0 to 1.0, where the sign is the direction. The simplest mode. The motor drives at that level and does not regulate its actual speed, so load and battery voltage will affect how fast it really turns. |
+| `1` manual velocity | `/m_N/rpm_cmd` | Closed loop speed control where you supply the gains yourself. You tune the kP, kI, kD, and kF values in the Studica Hardware Manager until the motor holds speed the way you want. |
+| `2` MCV2 velocity | `/m_N/rpm_cmd` | The easier closed loop speed control option. You give a target RPM and the controller adjusts the duty cycle to hold it, smoothing the change in speed using the ramp profile below. |
+
+**If you want closed loop control, we recommend PID type 2 (MCV2).** It can set its own gains with autotune (below), so you do not have to find kP, kI, kD, and kF by hand. Choose type 1 only if you specifically want to tune those values yourself in the Studica Hardware Manager.
+
+**Ramp profile (MCV2 only).** Set with `scurve_profile`. Both profiles ease the motor up to speed smoothly so the wheels do not slip and the gears are not jolted; they differ only in how the robot slows down.
+
+- `0` nav: the speed eases in and eases out gently in both directions. Best for autonomous driving and odometry, where smooth and predictable motion matters most.
+- `1` teleop: the speed still eases in when you push the stick, but slows quickly when you let go. Best for driving by hand, where you want the robot to feel responsive and stop promptly.
+
+**Autotune — let the Titan learn each motor.** Closed loop speed control works best when the controller knows how much duty cycle produces how much speed for your exact motors and gearing. Autotune measures this relationship for you.
+
+- `autotune` runs with the robot lifted so the wheels spin freely. Each motor only spins forward.
+- `autotune_symmetric` runs with the robot on the ground. For each duty point a motor rolls forward, takes its reading, then returns to its start under so the robot stays roughly in place. A point ends as soon as its reading is accurate enough, so most points finish early and use only a fraction of the allowed distance.
+- `autotune_motor` tunes a single motor.
+
+**`autotune_distance_m` is a safety cap, not a target distance.** It sets the farthest a single duty point may roll forward before the sweep stops waiting and brings the motor home. Points that settle quickly stop well short of it; the cap only ever limits the fast, high duty points, which are the ones that need the most room to read cleanly. So give it as much space as you safely have. Default `1.0` m, range `0.5` to `5.0` m. It changes nothing else about tuning, and the lifted `autotune` ignores it entirely.
 
 ---
 

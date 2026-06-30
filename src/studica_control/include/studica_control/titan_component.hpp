@@ -60,7 +60,8 @@
  *                            requires: n_encoder, int_value
  *     autotune             — autotune duty->rpm feedforward curve, all motors (lifted / forward-only)
  *     autotune_symmetric   — symmetric back-and-forth autotune on the ground; signs from
- *                            each motor's invert_motor param (studica_params.yaml).
+ *                            each motor's invert_motor param (studica_params.yaml). Forward travel
+ *                            per point is capped by the titan.<sensor>.autotune_distance_m param.
  *     autotune_motor       — autotune one motor
  *                            requires: n_encoder
  *     set_motor_pid_type   — per-motor pid type (0=OFF, 1=legacy, 2=MCV2)
@@ -152,7 +153,8 @@ public:
           const uint16_t &motor_freq, const std::array<MotorConfig, 4> &motor_configs,
           int encoder_rate_hz = 20, int motor_update_rate_hz = 50,
           bool limit_switches = false, bool enable_freshness = false,
-          uint8_t default_pid_type = 0, uint8_t scurve_profile = 0);
+          uint8_t default_pid_type = 0, uint8_t scurve_profile = 0,
+          double autotune_distance_m = 1.0);
 
     ~Titan();
 
@@ -162,6 +164,9 @@ private:
     uint8_t canID_;
     uint16_t motor_freq_;
     std::array<MotorConfig, 4> motor_configs_;
+    // Autotune forward-distance cap (metres) sent to firmware before each autotune sweep.
+    // From the titan.<sensor>.autotune_distance_m param; clamped to 0.5-5.0 m.
+    float autotune_distance_m_ = 1.0f;
 
     float speeds_[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     float target_rpm_[4] = {0.0f, 0.0f, 0.0f, 0.0f};
