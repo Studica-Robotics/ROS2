@@ -32,6 +32,8 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
     std::vector<std::string> sensor_ids = control->get_parameter("titan.sensors").as_string_array();
 
     for (const auto &sensor : sensor_ids) {
+        std::string transport_param  = "titan." + sensor + ".transport";
+        std::string serial_port_param = "titan." + sensor + ".serial_port";
         std::string can_id_param     = "titan." + sensor + ".can_id";
         std::string motor_freq_param = "titan." + sensor + ".motor_freq";
 
@@ -40,6 +42,8 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
         std::string limit_switches_param      = "titan." + sensor + ".limit_switches";
         std::string enable_freshness_param   = "titan." + sensor + ".enable_freshness";
 
+        control->declare_parameter<std::string>(transport_param, "can");
+        control->declare_parameter<std::string>(serial_port_param, "/dev/ttyACM0");
         control->declare_parameter<int> (can_id_param, -1);
         control->declare_parameter<int> (motor_freq_param, -1);
         control->declare_parameter<int> (encoder_rate_param, 20);
@@ -47,6 +51,10 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
         control->declare_parameter<bool>(limit_switches_param, false);
         control->declare_parameter<bool>(enable_freshness_param, false);
 
+        std::string transport_str     = control->get_parameter(transport_param).as_string();
+        std::string serial_port       = control->get_parameter(serial_port_param).as_string();
+        TitanTransport transport      = (transport_str == "usb" || transport_str == "serial")
+                                            ? TitanTransport::Usb : TitanTransport::Can;
         uint8_t  can_id               = static_cast<uint8_t>(control->get_parameter(can_id_param).as_int());
         uint16_t motor_freq           = static_cast<uint16_t>(control->get_parameter(motor_freq_param).as_int());
         int      encoder_rate_hz      = control->get_parameter(encoder_rate_param).as_int();
@@ -71,12 +79,20 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
             motor_configs[m].invert_rpm     = control->get_parameter(prefix + ".invert_rpm").as_bool();
         }
 
-        RCLCPP_INFO(control->get_logger(), "%s -> can_id: %d, motor_freq: %d hz, encoder: %dHz, resend: %dHz",
-                    sensor.c_str(), can_id, motor_freq, encoder_rate_hz, motor_update_rate_hz);
+        if (transport == TitanTransport::Usb) {
+            RCLCPP_INFO(control->get_logger(),
+                        "%s -> transport: usb, serial_port: %s, motor_freq: %d hz, encoder: %dHz, resend: %dHz",
+                        sensor.c_str(), serial_port.c_str(), motor_freq, encoder_rate_hz, motor_update_rate_hz);
+        } else {
+            RCLCPP_INFO(control->get_logger(),
+                        "%s -> transport: can, can_id: %d, motor_freq: %d hz, encoder: %dHz, resend: %dHz",
+                        sensor.c_str(), can_id, motor_freq, encoder_rate_hz, motor_update_rate_hz);
+        }
 
         auto titan = std::make_shared<Titan>(vmx, sensor, can_id, motor_freq, motor_configs,
                                              encoder_rate_hz, motor_update_rate_hz,
-                                             limit_switches, enable_freshness);
+                                             limit_switches, enable_freshness,
+                                             transport, serial_port);
         titan_nodes.push_back(titan);
     }
 
@@ -89,11 +105,21 @@ Titan::Titan(const rclcpp::NodeOptions &options) : Node("titan_", options) {}
 
 Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID,
              const uint16_t &motor_freq, const std::array<MotorConfig, 4> &motor_configs,
-             int encoder_rate_hz, int motor_update_rate_hz, bool limit_switches, bool enable_freshness)
-    : Node(name), vmx_(vmx), canID_(canID), motor_freq_(motor_freq), motor_configs_(motor_configs),
+             int encoder_rate_hz, int motor_update_rate_hz, bool limit_switches, bool enable_freshness,
+             TitanTransport transport, const std::string &serial_port)
+    : Node(name), transport_(transport), serial_port_(serial_port), vmx_(vmx), canID_(canID),
+      motor_freq_(motor_freq), motor_configs_(motor_configs),
       limit_switches_enabled_(limit_switches), freshness_enabled_(enable_freshness) {
 
-    titan_ = std::make_shared<studica_driver::Titan>(canID_, motor_freq_, 1, vmx_);
+    if (transport_ == TitanTransport::Usb) {
+        auto usb = std::make_shared<studica_driver::TitanUsb>(serial_port_, motor_freq_);
+        if (!usb->IsOpen()) {
+            RCLCPP_ERROR(this->get_logger(), "titan USB failed to open %s", serial_port_.c_str());
+        }
+        titan_ = usb;
+    } else {
+        titan_ = std::make_shared<studica_driver::Titan>(canID_, motor_freq_, 1, vmx_);
+    }
 
     service_ = this->create_service<studica_control::srv::SetData>(
         name + "/titan_cmd",
@@ -132,9 +158,14 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
         }
     }
 
+    // Telemetry reads block on serial round-trips; isolate them in their own
+    // callback group so they cannot starve the timeout keep-alive or cmd handling.
+    telemetry_cbg_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+
     encoder_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(1000 / encoder_rate_hz),
-        std::bind(&Titan::publish_encoders, this));
+        std::bind(&Titan::publish_encoders, this),
+        telemetry_cbg_);
 
     watchdog_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(1000 / motor_update_rate_hz),
@@ -157,7 +188,13 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
     titan_->Enable(true);
     enabled_ = true;
 
-    RCLCPP_INFO(this->get_logger(), "titan ready. can_id: %d, freq: %d hz", canID_, motor_freq_);
+    if (transport_ == TitanTransport::Usb) {
+        RCLCPP_INFO(this->get_logger(), "titan ready. transport: usb (%s), freq: %d hz",
+                    serial_port_.c_str(), motor_freq_);
+    } else {
+        RCLCPP_INFO(this->get_logger(), "titan ready. transport: can, can_id: %d, freq: %d hz",
+                    canID_, motor_freq_);
+    }
 }
 
 Titan::~Titan() {}
@@ -498,8 +535,10 @@ void Titan::publish_encoders() {
 
 void Titan::resend_speeds() {
     if (!enabled_) return;
+    // Unconditional periodic resend for both transports; this is also what
+    // keeps the USB command timeout / CAN RX timeout fed.
     for (int i = 0; i < 4; i++) {
-        titan_->SetSpeed(i, speeds_[i]); 
+        titan_->SetSpeed(i, speeds_[i]);
     }
 }
 
