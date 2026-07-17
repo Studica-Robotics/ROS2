@@ -24,7 +24,7 @@ def generate_launch_description():
     # without a password prompt.
     manual_composition = ExecuteProcess(
         cmd=[
-            'sudo', '-E', exec_path,
+            'ros2_sudo', exec_path,
             '--ros-args',
             '-r', '__node:=control_server',
             '--params-file', LaunchConfiguration('params_file'),
