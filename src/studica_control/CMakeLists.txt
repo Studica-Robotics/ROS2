@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.10)
 project(studica_control)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -54,79 +54,66 @@ set(studica_control_HDRS
 )
 
 set(dependencies
-  "ament_index_cpp"
-  "geometry_msgs"
-  "rclcpp"
-  "rclcpp_action"
-  "rclcpp_components"
-  "sensor_msgs"
-  "std_msgs"
-  "std_srvs"
+  ${ament_index_cpp_TARGETS}
+  ${geometry_msgs_TARGETS}
+  ${rclcpp_TARGETS}
+  ${rclcpp_action_TARGETS}
+  ${rclcpp_components_TARGETS}
+  ${sensor_msgs_TARGETS}
+  ${std_msgs_TARGETS}
+  ${std_srvs_TARGETS}
 )
 
 add_library(cobra_component SHARED src/components/cobra_component.cpp)
-ament_target_dependencies(cobra_component ${dependencies})
-target_link_libraries(cobra_component "${cpp_typesupport_target}")
+target_link_libraries(cobra_component PUBLIC ${dependencies} ${cpp_typesupport_target})
 rclcpp_components_register_nodes(cobra_component "studica_control::cobra")
 
 add_library(dc_encoder_component SHARED src/components/dc_encoder_component.cpp)
-ament_target_dependencies(dc_encoder_component ${dependencies})
-target_link_libraries(dc_encoder_component "${cpp_typesupport_target}")
+target_link_libraries(dc_encoder_component PUBLIC ${dependencies} ${cpp_typesupport_target})
 rclcpp_components_register_nodes(dc_encoder_component "studica_control::DutyCycleEncoder")
 
 add_library(dio_component SHARED src/components/dio_component.cpp)
-ament_target_dependencies(dio_component ${dependencies})
-target_link_libraries(dio_component "${cpp_typesupport_target}")
+target_link_libraries(dio_component PUBLIC ${dependencies} ${cpp_typesupport_target})
 rclcpp_components_register_nodes(dio_component "studica_control::DIO")
 
 add_library(encoder_component SHARED src/components/encoder_component.cpp)
-ament_target_dependencies(encoder_component ${dependencies})
-target_link_libraries(encoder_component "${cpp_typesupport_target}")
+target_link_libraries(encoder_component PUBLIC ${dependencies} ${cpp_typesupport_target})
 rclcpp_components_register_nodes(encoder_component "studica_control::encoder")
 
 add_library(gamepad_component SHARED src/components/gamepad_component.cpp)
-ament_target_dependencies(gamepad_component ${dependencies})
-target_link_libraries(gamepad_component "${cpp_typesupport_target}")
+target_link_libraries(gamepad_component PUBLIC ${dependencies} ${cpp_typesupport_target})
 rclcpp_components_register_nodes(gamepad_component "studica_control::GamepadController")
 
 add_library(imu_component SHARED src/components/imu_component.cpp)
-ament_target_dependencies(imu_component ${dependencies})
-target_link_libraries(imu_component "${cpp_typesupport_target}")
+target_link_libraries(imu_component PUBLIC ${dependencies} ${cpp_typesupport_target})
 rclcpp_components_register_nodes(imu_component "studica_control::imu")
 
 add_library(light_tower_component SHARED src/components/light_tower_component.cpp)
-ament_target_dependencies(light_tower_component ${dependencies})
-target_link_libraries(light_tower_component "${cpp_typesupport_target}")
+target_link_libraries(light_tower_component PUBLIC ${dependencies} ${cpp_typesupport_target})
 rclcpp_components_register_nodes(light_tower_component "studica_control::LightTower")
 
 add_library(power_component SHARED src/components/power_component.cpp)
-ament_target_dependencies(power_component ${dependencies})
-target_link_libraries(power_component "${cpp_typesupport_target}")
+target_link_libraries(power_component PUBLIC ${dependencies} ${cpp_typesupport_target})
 rclcpp_components_register_nodes(power_component "studica_control::Power")
 
 add_library(servo_component SHARED src/components/servo_component.cpp)
-ament_target_dependencies(servo_component ${dependencies})
-target_link_libraries(servo_component "${cpp_typesupport_target}")
+target_link_libraries(servo_component PUBLIC ${dependencies} ${cpp_typesupport_target})
 rclcpp_components_register_nodes(servo_component "studica_control::Servo")
 
 add_library(sharp_component SHARED src/components/sharp_component.cpp)
-ament_target_dependencies(sharp_component ${dependencies})
-target_link_libraries(sharp_component "${cpp_typesupport_target}")
+target_link_libraries(sharp_component PUBLIC ${dependencies} ${cpp_typesupport_target})
 rclcpp_components_register_nodes(sharp_component "studica_control::sharp")
 
 add_library(titan_component SHARED src/components/titan_component.cpp)
-ament_target_dependencies(titan_component ${dependencies})
-target_link_libraries(titan_component "${cpp_typesupport_target}")
+target_link_libraries(titan_component PUBLIC ${dependencies} ${cpp_typesupport_target})
 rclcpp_components_register_nodes(titan_component "studica_control::Titan")
 
 add_library(ultrasonic_component SHARED src/components/ultrasonic_component.cpp)
-ament_target_dependencies(ultrasonic_component ${dependencies})
-target_link_libraries(ultrasonic_component "${cpp_typesupport_target}")
+target_link_libraries(ultrasonic_component PUBLIC ${dependencies} ${cpp_typesupport_target})
 rclcpp_components_register_nodes(ultrasonic_component "studica_control::Ultrasonic")
 
 add_library(parsec_component SHARED src/components/parsec_component.cpp)
-ament_target_dependencies(parsec_component ${dependencies})
-target_link_libraries(parsec_component "${cpp_typesupport_target}")
+target_link_libraries(parsec_component PUBLIC ${dependencies} ${cpp_typesupport_target})
 rclcpp_components_register_nodes(parsec_component "studica_control::Parsec")
 
 install(TARGETS
@@ -150,7 +137,7 @@ install(TARGETS
 )
 
 add_executable(manual_composition src/manual_composition.cpp)
-target_link_libraries(manual_composition
+target_link_libraries(manual_composition PUBLIC
   cobra_component
   dc_encoder_component
   dio_component
@@ -166,9 +153,9 @@ target_link_libraries(manual_composition
   parsec_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
   /usr/local/lib/studica_drivers/libstudica_drivers.so
+  ${DEP_TARGETS}
+  ${cpp_typesupport_target}
 )
-ament_target_dependencies(manual_composition ${dependencies})
-target_link_libraries(manual_composition "${cpp_typesupport_target}")
 # $ORIGIN/.. resolves to install/studica_control/lib/ at runtime, where the
 # component .so files live. The vmxpi and studica_drivers paths are for the
 # hardware driver libs installed system-wide.
@@ -214,7 +201,16 @@ ament_export_libraries(
   ultrasonic_component
   parsec_component
 )
-ament_export_dependencies(${dependencies})
+ament_export_dependencies(
+  ament_index_cpp
+  geometry_msgs
+  rclcpp
+  rclcpp_action
+  rclcpp_components
+  sensor_msgs
+  std_msgs
+  std_srvs
+)
 
 # ---- C++ examples ----
 set(cpp_example_targets
@@ -234,8 +230,13 @@ set(cpp_example_targets
 
 foreach(target ${cpp_example_targets})
   add_executable(${target} src/components/examples/cpp/${target}.cpp)
-  ament_target_dependencies(${target} rclcpp std_msgs sensor_msgs geometry_msgs)
-  target_link_libraries(${target} "${cpp_typesupport_target}")
+  target_link_libraries(${target} PUBLIC
+    ${rclcpp_TARGETS}
+    ${std_msgs_TARGETS}
+    ${sensor_msgs_TARGETS}
+    ${geometry_msgs_TARGETS}
+    ${cpp_typesupport_target}
+  )
 endforeach()
 
 install(TARGETS ${cpp_example_targets}
