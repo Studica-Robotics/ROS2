@@ -60,8 +60,8 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
 ### System Requirements
 
 - **Hardware:** Studica Robotics VMX (Raspberry Pi-based robotics controller)
-- **OS:** Ubuntu 22.04 (Jammy) — pre-installed on the VMX OS image
-- **ROS2:** [Humble Hawksbill](https://docs.ros.org/en/humble/Installation.html) (LTS)
+- **OS:** Ubuntu 26.04 (Resolute)
+- **ROS2:** [Lyrical Luth](https://docs.ros.org/en/lyrical/Installation.html) (LTS)
 
 ### Required SDKs
 
@@ -76,13 +76,13 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
 ```bash
 sudo apt update
 sudo apt install -y \
-  ros-humble-rclcpp \
-  ros-humble-rclcpp-components \
-  ros-humble-sensor-msgs \
-  ros-humble-geometry-msgs \
-  ros-humble-std-msgs \
-  ros-humble-rmw-cyclonedds-cpp \
-  ros-humble-joy          # only needed for gamepad support
+  ros-lyrical-rclcpp \
+  ros-lyrical-rclcpp-components \
+  ros-lyrical-sensor-msgs \
+  ros-lyrical-geometry-msgs \
+  ros-lyrical-std-msgs \
+  ros-lyrical-rmw-cyclonedds-cpp \
+  ros-lyrical-joy          # only needed for gamepad support
 ```
 
 CycloneDDS is required because the node runs as root (for pigpio hardware access) and Fast-DDS shared memory segments created by root are not accessible to non-root ROS2 tools (`ros2 topic echo`, etc.). CycloneDDS uses UDP sockets which work correctly across privilege boundaries.
