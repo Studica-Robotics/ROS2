@@ -49,7 +49,8 @@ public:
      *  rest host-side. Call once after open. */
     bool ConfigureStreaming(const std::string& color_format, int sample_ms);
 
-    /** Send GETCONFIG and collect the multi-line response (joined). */
+    /** Send GETCONFIG and collect the multi-line response (joined).
+     *  Pauses the reader thread so the reply is not lost to the XYZ stream. */
     bool RequestConfig(std::string* response_out);
 
     /** Copy the latest parsed sample. Returns true if any frame seen yet. */

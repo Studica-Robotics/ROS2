@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstring>
 #include <sstream>
+#include <vector>
 
 namespace studica_driver {
 
@@ -36,6 +37,27 @@ std::vector<std::string> split_csv(const std::string& s) {
     std::string tok;
     while (std::getline(ss, tok, ',')) out.push_back(trim(tok));
     return out;
+}
+
+// Telemetry lines the firmware streams continuously after COLORFORMAT.
+bool is_telemetry_line(const std::string& line) {
+    return line.rfind("XYZ:", 0) == 0
+        || line.rfind("SRGB:", 0) == 0
+        || line.rfind("HEX:", 0) == 0
+        || line.rfind("RGB:", 0) == 0
+        || line.rfind("RAW:", 0) == 0
+        || line.rfind("DIST:", 0) == 0;
+}
+
+// Lines that belong to a GETCONFIG dump (see firmware usb_cmd.c CMD_GETCONFIG).
+bool is_getconfig_line(const std::string& line) {
+    return line.rfind("SN:", 0) == 0
+        || line.rfind("BRIGHTNESS:", 0) == 0
+        || line.rfind("CALIB:", 0) == 0
+        || line.rfind("STATUSLED:", 0) == 0
+        || line.rfind("SAMPLETIME:", 0) == 0
+        || line.rfind("MEASMODE:", 0) == 0
+        || line.rfind("GAIN:", 0) == 0;
 }
 
 }  // namespace
@@ -74,6 +96,7 @@ void ColoreUsb::startReader() {
 void ColoreUsb::stopReader() {
     running_ = false;
     if (reader_.joinable()) reader_.join();
+    line_buf_.clear();
 }
 
 // Sends a command to the device.
@@ -93,19 +116,45 @@ bool ColoreUsb::ConfigureStreaming(const std::string& color_format, int sample_m
 }
 
 // Requests the configuration of the device.
+// Pause the reader, drain stale samples, then collect only GETCONFIG lines.
 bool ColoreUsb::RequestConfig(std::string* response_out) {
     if (fd_ < 0) return false;
-    if (!SendCommand("GETCONFIG")) return false;
+
+    const bool was_running = running_;
+    if (was_running) stopReader();
+
+    // Discard buffered telemetry so GETCONFIG is not buried under XYZ backlog.
+    {
+        auto drain_end = std::chrono::steady_clock::now() + std::chrono::milliseconds(150);
+        std::string line;
+        while (std::chrono::steady_clock::now() < drain_end) {
+            if (!readLineBlocking(&line, 20)) break;
+        }
+        // Drop any partial line left in the OS buffer mid-frame.
+        tcflush(fd_, TCIFLUSH);
+    }
+
+    if (!SendCommand("GETCONFIG")) {
+        if (was_running) startReader();
+        return false;
+    }
+
     std::string acc;
     std::string line;
-    // GETCONFIG is multi-line; gather everything that arrives within ~300 ms.
-    auto t_end = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
+    bool saw_sn = false;
+    auto t_end = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
     while (std::chrono::steady_clock::now() < t_end) {
-        if (readLineBlocking(&line, 60)) {
-            if (!line.empty()) acc += line + "\n";
-        }
+        if (!readLineBlocking(&line, 80)) continue;
+        if (line.empty() || is_telemetry_line(line)) continue;
+        if (!is_getconfig_line(line)) continue;
+        acc += line + "\n";
+        if (line.rfind("SN:", 0) == 0) saw_sn = true;
+        if (line.rfind("GAIN:", 0) == 0) break;  // last GETCONFIG line
     }
-    if (acc.empty()) return false;
+
+    if (was_running) startReader();
+
+    if (!saw_sn || acc.empty()) return false;
     if (response_out) *response_out = trim(acc);
     return true;
 }
