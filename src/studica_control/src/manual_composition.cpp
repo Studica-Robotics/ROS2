@@ -129,6 +129,8 @@ public:
         if (colore_enabled) {
             auto colore_nodes = studica_control::Colore::initialize(this, vmx_);
             component_nodes.insert(component_nodes.end(), colore_nodes.begin(), colore_nodes.end());
+        }
+
         if (parsec_enabled) {
             auto parsec_nodes = studica_control::Parsec::initialize(this, vmx_);
             component_nodes.insert(component_nodes.end(), parsec_nodes.begin(), parsec_nodes.end());

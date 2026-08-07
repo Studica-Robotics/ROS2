@@ -174,7 +174,7 @@ control_server:
     # USB port: ls /dev/ttyACM*
     # -------------------------------------------------------------------------
     colore:
-      enabled: true
+      enabled: false
       sensors: ["color0"]
       color0:
         transport: can            # can | usb
