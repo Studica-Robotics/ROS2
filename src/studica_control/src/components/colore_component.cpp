@@ -297,8 +297,17 @@ void Colore::cmd(const std::string &params,
     if (params == "get_config") {
         if (transport_ == ColoreTransport::Usb && colore_usb_) {
             std::string line;
-            if (colore_usb_->RequestConfig(&line)) return ok(line);
-            return err("no GETCONFIG response");
+            if (!colore_usb_->RequestConfig(&line)) return err("no GETCONFIG response");
+            // Flatten multi-line GETCONFIG so ros2 CLI doesn't show \n
+            for (std::size_t i = 0; i < line.size();) {
+                if (line[i] == '\n') {
+                    line.replace(i, 1, ", ");
+                    i += 2;
+                } else {
+                    ++i;
+                }
+            }
+            return ok(line);
         }
         if (colore_can_) {
             uint32_t v = 0;
