@@ -158,6 +158,39 @@ control_server:
       sharp:
         port: 22      # VMX analog input channel
         frame_id: "sharp_link"  # TF frame for the Range message
+        
+    # -------------------------------------------------------------------------
+    # Colore — color sensor (CAN or USB)
+    #
+    # Topics (publish):
+    #   /<name>/color       (std_msgs/ColorRGBA)             — always on, color as RGB 0.0-1.0
+    #   /<name>/color_info  (studica_control/ColoreColorMsg) — optional ("info"),  extra detail
+    #   /<name>/color_match (studica_control/ColoreMatch)    — optional ("match"), nearest taught color
+    #
+    # Service: /<name>/colore_cmd (SetData)
+    #   get_config, set_brightness, learn_color,<name>
+    #
+    # See the README for color matching, rate, and measmode (advanced) details.
+    # USB port: ls /dev/ttyACM*
+    # -------------------------------------------------------------------------
+    colore:
+      enabled: false
+      sensors: ["color0"]
+      color0:
+        transport: can            # can | usb
+        can_id: 0                 # CAN only
+        serial_port: /dev/ttyACM0 # USB only
+        publish_rate_hz: 10       # readings per second (Hz); also sets the sensor sample rate. (Max useful 20 Hz)
+        publish_outputs: ["info"] # add "match" to detect named colors
+        brightness: 50            # white LED 0-100
+        measmode: "off"           # advanced: leave "off" for normal use (see README)
+        # measmode_z_mm: -1.0     # sensor distance in mm, use only when measmode: "fixed"
+        # --- color matching (only when "match" is in publish_outputs; see README) ---
+        # match_threshold: 0.05
+        # match_references: ["red", "blue", "yellow"]
+        # match_red_xy:    [0.64, 0.33]   # teach with learn_color, then paste the reply
+        # match_blue_xy:   [0.15, 0.06]
+        # match_yellow_xy: [0.45, 0.48]
 
     # -------------------------------------------------------------------------
     # Parsec — multi-zone ToF sensor (16 or 64 zones)
