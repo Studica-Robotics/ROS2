@@ -122,11 +122,16 @@
 
 #include "studica_control/srv/set_data.hpp"
 #include "titan.hpp"
+#include "titan_iface.hpp"
+#include "titan_usb.hpp"
 #include "VMXPi.h"
 
 namespace studica_control {
 
 enum class EncoderMode { Quadrature, Absolute };
+
+// how this titan is wired to the host: can (VMX CAN bus) or usb (/dev/ttyACM*)
+enum class TitanTransport { Can, Usb };
 
 struct MotorConfig {
     EncoderMode encoder_mode = EncoderMode::Quadrature;
@@ -145,16 +150,21 @@ public:
     // composable node constructor — used when loading as a ros2 plugin
     explicit Titan(const rclcpp::NodeOptions &options);
 
-    // main constructor — connects to the titan and sets up topics/services
+    // main constructor - connects to the titan (CAN or USB) and sets up topics/services
     Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID,
           const uint16_t &motor_freq, const std::array<MotorConfig, 4> &motor_configs,
           int encoder_rate_hz = 20, int motor_update_rate_hz = 50,
-          bool limit_switches = false, bool enable_freshness = false);
+          bool limit_switches = false, bool enable_freshness = false,
+          TitanTransport transport = TitanTransport::Can,
+          const std::string &serial_port = "/dev/ttyACM0");
 
     ~Titan();
 
 private:
-    std::shared_ptr<studica_driver::Titan> titan_;
+    // transport-agnostic handle to the controller (CAN Titan or TitanUsb)
+    std::shared_ptr<studica_driver::ITitanController> titan_;
+    TitanTransport transport_;
+    std::string serial_port_;
     std::shared_ptr<VMXPi> vmx_;
     uint8_t canID_;
     uint16_t motor_freq_;
@@ -187,6 +197,11 @@ private:
 
     rclcpp::TimerBase::SharedPtr encoder_timer_;
     rclcpp::TimerBase::SharedPtr watchdog_timer_;
+
+    // The encoder/telemetry timer does blocking serial round-trips over USB. It
+    // lives in its own callback group so, under the MultiThreadedExecutor, it can
+    // never block the timeout keep-alive (resend_speeds) or the cmd subscription
+    rclcpp::CallbackGroup::SharedPtr telemetry_cbg_;
 
     void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request,
                       std::shared_ptr<studica_control::srv::SetData::Response> response);

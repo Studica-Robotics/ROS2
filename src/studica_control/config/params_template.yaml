@@ -14,7 +14,9 @@ control_server:
   ros__parameters:
 
     # -------------------------------------------------------------------------
-    # Titan — CAN bus motor controller (up to 4 motors per unit)
+    # Titan — motor controller (up to 4 motors per unit)
+    #
+    # transport: can (default, VMX CAN bus) or usb (Pi USB port, /dev/ttyACM0)
     #
     # Topics are auto-generated from the sensor name. For sensor "titan0":
     #   subscribe: /titan0/m_N/cmd     (std_msgs/Float64) — duty cycle -1.0 to 1.0
@@ -37,7 +39,9 @@ control_server:
       enabled: false
       sensors: ["titan0"]
       titan0:
-        can_id: 42          # CAN bus ID of the Titan controller
+        transport: can      # can | usb
+        serial_port: /dev/ttyACM0  # USB only - use 'ls /dev/ttyACM*' to find your port
+        can_id: 42          # CAN only - CAN bus ID of the Titan controller
         motor_freq: 15600   # PWM frequency (Hz)
         encoder_rate_hz: 20 # encoder/rpm feedback publish rate in Hz (default 20)
         motor_update_rate_hz: 50  # how often motor speeds are sent to hardware, in Hz (default 50)

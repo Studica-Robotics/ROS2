@@ -59,7 +59,12 @@ public:
         //     "/" + SENSOR + "/m_0/angle", 10, [this](std_msgs::msg::Float64::SharedPtr msg) {
         //         RCLCPP_INFO(get_logger(), "m_0 angle: %.2f deg", msg->data); });
 
-        client_ = create_client<studica_control::srv::SetData>("/" + SENSOR + "/titan_cmd");
+        // The client lives on a dedicated node so call_service() can spin it
+        // synchronously. The main node is owned by rclcpp::spin()'s executor and
+        // a node can only belong to one executor at a time.
+        client_node_ = rclcpp::Node::make_shared(std::string("titan_example_client"));
+        client_ = client_node_->create_client<studica_control::srv::SetData>(
+            "/" + SENSOR + "/titan_cmd");
 
         phase_start_ = now();
         timer_ = create_wall_timer(100ms, std::bind(&TitanExample::tick, this));
@@ -81,7 +86,7 @@ private:
         req->initparams.int_value = int_value;
 
         auto future = client_->async_send_request(req);
-        if (rclcpp::spin_until_future_complete(shared_from_this(), future, 5s) !=
+        if (rclcpp::spin_until_future_complete(client_node_, future, 5s) !=
             rclcpp::FutureReturnCode::SUCCESS) {
             RCLCPP_ERROR(get_logger(), "%s: timed out", command.c_str());
             return false;
@@ -143,17 +148,7 @@ private:
     }
 
     void call_reset_encoder(int motor) {
-        if (!client_->wait_for_service(2s)) {
-            RCLCPP_ERROR(get_logger(), "titan_cmd service not available");
-            return;
-        }
-        auto req = std::make_shared<studica_control::srv::SetData::Request>();
-        req->params = "reset_encoder";
-        req->initparams.n_encoder = motor;
-        client_->async_send_request(req,
-            [this](rclcpp::Client<studica_control::srv::SetData>::SharedFuture f) {
-                RCLCPP_INFO(get_logger(), "reset_encoder: %s", f.get()->message.c_str());
-            });
+        call_service("reset_encoder", motor);
     }
 
     void tick() {
@@ -186,6 +181,7 @@ private:
     std::array<rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr, 4> cmd_pubs_;
     rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr enc_sub_;
     rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr rpm_sub_;
+    rclcpp::Node::SharedPtr client_node_;
     rclcpp::Client<studica_control::srv::SetData>::SharedPtr client_;
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Time phase_start_;

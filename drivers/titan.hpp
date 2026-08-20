@@ -1,5 +1,6 @@
 #pragma once
 
+#include "titan_iface.hpp"
 #include "VMXPi.h"
 #include <inttypes.h>
 #include <iomanip>
@@ -90,12 +91,13 @@ namespace studica_driver
 #define TITAN_INFO_VERSION_MAJOR_1 1u
 #define TITAN_INFO_VERSION_MAJOR_2 2u
 
-    class Titan
+    class Titan : public ITitanController
     {
         public:
             Titan(const uint8_t& canID, const uint16_t& motorFreq, const float& distPerTick,
                   std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
             ~Titan();
+            bool isUsb() const override { return false; }
             /** Enable(true): send ENABLED_FLAG so device allows motor commands. Enable(false): send DISABLED_FLAG,
              * motors stop immediately. Call Enable(true) before any SetSpeed/SetTargetVelocity. */
             void Enable(bool enable);
