@@ -23,9 +23,11 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
   - [Servo](#servo)
   - [Ultrasonic](#ultrasonic--hc-sr04-range-sensor)
   - [Sharp](#sharp--gp2y-infrared-range-sensor)
+  - [Parsec](#parsec--multi-zone-tof-sensor)
   - [DIO](#dio--digital-inputoutput)
   - [Light Tower](#light-tower--5-output-led-indicator)
   - [Cobra](#cobra--reflectance-sensor-array)
+  - [Colore](#colore--color-sensor)
   - [Gamepad](#gamepad--joystick-to-cmd_vel)
 - [Python Examples](#python-examples)
 - [C++ Examples](#c-examples)
@@ -45,10 +47,12 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
 | **Servo** | Actuator | Standard (position), continuous (velocity), or linear |
 | **Ultrasonic** | Range Sensor | HC-SR04-style sonar, ~2 cm to 4 m |
 | **Sharp** | Range Sensor | GP2Y infrared rangefinder, ~10 cm to 80 cm |
+| **Parsec** | Range Sensor | Multi-zone ToF, 16 (4×4) or 64 (8×8) distance cells, CAN or USB |
 | **DIO** | Digital I/O | General-purpose digital input or output pin |
 | **Light Tower** | Indicator | 5-output LED tower — red, green, yellow, buzzer, continuous enable |
 | **Power** | System Monitor | Battery voltage, estimated state-of-charge, low-battery warnings — always on |
 | **Cobra** | Reflectance Array | 4-channel analog line/surface sensor over I2C |
+| **Colore** | Color Sensor | CIE-XYZ color sensor over CAN or USB, with color matching |
 | **Gamepad** | Input | Joystick/gamepad to `cmd_vel` via `joy` node |
 
 ---
@@ -194,7 +198,7 @@ control_server:
 
 The following components support multiple instances by adding names to the `sensors` list and providing a config block for each name:
 
-`cobra`, `duty_cycle`, `dio`, `encoder`, `servo`, `sharp`, `titan`, `ultrasonic`
+`cobra`, `duty_cycle`, `dio`, `encoder`, `parsec`, `servo`, `sharp`, `titan`, `ultrasonic`
 
 ```yaml
 servo:
@@ -626,6 +630,121 @@ sharp:
 
 ---
 
+### Parsec — Multi-Zone ToF Sensor
+
+The **Parsec** is a Studica multi-zone time-of-flight sensor. It reports distance
+for each cell in a **4×4 (16 zones)** or **8×8 (64 zones)** grid. Connect over **CAN**
+(default) or **USB** on the Pi (`/dev/ttyACM0`).
+
+Topics are auto-generated from the sensor name. Using `"parsec"` as an example:
+
+**Topics (publish) — optional outputs via `publish_outputs`:**
+
+| Topic | Type | Units / encoding | Best for |
+|---|---|---|---|
+| `/parsec/zones` | `studica_control/ParsecZoneMsg` | `fdist[]` in **mm** (`int16`) | **`ros2 topic echo`** — human-readable mm per cell |
+| `/parsec/grid` | `sensor_msgs/Image` (`16UC1`) | mm encoded as **raw uint16 pixels** (4×4 or 8×8) | RViz / cv_bridge — **not** readable in `topic echo` (shows byte pairs) |
+| `/parsec/pointcloud` | `sensor_msgs/PointCloud2` (`xyz`) | **metres** (`float32` x, y, z) | RViz 3D, PCL, fusion with your own TF/odom |
+| `/parsec/min_range` | `sensor_msgs/Range` | **metres** — nearest valid zone | Simple obstacle / “closest hit” (always published) |
+
+Rate: `publish_rate_hz` (default 15 Hz).
+
+All three optional topics carry the **same underlying grid** — different ROS message packaging.
+Enable any combination in `publish_outputs`. If omitted or empty, **`grid`** is published by default.
+
+> **Terminal debugging:** use **`/zones`** for mm you can read directly. **`/grid`** is a
+> `sensor_msgs/Image` — distances are mm per pixel, but `ros2 topic echo` only shows raw
+> bytes (decode with the snippet below, or use RViz / cv_bridge).
+
+**Zone values (`fdist`, mm):**
+
+| Value | Meaning |
+|---|---|
+| `0` – `4000` | Valid distance in millimetres |
+| `-1` | Zone disabled (zone mask) |
+| `-2` | Invalid / no return |
+
+On `/grid`, disabled and invalid zones are published as pixel value `0`.
+
+**Zone index layout** — row-major, top row first (index 0 = top-left). Grid is 4×4 or 8×8
+depending on firmware resolution (`RESOLUTION,16` or `RESOLUTION,64` on the device).
+
+**Decoding `/grid` (`16UC1`):**
+
+Each pixel is a uint16 distance in mm, stored as **2 bytes little-endian** in `image.data`:
+
+```python
+# pixel index i (0 .. width*height-1)
+mm = msg.data[2 * i] + (msg.data[2 * i + 1] << 8)
+```
+
+With **cv_bridge** (recommended for image pipelines):
+
+```python
+from cv_bridge import CvBridge
+import numpy as np
+
+bridge = CvBridge()
+img_mm = bridge.imgmsg_to_cv2(msg, desired_encoding='16UC1')  # numpy uint16, shape (H, W)
+```
+
+**`/pointcloud` coordinates** — one point per valid zone, in `header.frame_id` (metres):
+
+- **z** — measured range for a cell (forward, in metres)
+- **x**, **y** — left/right and up/down offset from the sensor center, estimated from each cell’s position in the grid and the ~65° FOV
+
+The driver does **not** publish TF. Set `frame_id` in `params.yaml` and provide your own
+`static_transform_publisher` or robot URDF if you need the cloud on the robot model.
+
+**Service:** `/parsec/parsec_cmd` → `studica_control/SetData`
+
+| Command | Required fields | Description |
+|---|---|---|
+| `get_config` | — | Device settings as a string in `response.message`. **USB:** full line from firmware (serial, resolution, CAN ID, zone mask, etc.). **CAN:** short summary only (`version=…, fdist_en=…, can_id=…`) — Classic CAN returns 8 bytes, not the full config |
+| `get_zone_distance` | `initparams.n_encoder` = zone index (0..zones−1) | Distance for one zone (**mm**) |
+| `get_min_distance` | — | Nearest valid zone distance (**mm**) |
+
+**params.yaml:**
+
+```yaml
+parsec:
+  enabled: true
+  sensors: ["parsec"]
+  parsec:
+    transport: can            # "can" (VMX CAN bus) or "usb" (Pi serial)
+    can_id: 5                 # CAN only — must match device CANID (0..63)
+    serial_port: /dev/ttyACM0 # USB only — run: ls /dev/ttyACM*
+    frame_id: "parsec_link"
+    publish_rate_hz: 15
+    publish_outputs: ["zones", "grid", "pointcloud"]  # any of: zones, grid, pointcloud
+```
+
+**Verify:**
+
+```bash
+# Raw per-zone distances in mm (easiest to read in the terminal)
+ros2 topic echo /parsec/zones --once
+
+# Nearest hit in metres
+ros2 topic echo /parsec/min_range --once
+
+# On-demand zone query (zone 0, mm)
+ros2 service call /parsec/parsec_cmd studica_control/srv/SetData \
+  "{params: 'get_zone_distance', initparams: {n_encoder: 0, speed: 0.0, int_value: 0, hold: false}}"
+```
+
+**RViz:**
+
+- **Image:** add `/parsec/grid`, encoding `16UC1`. For a colour heatmap, convert to
+  another encoding in your node or use the point cloud view below.
+- **PointCloud2:** add `/parsec/pointcloud`, set **Fixed Frame** to `frame_id` (or your
+  map/odom frame if you publish TF). Colour by **Axis → Z** for distance.
+
+> **Note:** `ros2 topic echo` on `/grid` shows raw bytes (e.g. `94, 1` = 350 mm). Use
+> `/zones` for human-readable mm values, or decode the image as shown above.
+
+---
+
 ### DIO — Digital Input/Output
 
 Topics are auto-generated from the sensor name. Using `"limit_switch"` as an example:
@@ -808,6 +927,74 @@ cobra:
 
 ---
 
+### Colore — Color Sensor
+
+A color sensor that connects over **CAN** or **USB**. The main output is the color as sRGB on `/color`; everything else is optional. For most robots, `/color` (an RGB reading) and `/color_match` (a named color) are all you need.
+
+**Topics (publish):** auto-generated from the sensor name. Using `"color0"`:
+
+| Topic | Type | When | Contents |
+|---|---|---|---|
+| `/color0/color` | `std_msgs/ColorRGBA` | always | the color as RGB, each channel 0.0–1.0 |
+| `/color0/color_info` | `studica_control/ColoreColorMsg` | `"info"` in `publish_outputs` | extra detail: RGB, a `hex` string, and advanced fields (see below) |
+| `/color0/color_match` | `studica_control/ColoreMatch` | `"match"` in `publish_outputs` | which taught color it sees: `label` (or `"unknown"`) and a `confidence` (0–1) |
+
+**Service:** `/color0/colore_cmd` → `studica_control/SetData`
+
+| Command (`request.params`) | Description |
+|---|---|
+| `get_config` | Prints the sensor's current settings |
+| `set_brightness` | Sets the white LED brightness (0–100); put the value in `request.initparams.n_encoder` |
+| `learn_color,<name>` | Teaches the sensor the color it's currently looking at, under the name `<name>` |
+
+#### Color matching
+
+Teach the sensor a few colors and it tells you which one it's looking at. Matching ignores how bright the color is, so it keeps working as lighting and distance change.
+
+1. Add `"match"` to `publish_outputs`, list your color names in `match_references` (e.g. `["red", "blue", "yellow"]`), and add a `match_<name>_xy` line for each — placeholder values are fine; use `learn_color` to replace them in step 3.
+2. Point the sensor at each object and learn that color:
+   ```bash
+   ros2 service call /color0/colore_cmd studica_control/srv/SetData \
+     "{params: 'learn_color,blue'}"
+   ```
+3. `learn_color` only lasts until the next restart. To keep a color permanently, copy the x,y numbers from the command's reply into the matching `match_<name>_xy` line in `params.yaml`.
+4. If matches are too permissive or too strict, adjust `match_threshold` (smaller = stricter). Colors that don't match anything report `label: "unknown"`.
+
+Then read `/color0/color_match`: `label` is the closest taught color and `confidence` (0–1) is how sure it is.
+
+**Brightness (white LED):** the sensor has its own white LED that lights up the surface it's reading, so colors come out the same regardless of room lighting. `brightness` (0–100) sets how bright it is — turn it **down** for close or shiny/light surfaces (too much light washes the reading out toward white) and **up** for far or dark surfaces (too little light is weak and noisy). Tune it so your colors look distinct at the distance you'll actually be sensing.
+
+**Rate:** `publish_rate_hz` sets how often ROS publishes to enabled topics *and* how often the sensor reads. ~1–20 Hz is the useful range; the sensor's ~50 ms integration caps fresh data near 20 Hz, so higher publish rates will repeat stale readings.
+
+**measmode (advanced):** a firmware multi-flash mode for more accurate color; leave `"off"` for normal use. `"auto"` flashes the LED at several brightness levels to auto-detect and account for distance (slow — only ~1 reading/sec); `"fixed"` uses a known distance between sensor and object of interest `measmode_z_mm`.
+
+**Advanced (optional):** `/color_info` also carries the sensor's raw color values `x`, `y`, `z`; most users never need these. Matching compares colors in **CIE xy** (hue independent of brightness); `match_<color>_xy` is the `[x, y]` point for each color, which `learn_color` computes for you. `/color_match` also reports the measured `x`, `y` chromaticity.
+
+**params.yaml:**
+```yaml
+colore:
+  enabled: true
+  sensors: ["color0"]
+  color0:
+    transport: usb            # can | usb
+    can_id: 0                 # CAN only
+    serial_port: /dev/ttyACM0 # USB only
+    publish_rate_hz: 10       # readings per second (Hz); also sets the sensor sample rate. (Max useful 20 Hz)
+    publish_outputs: ["info"] # add "match" to detect named colors
+    brightness: 50            # white LED, 0-100
+    measmode: "off"           # advanced: leave "off" for normal use (see above)
+    # --- color matching (only used when "match" is in publish_outputs) ---
+    # match_threshold: 0.05
+    # match_references: ["red", "blue", "yellow"]
+    # match_red_xy:    [0.64, 0.33]   # placeholders - identify with learn_color, then paste the x,y here
+    # match_blue_xy:   [0.15, 0.06]
+    # match_yellow_xy: [0.45, 0.48]
+```
+
+**Finding the USB port:** the Colore appears as `/dev/ttyACM*`. List the active ports with `ls /dev/ttyACM*`
+
+---
+
 ### Gamepad — Joystick to cmd_vel
 
 Converts joystick input from a `joy` node into `geometry_msgs/Twist` velocity commands.
@@ -916,7 +1103,7 @@ Cycles through every state (red, green, yellow, buzzer, software blink, hardware
 ros2 run studica_control light_tower_example.py
 ```
 
-Additional Python examples for Encoder, DutyCycleEncoder, DIO, Sharp, and Cobra follow the same pattern.
+Additional Python examples for Encoder, DutyCycleEncoder, DIO, Sharp, Cobra, and Colore follow the same pattern.
 
 ---
 
@@ -1024,6 +1211,17 @@ Subscribes to all four `/cobra/ch_N` topics and prints voltages side by side at
 ros2 run studica_control cobra_example
 ```
 
+### Colore
+
+Subscribes to `/color0/color` (RGB) and `/color0/color_match` (nearest taught
+color) and prints them. Sets the white LED brightness to 50% via the
+`set_brightness` service at startup. Add `"match"` to `publish_outputs` to see
+match output.
+
+```bash
+ros2 run studica_control colore_example
+```
+
 ### Light Tower
 
 Cycles through every state (red, green, yellow, buzzer, software blink, hardware blink, custom Hz, off) via the `/light_tower/set` service every 3 seconds. Subscribes to `/light_tower/state` and prints each state change.
@@ -1079,6 +1277,7 @@ sudo ./titan_example
 | `ultrasonic_example` | Print range readings in a loop |
 | `sharp_example` | Print IR distance readings in a loop |
 | `cobra_example` | Print reflectance voltage for all 4 channels |
+| `colore_example` | Configure the sensor and print XYZ color readings — `can [id]` or `usb [port]` (default CAN ID 0) |
 | `light_tower_example` | Cycle through solid, hardware blink, and off states for each output |
 
 **Titan example walkthrough:**
@@ -1185,6 +1384,10 @@ node.create_subscription(Float64, '/titan0/m_2/angle', lambda msg: ..., 10)
 
 # Ultrasonic range (/<name>/range)
 node.create_subscription(Range, '/front/range', lambda msg: ..., 10)
+
+# Parsec multi-zone ToF — raw mm per cell (easiest to consume)
+from studica_control.msg import ParsecZoneMsg
+node.create_subscription(ParsecZoneMsg, '/parsec/zones', lambda msg: ..., 10)
 
 # Cobra per-channel voltage
 node.create_subscription(Float32, '/line_sensor/ch_0', lambda msg: ..., 10)

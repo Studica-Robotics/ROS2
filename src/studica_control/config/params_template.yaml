@@ -3,8 +3,8 @@
 # Full reference for all available components.
 # Copy any section into params.yaml and set enabled: true to activate it.
 #
-# Multi-instance components (cobra, duty_cycle, dio, encoder, servo, sharp,
-# titan, ultrasonic) support multiple sensors by adding names to the
+# Multi-instance components (cobra, duty_cycle, dio, encoder, parsec, servo,
+# sharp, titan, ultrasonic) support multiple sensors by adding names to the
 # "sensors" list and adding a matching config block for each name.
 #
 # Single-instance components (gamepad, imu) have a flat config.
@@ -161,7 +161,68 @@ control_server:
       sharp:
         port: 22      # VMX analog input channel
         frame_id: "sharp_link"  # TF frame for the Range message
+        
+    # -------------------------------------------------------------------------
+    # Colore — color sensor (CAN or USB)
+    #
+    # Topics (publish):
+    #   /<name>/color       (std_msgs/ColorRGBA)             — always on, color as RGB 0.0-1.0
+    #   /<name>/color_info  (studica_control/ColoreColorMsg) — optional ("info"),  extra detail
+    #   /<name>/color_match (studica_control/ColoreMatch)    — optional ("match"), nearest taught color
+    #
+    # Service: /<name>/colore_cmd (SetData)
+    #   get_config, set_brightness, learn_color,<name>
+    #
+    # See the README for color matching, rate, and measmode (advanced) details.
+    # USB port: ls /dev/ttyACM*
+    # -------------------------------------------------------------------------
+    colore:
+      enabled: false
+      sensors: ["color0"]
+      color0:
+        transport: can            # can | usb
+        can_id: 0                 # CAN only
+        serial_port: /dev/ttyACM0 # USB only
+        publish_rate_hz: 10       # readings per second (Hz); also sets the sensor sample rate. (Max useful 20 Hz)
+        publish_outputs: ["info"] # add "match" to detect named colors
+        brightness: 50            # white LED 0-100
+        measmode: "off"           # advanced: leave "off" for normal use (see README)
+        # measmode_z_mm: -1.0     # sensor distance in mm, use only when measmode: "fixed"
+        # --- color matching (only when "match" is in publish_outputs; see README) ---
+        # match_threshold: 0.05
+        # match_references: ["red", "blue", "yellow"]
+        # match_red_xy:    [0.64, 0.33]   # teach with learn_color, then paste the reply
+        # match_blue_xy:   [0.15, 0.06]
+        # match_yellow_xy: [0.45, 0.48]
 
+    # -------------------------------------------------------------------------
+    # Parsec — multi-zone ToF sensor (16 or 64 zones)
+    #
+    # transport: can (default, VMX CAN bus) or usb (Pi USB port, /dev/ttyACM0)
+    #
+    # Topics (publish):
+    #   /<name>/min_range (sensor_msgs/Range) — always on; nearest valid zone in metres
+    # Optional outputs (publish_outputs — pick one, two, or all three):
+    #   zones      — /<name>/zones      (ParsecZoneMsg) int16[] mm — human-readable in topic echo
+    #   grid       — /<name>/grid       (sensor_msgs/Image 16UC1) mm as raw pixels — use RViz/cv_bridge, not topic echo
+    #   pointcloud — /<name>/pointcloud (sensor_msgs/PointCloud2) 3D points in frame_id
+    #
+    # Service: /<name>/parsec_cmd (SetData)
+    #   Commands: get_config, get_zone_distance, get_min_distance
+    #   get_zone_distance uses initparams.n_encoder as the zone index (0..zones-1)
+    #
+    # USB on Pi: add user to dialout — sudo usermod -aG dialout $USER (re-login)
+    # -------------------------------------------------------------------------
+    parsec:
+      enabled: false
+      sensors: ["parsec"]
+      parsec:
+        transport: can            # can | usb
+        can_id: 5                 # CAN only - must match device CANID (0..63)
+        serial_port: /dev/ttyACM0 # USB only - use 'ls /dev/ttyACM*' to find your port
+        frame_id: "parsec_link"
+        publish_rate_hz: 15
+        publish_outputs: ["zones", "grid", "pointcloud"]  # any of: zones, grid, pointcloud
     # -------------------------------------------------------------------------
     # DIO — digital input or output pin
     #
