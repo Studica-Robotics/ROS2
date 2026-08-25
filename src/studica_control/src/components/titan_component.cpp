@@ -278,6 +278,19 @@ void Titan::cmd(std::string params,
         response->message = "motor " + std::to_string(motor) + " position hold "
                             + std::string(request->initparams.hold ? "enabled" : "disabled");
 
+    } else if (params == "set_angle_limits") {
+        /* InitializeParams has no spare numeric fields, so min rides on speed and
+         * max on dist_per_tick. Firmware drops command if not in absolute mode. */
+        double minDeg = static_cast<double>(request->initparams.speed);
+        double maxDeg = static_cast<double>(request->initparams.dist_per_tick);
+        titan_->SetAngleLimits(motor, minDeg, maxDeg);
+        /* Read back so the reply shows what the driver actually applied */
+        double appliedMin = 0.0, appliedMax = 360.0;
+        titan_->GetAngleLimits(motor, appliedMin, appliedMax);
+        response->success = true;
+        response->message = "motor " + std::to_string(motor) + " angle limits set to ["
+                          + std::to_string(appliedMin) + ", " + std::to_string(appliedMax) + "]";
+
     // --- pid tuning (titan2 firmware) ---
 
     } else if (params == "set_pid_type") {
