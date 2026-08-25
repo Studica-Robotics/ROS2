@@ -62,6 +62,8 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
             control->declare_parameter<bool>       (prefix + ".invert_motor",   false);
             control->declare_parameter<bool>       (prefix + ".invert_encoder", false);
             control->declare_parameter<bool>       (prefix + ".invert_rpm",     false);
+            control->declare_parameter<double>(prefix + ".angle_limit_min_deg",   0.0);
+            control->declare_parameter<double>(prefix + ".angle_limit_max_deg", 360.0);
 
             std::string mode_str = control->get_parameter(prefix + ".encoder_mode").as_string();
             motor_configs[m].encoder_mode  = (mode_str == "absolute") ? EncoderMode::Absolute : EncoderMode::Quadrature;
@@ -69,6 +71,8 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
             motor_configs[m].invert_motor   = control->get_parameter(prefix + ".invert_motor").as_bool();
             motor_configs[m].invert_encoder = control->get_parameter(prefix + ".invert_encoder").as_bool();
             motor_configs[m].invert_rpm     = control->get_parameter(prefix + ".invert_rpm").as_bool();
+            motor_configs[m].angle_limit_min_deg = control->get_parameter(prefix + ".angle_limit_min_deg").as_double();
+            motor_configs[m].angle_limit_max_deg = control->get_parameter(prefix + ".angle_limit_max_deg").as_double();
         }
 
         RCLCPP_INFO(control->get_logger(), "%s -> can_id: %d, motor_freq: %d hz, encoder: %dHz, resend: %dHz",
@@ -146,6 +150,22 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
         if (motor_configs_[i].invert_motor)   titan_->InvertMotorDirection(i);
         if (motor_configs_[i].invert_encoder) titan_->InvertEncoderDirection(i);
         if (motor_configs_[i].invert_rpm)     titan_->InvertMotorRPM(i);
+
+        titan_->SetAngleLimits(i, motor_configs_[i].angle_limit_min_deg,
+                                  motor_configs_[i].angle_limit_max_deg);
+
+        /* An angle limit on a quadrature motor does nothing so warn users. */
+        bool limited = (motor_configs_[i].angle_limit_min_deg > 0.0 ||
+                        motor_configs_[i].angle_limit_max_deg < 360.0);
+
+        if (limited && motor_configs_[i].encoder_mode != EncoderMode::Absolute) {
+            RCLCPP_WARN(this->get_logger(),
+                        "m_%d: angle limits set but encoder_mode is quadrature, ignored", i);
+        } else if (limited) {
+            RCLCPP_INFO(this->get_logger(), "  m_%d: angle limits %.1f to %.1f deg", i,
+                        motor_configs_[i].angle_limit_min_deg,
+                        motor_configs_[i].angle_limit_max_deg);
+        }
     }
 
     titan_->SetPIDType(0);
@@ -235,10 +255,22 @@ void Titan::cmd(std::string params,
                             + std::to_string(request->initparams.int_value) + " counts";
 
     } else if (params == "set_target_angle") {
-        titan_->SetTargetAngle(motor, static_cast<double>(request->initparams.speed));
+        double requested = static_cast<double>(request->initparams.speed);
+        /* SetTargetAngle returns void, so mirror its clamp here to report what actually went out. */
+        double minDeg = 0.0, maxDeg = 360.0;
+        titan_->GetAngleLimits(motor, minDeg, maxDeg);
+        titan_->SetTargetAngle(motor, requested);
         response->success = true;
-        response->message = "motor " + std::to_string(motor) + " target angle set to "
-                            + std::to_string(request->initparams.speed) + " degrees";
+        if (requested < minDeg || requested > maxDeg) {
+            double sent = (requested < minDeg) ? minDeg : maxDeg;
+            response->message = "motor " + std::to_string(motor) + " target "
+                              + std::to_string(requested) + " clamped to "
+                              + std::to_string(sent) + " deg by angle limit ["
+                              + std::to_string(minDeg) + ", " + std::to_string(maxDeg) + "]";
+        } else {
+            response->message = "motor " + std::to_string(motor)
+                              + " target angle set to " + std::to_string(requested) + " degrees";
+        }
 
     } else if (params == "set_position_hold") {
         titan_->SetPositionHold(motor, request->initparams.hold);
@@ -383,6 +415,11 @@ void Titan::cmd(std::string params,
     } else if (params == "get_id") {
         response->success = true;
         response->message = std::to_string(titan_->GetID());
+    } else if (params == "get_angle_limits") {
+        double minDeg = 0.0, maxDeg = 360.0;
+        titan_->GetAngleLimits(motor, minDeg, maxDeg);
+        response->success = true;
+        response->message = std::to_string(minDeg) + "," + std::to_string(maxDeg);
 
     } else {
         response->success = false;

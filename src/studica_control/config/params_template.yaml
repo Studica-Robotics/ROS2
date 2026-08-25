@@ -49,6 +49,8 @@ control_server:
           invert_motor: false         # flip positive motor direction
           invert_encoder: false       # flip encoder count sign
           invert_rpm: false           # flip RPM sign
+          # angle_limit_min_deg: 0.0    # absolute mode only - min angle limit in degrees (0-360)
+          # angle_limit_max_deg: 360.0  # absolute mode only - max angle limit in degrees (0-360)
         m_1:
           encoder_mode: "quadrature"
           dist_per_tick: 1.0

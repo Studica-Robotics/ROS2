@@ -134,6 +134,8 @@ struct MotorConfig {
     bool invert_motor   = false;
     bool invert_encoder = false;
     bool invert_rpm     = false;
+    double angle_limit_min_deg = 0.0;
+    double angle_limit_max_deg = 360.0;
 };
 
 // titan — motor controller node. one instance per physical titan board.
