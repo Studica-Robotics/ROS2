@@ -392,14 +392,16 @@ Use the service for configuration and closed-loop control. Direct speed commands
 | `disable_motor` | `n_encoder` | Cut power to one motor only |
 | `set_target_velocity` | `n_encoder`, `speed` (RPM) | Closed-loop velocity (Titan2 firmware) |
 | `set_target_distance` | `n_encoder`, `int_value` | Closed-loop position in encoder counts |
-| `set_target_angle` | `n_encoder`, `speed` | Drive to target angle in degrees |
+| `set_target_angle` | `n_encoder`, `speed` | Drive to target angle in degrees (clamped to the motor's angle limits) |
 | `set_position_hold` | `n_encoder`, `hold` | Lock motor at current position |
+| `set_angle_limits` | `n_encoder`, `speed` (min deg), `dist_per_tick` (max deg) | Restrict travel range at runtime, absolute mode only (normally set in params.yaml) |
 | `configure_encoder` | `n_encoder`, `dist_per_tick` | Override distance per tick at runtime (normally set in params.yaml) |
 | `reset_encoder` | `n_encoder` | Zero one encoder |
 | `invert_motor` | `n_encoder` | Flip positive direction at runtime (normally set in params.yaml) |
 | `get_rpm` | `n_encoder` | Read current RPM |
 | `get_encoder_count` | `n_encoder` | Read raw tick count |
 | `get_encoder_distance` | `n_encoder` | Read odometry distance |
+| `get_angle_limits` | `n_encoder` | Read the motor's angle limits as `min,max` in degrees |
 | `get_firmware_version` | — | Firmware version string |
 
 > **CAN Watchdog:** The Titan enters a safe (stopped) state if no speed command is received within ~150 ms. The driver resends all four motor speeds — including zeros — at `motor_update_rate_hz` (default 50 Hz) as the sole path to hardware. This ensures stopped motors receive a sustained zero rather than coasting on the last non-zero command.
