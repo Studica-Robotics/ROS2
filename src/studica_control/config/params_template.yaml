@@ -43,6 +43,9 @@ control_server:
         motor_update_rate_hz: 50  # how often motor speeds are sent to hardware, in Hz (default 50)
         limit_switches: false     # true = publish /m_N/limit_fwd and /m_N/limit_rev (std_msgs/Bool)
         enable_freshness: false   # true = skip publish on stale CAN frames (encoder, RPM, cypher max, limit switch); warn after 5 consecutive stale reads
+        default_pid_type: 0       # starting control mode for all motors: 0 = duty cycle, 1 = manual velocity (tune kP/kI/kD/kF in Studica Hardware Manager), 2 = MCV2 velocity (supports autotune, recommended)
+        scurve_profile: 0         # speed ramp shape for MCV2 velocity: 0 = nav (smooth speed up and slow down), 1 = teleop (smooth speed up, quick stop)
+        autotune_distance_m: 1.0  # max forward travel per step during on the ground (symmetric) autotune, 0.5 to 5.0 metres
         m_0:
           encoder_mode: "quadrature"  # "quadrature" or "absolute"
           dist_per_tick: 1.0          # metres per encoder tick (1.0 = raw counts)

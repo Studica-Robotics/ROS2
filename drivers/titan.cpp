@@ -728,6 +728,14 @@ void Titan::SetTargetVelocity(uint8_t motor, float velocityRpm)
 {
     if (motor >= 4)
         return;
+    if (motor == 0 && invertMotor0)
+        velocityRpm *= -1.0f;
+    else if (motor == 1 && invertMotor1)
+        velocityRpm *= -1.0f;
+    else if (motor == 2 && invertMotor2)
+        velocityRpm *= -1.0f;
+    else if (motor == 3 && invertMotor3)
+        velocityRpm *= -1.0f;
     float rpmScaled = velocityRpm * kRpmScale;
     int32_t rpm32 =
         (rpmScaled >= 0.0f) ? static_cast<int32_t>(rpmScaled + 0.5f) : static_cast<int32_t>(rpmScaled - 0.5f);
@@ -843,9 +851,13 @@ void Titan::SetMotorPIDType(uint8_t motor, uint8_t type)
     Write(GetAddress(SET_PID_TYPE), data, 0);
 }
 
-void Titan::AutotuneAll()
+void Titan::AutotuneAll(const char *signs)
 {
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    if (signs) {
+        for (int i = 0; i < 4; i++)
+            data[i] = (signs[i] == '-') ? (uint8_t)'-' : (uint8_t)'+';
+    }
     Write(GetAddress(AUTOTUNE_ALL), data, 0);
 }
 
@@ -865,6 +877,39 @@ void Titan::SetSensitivity(uint8_t motor, uint8_t sensitivity)
     data[0] = motor;
     data[1] = sensitivity;
     Write(GetAddress(SET_SENSITIVITY), data, 0);
+}
+
+void Titan::SetRampProfile(uint8_t profile)
+{
+    if (profile > 1)   // 0 = nav (symmetric S-curve), 1 = teleop (smooth accel, fast jerk-limited decel)
+        return;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = profile;
+    Write(GetAddress(SET_RAMP_PROFILE), data, 0);
+}
+
+void Titan::SetAutotuneDistance(float metres)
+{
+    // Forward-distance cap for the symmetric autotune sweep. Clamp to the supported 0.5-5.0 m
+    // range, then send as a single byte in 0.1 m units (firmware applies its own sane bound).
+    if (metres < 0.5f) metres = 0.5f;
+    if (metres > 5.0f) metres = 5.0f;
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = static_cast<uint8_t>(metres * 10.0f + 0.5f);
+    Write(GetAddress(SET_AUTOTUNE_DISTANCE), data, 0);
+}
+
+void Titan::SetWheelDiameter(float metres)
+{
+    /* Wheel diameter for the autotune metres->counts conversion. Clamp to a sane range, then send
+     * as U16 LE millimetres (firmware applies its own 0 < d <= 1.0 m bound). */
+    if (metres < 0.01f) metres = 0.01f;
+    if (metres > 1.0f)  metres = 1.0f;
+    uint16_t mm = static_cast<uint16_t>(metres * 1000.0f + 0.5f);
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = static_cast<uint8_t>(mm & 0xFFu);
+    data[1] = static_cast<uint8_t>((mm >> 8) & 0xFFu);
+    Write(GetAddress(SET_WHEEL_DIAMETER), data, 0);
 }
 
 void Titan::SetCANSensorOsDelay(uint16_t periodMs)

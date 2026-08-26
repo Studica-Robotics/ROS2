@@ -13,13 +13,15 @@
  *     publishes /name/m_N/angle (degrees) at 20hz
  *
  * command topics (always active):
- *     subscribe /name/m_N/cmd (Float64, duty cycle -1.0 to 1.0)
+ *     subscribe /name/m_N/cmd      (Float64, duty -1.0 to 1.0, pid type 0)
+ *     subscribe /name/m_N/rpm_cmd  (Float64, target rpm, pid type 1 or 2)
  *
  * service: /name/titan_cmd (studica_control/SetData)
  *   see titan_component.h for the full command reference.
  */
 
 #include "studica_control/titan_component.hpp"
+#include <cmath>
 #include <thread>
 
 namespace studica_control {
@@ -39,6 +41,9 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
         std::string motor_update_rate_param = "titan." + sensor + ".motor_update_rate_hz";
         std::string limit_switches_param      = "titan." + sensor + ".limit_switches";
         std::string enable_freshness_param   = "titan." + sensor + ".enable_freshness";
+        std::string default_pid_type_param   = "titan." + sensor + ".default_pid_type";
+        std::string scurve_profile_param      = "titan." + sensor + ".scurve_profile";
+        std::string autotune_distance_param   = "titan." + sensor + ".autotune_distance_m";
 
         control->declare_parameter<int> (can_id_param, -1);
         control->declare_parameter<int> (motor_freq_param, -1);
@@ -46,6 +51,9 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
         control->declare_parameter<int> (motor_update_rate_param, 50);
         control->declare_parameter<bool>(limit_switches_param, false);
         control->declare_parameter<bool>(enable_freshness_param, false);
+        control->declare_parameter<int> (default_pid_type_param, 0);
+        control->declare_parameter<int> (scurve_profile_param, 0);   // 0=nav (symmetric S-curve), 1=teleop
+        control->declare_parameter<double>(autotune_distance_param, 1.0);  // autotune forward cap (m), 0.5-5.0
 
         uint8_t  can_id               = static_cast<uint8_t>(control->get_parameter(can_id_param).as_int());
         uint16_t motor_freq           = static_cast<uint16_t>(control->get_parameter(motor_freq_param).as_int());
@@ -53,6 +61,9 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
         int      motor_update_rate_hz = control->get_parameter(motor_update_rate_param).as_int();
         bool     limit_switches       = control->get_parameter(limit_switches_param).as_bool();
         bool     enable_freshness     = control->get_parameter(enable_freshness_param).as_bool();
+        uint8_t  default_pid_type     = static_cast<uint8_t>(control->get_parameter(default_pid_type_param).as_int());
+        uint8_t  scurve_profile       = static_cast<uint8_t>(control->get_parameter(scurve_profile_param).as_int());
+        double   autotune_distance_m  = control->get_parameter(autotune_distance_param).as_double();
 
         std::array<MotorConfig, 4> motor_configs;
         for (int m = 0; m < 4; m++) {
@@ -80,7 +91,8 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
 
         auto titan = std::make_shared<Titan>(vmx, sensor, can_id, motor_freq, motor_configs,
                                              encoder_rate_hz, motor_update_rate_hz,
-                                             limit_switches, enable_freshness);
+                                             limit_switches, enable_freshness, default_pid_type,
+                                             scurve_profile, autotune_distance_m);
         titan_nodes.push_back(titan);
     }
 
@@ -93,9 +105,18 @@ Titan::Titan(const rclcpp::NodeOptions &options) : Node("titan_", options) {}
 
 Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID,
              const uint16_t &motor_freq, const std::array<MotorConfig, 4> &motor_configs,
-             int encoder_rate_hz, int motor_update_rate_hz, bool limit_switches, bool enable_freshness)
+             int encoder_rate_hz, int motor_update_rate_hz, bool limit_switches, bool enable_freshness,
+             uint8_t default_pid_type, uint8_t scurve_profile, double autotune_distance_m)
     : Node(name), vmx_(vmx), canID_(canID), motor_freq_(motor_freq), motor_configs_(motor_configs),
       limit_switches_enabled_(limit_switches), freshness_enabled_(enable_freshness) {
+
+    // Clamp the autotune distance cap to the supported range; the firmware applies its own bound too.
+    if (autotune_distance_m < 0.5) autotune_distance_m = 0.5;
+    if (autotune_distance_m > 5.0) autotune_distance_m = 5.0;
+    autotune_distance_m_ = static_cast<float>(autotune_distance_m);
+
+    for (int i = 0; i < 4; i++)
+        pid_type_[i] = default_pid_type;
 
     titan_ = std::make_shared<studica_driver::Titan>(canID_, motor_freq_, 1, vmx_);
 
@@ -111,7 +132,38 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
             prefix + "/cmd", 1,
             [this, i](std_msgs::msg::Float64::SharedPtr msg) {
                 if (!enabled_) return;
-                speeds_[i] = static_cast<float>(msg->data);  // store only — resend_speeds is the sole sender
+                
+                if (pid_type_[i] != 0) {
+                    const double duty = msg->data;
+                    const bool significant = std::abs(duty) > 1e-4;
+                    if (!cmd_rejected_warned_[i]) {
+                        cmd_rejected_warned_[i] = true;
+                        RCLCPP_WARN(this->get_logger(),
+                                             "m_%d: ignoring /cmd duty=%.3f (pid type %u); "
+                                             "use /rpm_cmd or set pid type 0",
+                                             i, duty, pid_type_[i]);
+                    } else if (significant) {
+                        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                             "m_%d: ignoring /cmd duty=%.3f (pid type %u); "
+                                             "use /rpm_cmd or set pid type 0",
+                                             i, duty, pid_type_[i]);
+                    }
+                    return;
+                }
+                speeds_[i] = static_cast<float>(msg->data);
+                position_active_[i] = false;
+            });
+
+        rpm_cmd_subs_[i] = this->create_subscription<std_msgs::msg::Float64>(
+            prefix + "/rpm_cmd", 1,
+            [this, i](std_msgs::msg::Float64::SharedPtr msg) {
+                if (!enabled_) return;
+                if (pid_type_[i] == 0) {
+                    RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                         "m_%d: rpm_cmd ignored; set pid type 1 or 2 first", i);
+                    return;
+                }
+                target_rpm_[i] = static_cast<float>(msg->data);
                 position_active_[i] = false;
             });
 
@@ -169,7 +221,10 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
         }
     }
 
-    titan_->SetPIDType(0);
+    titan_->SetPIDType(default_pid_type);
+
+    // Velocity ramp profile (MCV2): 0=nav (symmetric S-curve), 1=teleop (smooth accel, instant decel).
+    titan_->SetRampProfile(scurve_profile);
 
     // The Titan requires ~1s after initial CONFIG_MOTOR frames before it will
     // accept the enable command. See drivers/examples/titan_example/titan_example.cpp.
@@ -178,7 +233,9 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
     titan_->Enable(true);
     enabled_ = true;
 
-    RCLCPP_INFO(this->get_logger(), "titan ready. can_id: %d, freq: %d hz", canID_, motor_freq_);
+    RCLCPP_INFO(this->get_logger(), "titan ready. can_id: %d, freq: %d hz, pid_type: %u, scurve_profile: %u (%s)",
+                canID_, motor_freq_, static_cast<unsigned>(default_pid_type),
+                static_cast<unsigned>(scurve_profile), scurve_profile ? "teleop" : "nav");
 }
 
 Titan::~Titan() {}
@@ -366,7 +423,6 @@ void Titan::cmd(std::string params,
                           + std::to_string(appliedMin) + ", " + std::to_string(appliedMax) + "]";
 
     // --- pid tuning (titan2 firmware) ---
-
     } else if (params == "set_pid_type") {
         uint8_t type = static_cast<uint8_t>(request->initparams.int_value);
         titan_->SetPIDType(type);
@@ -386,11 +442,30 @@ void Titan::cmd(std::string params,
                             + std::to_string(request->initparams.int_value);
 
     } else if (params == "autotune") {
+        // Push the configured forward-distance cap first; ignored by firmware on a forward-only
+        // (lifted) sweep, but keeps the device's value in sync with the param.
+        titan_->SetAutotuneDistance(autotune_distance_m_);
         titan_->AutotuneAll();
         response->success = true;
         response->message = "autotune started on all motors";
 
+    } else if (params == "autotune_symmetric") {
+        char signs[4];
+        std::string signs_str;
+        for (int i = 0; i < 4; i++) {
+            signs[i] = motor_configs_[i].invert_motor ? '-' : '+';
+            signs_str += signs[i];
+        }
+        // Forward travel per duty point is capped at autotune_distance_m_ (the on-ground sweep
+        // rolls forward to sample, then closed-loop returns home).
+        titan_->SetAutotuneDistance(autotune_distance_m_);
+        titan_->AutotuneAll(signs);
+        response->success = true;
+        response->message = "symmetric autotune started (" + signs_str + " from invert_motor), cap "
+                            + std::to_string(autotune_distance_m_) + " m";
+
     } else if (params == "autotune_motor") {
+        titan_->SetAutotuneDistance(autotune_distance_m_);
         titan_->AutotuneMotor(motor);
         response->success = true;
         response->message = "autotune started on motor " + std::to_string(motor);
