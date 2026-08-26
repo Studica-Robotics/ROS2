@@ -112,6 +112,7 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
             [this, i](std_msgs::msg::Float64::SharedPtr msg) {
                 if (!enabled_) return;
                 speeds_[i] = static_cast<float>(msg->data);  // store only — resend_speeds is the sole sender
+                position_active_[i] = false;
             });
 
         // feedback publishers — depend on encoder mode
@@ -182,6 +183,16 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
 
 Titan::~Titan() {}
 
+void Titan::resume_motion_resend(int motor, bool all_motors)
+{
+    if (all_motors) {
+        for (int i = 0; i < 4; i++)
+            position_active_[i] = false;
+    } else {
+        position_active_[motor] = false;
+    }
+}
+
 
 void Titan::cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request,
                          std::shared_ptr<studica_control::srv::SetData::Response> response) {
@@ -204,33 +215,64 @@ void Titan::cmd(std::string params,
         response->message = "titan enabled";
 
     } else if (params == "disable") {
-        for (int i = 0; i < 4; i++) speeds_[i] = 0.0f;
+        resume_motion_resend(0, true);
+        for (int i = 0; i < 4; i++) {
+            speeds_[i] = 0.0f;
+            target_rpm_[i] = 0.0f;
+        }
         enabled_ = false;
         titan_->Enable(false);
         response->success = true;
         response->message = "titan disabled";
 
     } else if (params == "set_speed") {
-        float speed = request->initparams.speed;
-        speeds_[motor] = speed;
-        titan_->SetSpeed(motor, speed);
-        response->success = true;
-        response->message = "motor " + std::to_string(motor) + " speed set to " + std::to_string(speed);
+        if (pid_type_[motor] != 0) {
+            response->success = false;
+            response->message = "motor " + std::to_string(motor) + " is in pid type "
+                                + std::to_string(pid_type_[motor])
+                                + "; switch to pid type 0 before open-loop duty commands";
+        } else {
+            float speed = request->initparams.speed;
+            resume_motion_resend(motor, false);
+            speeds_[motor] = speed;
+            titan_->SetSpeed(motor, speed);
+            response->success = true;
+            response->message = "motor " + std::to_string(motor) + " speed set to " + std::to_string(speed);
+        }
 
     } else if (params == "set_speed_all") {
+        for (int i = 0; i < 4; i++) {
+            if (pid_type_[i] != 0) {
+                response->success = false;
+                response->message = "motor " + std::to_string(i) + " is in pid type "
+                                    + std::to_string(pid_type_[i])
+                                    + "; switch to pid type 0 before open-loop duty commands";
+                return;
+            }
+        }
         float speed = request->initparams.speed;
+        resume_motion_resend(0, true);
         for (int i = 0; i < 4; i++) speeds_[i] = speed;
         titan_->SetSpeedAll(static_cast<double>(speed));
         response->success = true;
         response->message = "all motors set to " + std::to_string(speed);
 
     } else if (params == "stop") {
-        speeds_[motor] = 0.0f;
-        titan_->SetSpeed(motor, 0.0);
+        resume_motion_resend(motor, false);
+        if (pid_type_[motor] == 0) {
+            speeds_[motor] = 0.0f;
+            titan_->SetSpeed(motor, 0.0);
+        } else {
+            target_rpm_[motor] = 0.0f;
+            titan_->SetTargetVelocity(motor, 0.0f);
+        }
         response->success = true;
         response->message = "motor " + std::to_string(motor) + " stopped";
 
     } else if (params == "disable_motor") {
+        speeds_[motor] = 0.0f;
+        target_rpm_[motor] = 0.0f;
+        resume_motion_resend(motor, false);
         titan_->DisableMotor(motor);
         response->success = true;
         response->message = "motor " + std::to_string(motor) + " disabled";
@@ -243,40 +285,72 @@ void Titan::cmd(std::string params,
     // --- closed loop velocity / position control (titan2 firmware) ---
 
     } else if (params == "set_target_velocity") {
-        float rpm = request->initparams.speed;
-        titan_->SetTargetVelocity(motor, rpm);
-        response->success = true;
-        response->message = "motor " + std::to_string(motor) + " target velocity set to " + std::to_string(rpm) + " rpm";
+        // closed-loop only: firmware ignores SetTargetVelocity when pid type is OFF
+        if (pid_type_[motor] == 0) {
+            response->success = false;
+            response->message = "motor " + std::to_string(motor)
+                                + " is in pid type 0 (OFF); set pid type 1 or 2 before set_target_velocity";
+        } else {
+            float rpm = request->initparams.speed;
+            resume_motion_resend(motor, false);
+            target_rpm_[motor] = rpm;
+            titan_->SetTargetVelocity(motor, rpm);
+            response->success = true;
+            response->message = "motor " + std::to_string(motor) + " target velocity set to " + std::to_string(rpm) + " rpm";
+        }
 
     } else if (params == "set_target_distance") {
-        titan_->SetTargetDistance(motor, static_cast<int32_t>(request->initparams.int_value));
-        response->success = true;
-        response->message = "motor " + std::to_string(motor) + " target distance set to "
-                            + std::to_string(request->initparams.int_value) + " counts";
+        if (pid_type_[motor] == 0) {
+            response->success = false;
+            response->message = "motor " + std::to_string(motor)
+                                + " is in pid type 0 (OFF); set pid type 1 or 2 before set_target_distance";
+        } else {
+            position_active_[motor] = true;
+            titan_->SetTargetDistance(motor, static_cast<int32_t>(request->initparams.int_value));
+            response->success = true;
+            response->message = "motor " + std::to_string(motor) + " target distance set to "
+                                + std::to_string(request->initparams.int_value) + " counts";
+        }
 
     } else if (params == "set_target_angle") {
-        double requested = static_cast<double>(request->initparams.speed);
-        /* SetTargetAngle returns void, so mirror its clamp here to report what actually went out. */
-        double minDeg = 0.0, maxDeg = 360.0;
-        titan_->GetAngleLimits(motor, minDeg, maxDeg);
-        titan_->SetTargetAngle(motor, requested);
-        response->success = true;
-        if (requested < minDeg || requested > maxDeg) {
-            double sent = (requested < minDeg) ? minDeg : maxDeg;
-            response->message = "motor " + std::to_string(motor) + " target "
-                              + std::to_string(requested) + " clamped to "
-                              + std::to_string(sent) + " deg by angle limit ["
-                              + std::to_string(minDeg) + ", " + std::to_string(maxDeg) + "]";
-        } else {
+        if (pid_type_[motor] == 0) {
+            response->success = false;
             response->message = "motor " + std::to_string(motor)
-                              + " target angle set to " + std::to_string(requested) + " degrees";
+                                + " is in pid type 0 (OFF); set pid type 1 or 2 before set_target_angle";
+        } else {
+            position_active_[motor] = true;
+            double requested = static_cast<double>(request->initparams.speed);
+            /* SetTargetAngle returns void, so mirror its clamp here to report what actually went out. */
+            double minDeg = 0.0, maxDeg = 360.0;
+            titan_->GetAngleLimits(motor, minDeg, maxDeg);
+            titan_->SetTargetAngle(motor, requested);
+            response->success = true;
+            if (requested < minDeg || requested > maxDeg) {
+                double sent = (requested < minDeg) ? minDeg : maxDeg;
+                response->message = "motor " + std::to_string(motor) + " target "
+                                  + std::to_string(requested) + " clamped to "
+                                  + std::to_string(sent) + " deg by angle limit ["
+                                  + std::to_string(minDeg) + ", " + std::to_string(maxDeg) + "]";
+            } else {
+                response->message = "motor " + std::to_string(motor)
+                                  + " target angle set to " + std::to_string(requested) + " degrees";
+            }
         }
 
     } else if (params == "set_position_hold") {
-        titan_->SetPositionHold(motor, request->initparams.hold);
-        response->success = true;
-        response->message = "motor " + std::to_string(motor) + " position hold "
-                            + std::string(request->initparams.hold ? "enabled" : "disabled");
+        if (pid_type_[motor] == 0) {
+            response->success = false;
+            response->message = "motor " + std::to_string(motor)
+                                + " is in pid type 0 (OFF); set pid type 1 or 2 before set_position_hold";
+        } else {
+            position_active_[motor] = request->initparams.hold;
+            if (!request->initparams.hold)
+                resume_motion_resend(motor, false);
+            titan_->SetPositionHold(motor, request->initparams.hold);
+            response->success = true;
+            response->message = "motor " + std::to_string(motor) + " position hold "
+                                + std::string(request->initparams.hold ? "enabled" : "disabled");
+        }
 
     } else if (params == "set_angle_limits") {
         /* InitializeParams has no spare numeric fields, so min rides on speed and
@@ -294,9 +368,16 @@ void Titan::cmd(std::string params,
     // --- pid tuning (titan2 firmware) ---
 
     } else if (params == "set_pid_type") {
-        titan_->SetPIDType(static_cast<uint8_t>(request->initparams.int_value));
+        uint8_t type = static_cast<uint8_t>(request->initparams.int_value);
+        titan_->SetPIDType(type);
+        for (int i = 0; i < 4; i++) {
+            pid_type_[i] = type;
+            position_active_[i] = false;
+            if (type == 0)
+                target_rpm_[i] = 0.0f;
+        }
         response->success = true;
-        response->message = "pid type set to " + std::to_string(request->initparams.int_value);
+        response->message = "pid type set to " + std::to_string(type);
 
     } else if (params == "set_sensitivity") {
         titan_->SetSensitivity(motor, static_cast<uint8_t>(request->initparams.int_value));
@@ -315,10 +396,15 @@ void Titan::cmd(std::string params,
         response->message = "autotune started on motor " + std::to_string(motor);
 
     } else if (params == "set_motor_pid_type") {
-        titan_->SetMotorPIDType(motor, static_cast<uint8_t>(request->initparams.int_value));
+        uint8_t type = static_cast<uint8_t>(request->initparams.int_value);
+        titan_->SetMotorPIDType(motor, type);
+        pid_type_[motor] = type;
+        position_active_[motor] = false;
+        if (type == 0)
+            target_rpm_[motor] = 0.0f;
         response->success = true;
         response->message = "motor " + std::to_string(motor) + " pid type set to "
-                            + std::to_string(request->initparams.int_value);
+                            + std::to_string(type);
 
     // --- encoder configuration ---
 
@@ -549,7 +635,12 @@ void Titan::publish_encoders() {
 void Titan::resend_speeds() {
     if (!enabled_) return;
     for (int i = 0; i < 4; i++) {
-        titan_->SetSpeed(i, speeds_[i]); 
+        if (position_active_[i])
+            continue;
+        if (pid_type_[i] == 0)
+            titan_->SetSpeed(i, speeds_[i]);
+        else
+            titan_->SetTargetVelocity(i, target_rpm_[i]);
     }
 }
 
