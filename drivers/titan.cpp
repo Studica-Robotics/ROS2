@@ -764,10 +764,10 @@ void Titan::SetTargetAngle(uint8_t motor, double angleDeg)
 {
     if (motor >= 4)
         return;
-    if (angleDeg < 0.0)
-        angleDeg = 0.0;
-    if (angleDeg > 360.0)
-        angleDeg = 360.0;
+    if (angleDeg < angleLimitMin_[motor])
+        angleDeg = angleLimitMin_[motor];
+    if (angleDeg > angleLimitMax_[motor])
+        angleDeg = angleLimitMax_[motor];
     uint16_t angle_x100 = static_cast<uint16_t>(angleDeg * 100.0);
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     data[0] = motor;
@@ -929,4 +929,45 @@ void Titan::DisableMotor(uint8_t motor)
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     data[0] = motor;
     Write(GetAddress(DISABLE_MOTOR), data, 0);
+}
+
+void Titan::SetAngleLimits(uint8_t motor, double minAngleDeg, double maxAngleDeg)
+{
+    if (motor >= 4)
+        return;
+    if (minAngleDeg < 0.0)
+        minAngleDeg = 0.0;
+    if (minAngleDeg > 360.0)
+        minAngleDeg = 360.0;
+    if (maxAngleDeg < 0.0)
+        maxAngleDeg = 0.0;
+    if (maxAngleDeg > 360.0)
+        maxAngleDeg = 360.0;
+    if (minAngleDeg > maxAngleDeg)
+    {
+        double temp = minAngleDeg;
+        minAngleDeg = maxAngleDeg;
+        maxAngleDeg = temp;
+    }
+
+    angleLimitMin_[motor] = minAngleDeg;
+    angleLimitMax_[motor] = maxAngleDeg;
+
+    uint16_t min_x100 = static_cast<uint16_t>(minAngleDeg * 100.0);
+    uint16_t max_x100 = static_cast<uint16_t>(maxAngleDeg * 100.0);
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    data[0] = motor;
+    data[1] = static_cast<uint8_t>(min_x100 & 0xFF);
+    data[2] = static_cast<uint8_t>((min_x100 >> 8) & 0xFF);
+    data[3] = static_cast<uint8_t>(max_x100 & 0xFF);
+    data[4] = static_cast<uint8_t>((max_x100 >> 8) & 0xFF);
+    Write(GetAddress(SET_ANGLE_LIMITS), data, 0);
+}
+
+void Titan::GetAngleLimits(uint8_t motor, double& minDeg, double& maxDeg) const
+{
+    if (motor >= 4)
+        return;
+    minDeg = angleLimitMin_[motor];
+    maxDeg = angleLimitMax_[motor];
 }

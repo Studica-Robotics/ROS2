@@ -64,6 +64,7 @@ namespace studica_driver
 #define SET_RAMP_PROFILE           BASE + (OFFSET * 28)
 #define SET_WHEEL_DIAMETER         BASE + (OFFSET * 29)
 #define SET_AUTOTUNE_DISTANCE      BASE + (OFFSET * 30)
+#define SET_ANGLE_LIMITS BASE + (OFFSET * 31)
 #define CYPHER_OUTPUT BASE + (OFFSET * 36)
 #define ENCODER_0 BASE + (OFFSET * 37)
 #define ENCODER_1 BASE + (OFFSET * 38)
@@ -173,6 +174,10 @@ namespace studica_driver
             /** Set CAN sensor transmit task period in ms (firmware minimum 5). Persisted to EEPROM. */
             void SetCANSensorOsDelay(uint16_t periodMs);
             void DisableMotor(uint8_t motor);
+            /** Set cypher max angle limits for a specific motor. */
+            void SetAngleLimits(uint8_t motor, double minDeg, double maxDeg);
+            /** Get the angle limits for a specific motor. */
+            void GetAngleLimits(uint8_t motor, double& minDeg, double& maxDeg) const;
 
         private:
             std::shared_ptr<VMXPi> vmx_;
@@ -219,6 +224,9 @@ namespace studica_driver
             double distPerTick_1 = 0;
             double distPerTick_2 = 0;
             double distPerTick_3 = 0;
+
+            double angleLimitMin_[4] = {0.0, 0.0, 0.0, 0.0};
+            double angleLimitMax_[4] = {360.0, 360.0, 360.0, 360.0};
     };
 
 } // namespace studica_driver

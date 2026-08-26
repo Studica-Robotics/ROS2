@@ -137,6 +137,8 @@ struct MotorConfig {
     bool invert_motor   = false;
     bool invert_encoder = false;
     bool invert_rpm     = false;
+    double angle_limit_min_deg = 0.0;
+    double angle_limit_max_deg = 360.0;
 };
 
 // titan — motor controller node. one instance per physical titan board.
@@ -170,10 +172,11 @@ private:
 
     float speeds_[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     float target_rpm_[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-    // per-motor pid type (0=OFF, 1=Manual, 2=S-Curve).
-    // resend_speeds(): pid 0 -> SetSpeed(speeds_); pid 1/2 -> SetTargetVelocity(target_rpm_).
+    // per-motor pid type (0=OFF, 1=legacy, 2=MCV2), tracked so the watchdog resends the
+    // right command: pid 0 -> SetSpeed(speeds_), pid 1/2 -> SetTargetVelocity(target_rpm_).
     uint8_t pid_type_[4] = {0, 0, 0, 0};
-    // One-shot position/hold: suppress velocity keepalives until next duty/velocity command.
+    // Set while a position/angle move is in flight: suppresses the velocity keepalive so it
+    // cannot drag the motor out of firmware POSITION mode. Cleared by resume_motion_resend().
     std::array<bool, 4> position_active_ = {false, false, false, false};
     std::array<bool, 4> cmd_rejected_warned_ = {false, false, false, false};
     bool enabled_ = false;
@@ -204,6 +207,7 @@ private:
     rclcpp::TimerBase::SharedPtr encoder_timer_;
     rclcpp::TimerBase::SharedPtr watchdog_timer_;
 
+    // Clear the position latch so resend_speeds() resumes sending motion commands.
     void resume_motion_resend(int motor, bool all_motors);
 
     void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request,
