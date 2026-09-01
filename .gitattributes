@@ -1,0 +1,9 @@
+# Ensure all text files use LF on checkout (deployed to Linux targets)
+* text=auto eol=lf
+
+# Explicitly binary — never touch line endings
+*.so    binary
+*.a     binary
+*.png   binary
+*.jpg   binary
+*.pdf   binary

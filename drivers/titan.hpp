@@ -1,0 +1,217 @@
+#pragma once
+
+#include "VMXPi.h"
+#include <inttypes.h>
+#include <iomanip>
+#include <memory>
+#include <sstream>
+#include <stdio.h>
+#include <string.h>
+
+namespace studica_driver
+{
+
+/* CAN address = BASE + canID + (OFFSET * index). GetAddress(index) at runtime. */
+#define TITAN_DEVICE_TYPE 33554432
+#define TITAN_MANUFACTURER_ID 786432
+#define TITAN_OFFSET 64
+#define BASE (TITAN_DEVICE_TYPE + TITAN_MANUFACTURER_ID)
+#define OFFSET TITAN_OFFSET
+
+/*
+ * Enable/safe (Titan device behavior – host must match):
+ * - Device powers up disabled; host MUST call Enable(true) before any SetSpeed/SetTargetVelocity.
+ * - ENABLED_FLAG: device sets robotDisabled=0 and allows motor commands.
+ * - DISABLED_FLAG: device stops motors immediately and sets disabled.
+ * - Any valid CAN message refreshes device "last RX" time; if no message for 200 ms → brake/coast + disabled, 10 s →
+ * coast + disabled.
+ * - SET_MOTOR_SPEED is only applied when device is enabled (robotDisabled==0).
+ * - When controlling via CAN, send commands (e.g. SetSpeed or SetTargetVelocity) at least every ~150 ms to avoid 200 ms
+ * timeout.
+ */
+#define TITAN_CAN_KEEPALIVE_MS 150 /* Send CAN at least this often when controlling to avoid device 200 ms timeout */
+
+/* CAN API: address = BASE + canID + (OFFSET * index). Use GetAddress(XXX) to add canID. */
+#define DISABLED_FLAG BASE
+#define ENABLED_FLAG BASE + (OFFSET * 1)
+#define SET_MOTOR_SPEED BASE + (OFFSET * 2)
+#define DISABLE_MOTOR BASE + (OFFSET * 3)
+#define GET_TITAN_INFO BASE + (OFFSET * 4)
+#define RETURN_TITAN_INFO BASE + (OFFSET * 5)
+#define GET_UNIQUE_ID BASE + (OFFSET * 6)
+#define RETURN_WORD_1 BASE + (OFFSET * 7)
+#define RETURN_WORD_2 BASE + (OFFSET * 8)
+#define RETURN_WORD_3 BASE + (OFFSET * 9)
+#define CONFIG_MOTOR BASE + (OFFSET * 10)
+#define GET_MOTOR_FREQUENCY BASE + (OFFSET * 11)
+#define RETURN_MOTOR_FREQUENCY BASE + (OFFSET * 12)
+#define RESET_ENCODER BASE + (OFFSET * 13)
+#define SET_CURRENT_LIMIT BASE + (OFFSET * 14)
+#define SET_MOTOR_STOP_MODE BASE + (OFFSET * 15)
+#define SET_TARGET_VELOCITY BASE + (OFFSET * 16)
+#define SET_TARGET_DISTANCE BASE + (OFFSET * 17)
+#define SET_ENCODER_RESOLUTION BASE + (OFFSET * 18)
+#define SET_CURRENT_LIMIT_MODE BASE + (OFFSET * 19)
+#define SET_PID_TYPE BASE + (OFFSET * 20)
+#define AUTOTUNE_ALL BASE + (OFFSET * 21)
+#define SET_SENSITIVITY BASE + (OFFSET * 22)
+#define SET_TARGET_ANGLE BASE + (OFFSET * 23)
+#define SET_POSITION_HOLD BASE + (OFFSET * 24)
+#define GET_TARGET_RPM BASE + (OFFSET * 25)
+#define SET_CAN_SENSOR_OS_DELAY BASE + (OFFSET * 26)
+#define AUTOTUNE_MOTOR BASE + (OFFSET * 27)
+#define SET_ANGLE_LIMITS BASE + (OFFSET * 31)
+#define CYPHER_OUTPUT BASE + (OFFSET * 36)
+#define ENCODER_0 BASE + (OFFSET * 37)
+#define ENCODER_1 BASE + (OFFSET * 38)
+#define ENCODER_2 BASE + (OFFSET * 39)
+#define ENCODER_3 BASE + (OFFSET * 40)
+#define CAN_RPM_0 BASE + (OFFSET * 41)
+#define CAN_RPM_1 BASE + (OFFSET * 42)
+#define CAN_RPM_2 BASE + (OFFSET * 43)
+#define CAN_RPM_3 BASE + (OFFSET * 44)
+#define LIMIT_SWITCH BASE + (OFFSET * 45)
+#define MCU_TEMP BASE + (OFFSET * 47)
+#define TARGET_RPM_0 BASE + (OFFSET * 48)
+#define TARGET_RPM_1 BASE + (OFFSET * 49)
+#define TARGET_RPM_2 BASE + (OFFSET * 50)
+#define TARGET_RPM_3 BASE + (OFFSET * 51)
+
+/* Titan2 PID type (SET_PID_TYPE) */
+#define TITAN_PID_TYPE_OFF 0u     /* No internal closed-loop; duty via SET_MOTOR_SPEED / open loop */
+#define TITAN_PID_TYPE_LEGACY 1u  /* user Kp/Ki/Kd path */
+#define TITAN_PID_TYPE_MCV2 2u    /* MCV2 cascade control */
+#define TITAN_PID_TYPE_MAX 2u     /* Max valid PID type (for validation) */
+/* PID type is in data[1]; data[2] signature distinguishes from legacy layout (type in data[0]). */
+#ifndef STUDICA_CAN_PIDTYPE_PAYLOAD_SIG
+#define STUDICA_CAN_PIDTYPE_PAYLOAD_SIG 0xC3u
+#define STUDICA_CAN_PIDTYPE_BROADCAST 0xFFu
+#endif
+/** RETURN_TITAN_INFO data[1] (firmware VERSION_MAJOR): 1 = original Titan, 2 = Titan2 (MCV2-capable). */
+#define TITAN_INFO_VERSION_MAJOR_1 1u
+#define TITAN_INFO_VERSION_MAJOR_2 2u
+
+    class Titan
+    {
+        public:
+            Titan(const uint8_t& canID, const uint16_t& motorFreq, const float& distPerTick,
+                  std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50));
+            ~Titan();
+            /** Enable(true): send ENABLED_FLAG so device allows motor commands. Enable(false): send DISABLED_FLAG,
+             * motors stop immediately. Call Enable(true) before any SetSpeed/SetTargetVelocity. */
+            void Enable(bool enable);
+            void SetupEncoder(uint8_t encoder);
+            uint8_t GetID();
+            uint16_t GetFrequency();
+            std::string GetFirmwareVersion();
+            std::string GetHardwareVersion();
+            float GetControllerTemp();
+            bool GetLimitSwitch(uint8_t motor, uint8_t direction);
+            /** Read all 8 limit switch states (4 motors × fwd/rev) in one frame read. fwd[i] and rev[i] are raw */
+            bool GetLimitSwitchesFresh(bool fwd[4], bool rev[4], bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
+            float GetRPM(uint8_t motor);
+            /** Returns true if a RPM frame was read; false if no frame (Blackboard empty for that ID). Fills *out_rpm. */
+            bool TryGetRPM(uint8_t motor, float* out_rpm);
+            /** RPM read with VMX blackboard freshness. */
+            bool GetRPMFresh(uint8_t motor, float& rpm, bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
+            std::string GetSerialNumber();
+            double GetEncoderDistance(uint8_t motor);
+            int32_t GetEncoderCount(uint8_t motor);
+            /** Encoder distance (metres, distPerTick applied) with VMX blackboard freshness. Single read. */
+            bool GetEncoderDistanceFresh(uint8_t motor, double& distance, bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
+            void ConfigureEncoder(uint8_t motor, double cfg);
+            void ResetEncoder(uint8_t motor);
+            double GetCypherAngle(uint8_t port);
+            /** Read all 4 Cypher angles in one frame read. angles[i] is in degrees. */
+            bool GetCypherAnglesFresh(double angles[4], bool& is_fresh, uint64_t* out_timestamp_us = nullptr);
+            /** SET_MOTOR_SPEED (one frame per motor). Only applied when device is enabled; resend within
+             * TITAN_CAN_KEEPALIVE_MS to avoid 200 ms timeout. */
+            void SetSpeed(uint8_t motor, double speedCfg);
+            /** Set all 4 channels to same duty (0..1). Sends 4 CAN frames, one per motor (Titan format [motor, duty,
+             * inA, inB]). Resend within TITAN_CAN_KEEPALIVE_MS when holding. */
+            void SetSpeedAll(double duty);
+            void InvertMotorDirection(uint8_t motor);
+            void InvertMotorRPM(uint8_t motor);
+            void InvertEncoderDirection(uint8_t motor);
+            void InvertMotor(uint8_t motor);
+
+            /** Set target RPM; negative = reverse. PID (or MCV2) drives motor via setMotorSpeed(..., inA, inB). */
+            void SetTargetVelocity(uint8_t motor, float velocityRpm);
+            /** Read back velocity target for one motor (TARGET_RPM_0..3 blackboard). data[0..3] = int32 LE RPM×100. */
+            float GetTargetRPM(uint8_t motor);
+            bool TryGetTargetRPM(uint8_t motor, float* out_rpm);
+            /** Read all four target RPMs via per-motor blackboard IDs (no GET_TARGET_RPM stream drain). */
+            bool TryGetTargetRPMFromAll(float targetRpm[4]);
+            void SetTargetDistance(uint8_t motor, int32_t distanceCounts);
+            void SetTargetAngle(uint8_t motor, double angleDeg);
+            void SetPositionHold(uint8_t motor, bool hold);
+            void SetEncoderResolution(uint8_t channel, uint16_t cpr);
+            void SetCurrentLimit(uint8_t channel, float limitAmps);
+            void SetCurrentLimitMode(uint8_t channel, uint8_t mode);
+            void SetMotorStopMode(uint8_t mode);
+            /** Broadcast PID mode (legacy-compatible global): same type on all motors. */
+            void SetPIDType(uint8_t type);
+            /** Per-motor PID type (0=OFF, 1=legacy, 2=MCV2 cascade). */
+            void SetMotorPIDType(uint8_t motor, uint8_t type);
+            void AutotuneAll();
+            void AutotuneMotor(uint8_t motor);
+            void SetSensitivity(uint8_t motor, uint8_t sensitivity);
+            /** Set CAN sensor transmit task period in ms (firmware minimum 5). Persisted to EEPROM. */
+            void SetCANSensorOsDelay(uint16_t periodMs);
+            void DisableMotor(uint8_t motor);
+            /** Set cypher max angle limits for a specific motor. */
+            void SetAngleLimits(uint8_t motor, double minDeg, double maxDeg);
+            /** Get the angle limits for a specific motor. */
+            void GetAngleLimits(uint8_t motor, double& minDeg, double& maxDeg) const;
+
+        private:
+            std::shared_ptr<VMXPi> vmx_;
+            uint8_t canID_;
+            uint16_t motorFreq_;
+            uint8_t nEncoder_;
+            float distPerTick_;
+
+            /** Build CAN ID for this device: addressBase + canID_. addressBase = BASE + (OFFSET * n). */
+            uint32_t GetAddress(uint32_t addressBase) const;
+
+            VMXCANReceiveStreamHandle canrxhandle = 0;
+            VMXErrorCode vmxerr;
+            bool Write(uint32_t address, const uint8_t* data, int32_t periodMS);
+            bool Read(uint32_t address, uint8_t* data);
+            /** VMX blackboard read; is_fresh=true when a new CAN frame arrived */
+            bool ReadWithFreshFlag(uint32_t address, uint8_t* data, bool& is_fresh,
+                                   uint64_t* out_timestamp_us = nullptr);
+            /** Cache RETURN_TITAN_INFO so GetID/GetFirmwareVersion/GetHardwareVersion share one read (VMX Blackboard
+             * may only serve one consume per ID). */
+            uint8_t cached_titan_info_[8] = {0};
+            bool cached_titan_info_valid_ = false;
+            bool EnsureTitanInfoCached();
+            /** SET_MOTOR_SPEED (same as Titan): one frame per motor: data[0]=motor, data[1]=duty, data[2]=inA,
+             * data[3]=inB. */
+            uint8_t lastDuty_[4] = {0, 0, 0, 0};
+            uint8_t lastDirection_ = 0x0F; /* all forward */
+            // Motor Flags
+            bool invertMotor0 = false;
+            bool invertRPM0 = false;
+            bool invertEncoder0 = false;
+            bool invertMotor1 = false;
+            bool invertRPM1 = false;
+            bool invertEncoder1 = false;
+            bool invertMotor2 = false;
+            bool invertRPM2 = false;
+            bool invertEncoder2 = false;
+            bool invertMotor3 = false;
+            bool invertRPM3 = false;
+            bool invertEncoder3 = false;
+
+            // Encoder stuff
+            double distPerTick_0 = 0;
+            double distPerTick_1 = 0;
+            double distPerTick_2 = 0;
+            double distPerTick_3 = 0;
+
+            double angleLimitMin_[4] = {0.0, 0.0, 0.0, 0.0};
+            double angleLimitMax_[4] = {360.0, 360.0, 360.0, 360.0};
+    };
+
+} // namespace studica_driver

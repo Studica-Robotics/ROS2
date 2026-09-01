@@ -1,0 +1,41 @@
+BasedOnStyle: LLVM
+
+# Indentation
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+# Brace style (Allman)
+BreakBeforeBraces: Allman
+
+# Indent access specifiers (public/private/protected)
+IndentAccessModifiers: true
+AccessModifierOffset: 0
+
+# Line length
+ColumnLimit: 120
+
+# Pointer style
+PointerAlignment: Left
+
+# Function formatting
+AllowShortBlocksOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+
+# Namespace formatting
+NamespaceIndentation: All
+
+# Constructor initializer formatting
+BreakConstructorInitializers: BeforeComma
+
+# Includes
+SortIncludes: true
+IncludeBlocks: Preserve
+
+# Spacing
+SpaceBeforeParens: ControlStatements
+
+# Keep empty lines reasonable
+MaxEmptyLinesToKeep: 1
