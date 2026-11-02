@@ -26,7 +26,6 @@ def generate_launch_description():
         cmd=[
             'sudo', '-E', exec_path,
             '--ros-args',
-            '-r', '__node:=control_server',
             '--params-file', LaunchConfiguration('params_file'),
         ],
         output='screen',

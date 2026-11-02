@@ -1372,7 +1372,6 @@ params_file = os.path.join(
 Node(
     package='studica_control',
     executable='manual_composition',
-    name='control_server',
     output='screen',
     parameters=[params_file],
 )
