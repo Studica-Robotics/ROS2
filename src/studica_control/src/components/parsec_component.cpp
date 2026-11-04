@@ -4,6 +4,7 @@
  * ROS2 component for the Studica Parsec multi-zone ToF sensor.
  * CAN: studica_driver::Parsec::ReadDataStreamCAN2()
  * USB: studica_driver::ParsecUsb serial binary frames on /dev/ttyACM0
+ * Current firmware only.
  */
 
 #include "studica_control/parsec_component.hpp"
@@ -47,6 +48,8 @@ std::vector<std::shared_ptr<rclcpp::Node>> Parsec::initialize(
         const std::string frame_id_param = prefix + ".frame_id";
         const std::string publish_rate_param = prefix + ".publish_rate_hz";
         const std::string publish_outputs_param = prefix + ".publish_outputs";
+        const std::string resolution_param = prefix + ".resolution";
+        const std::string zone_mask_param = prefix + ".zone_mask";
 
         control->declare_parameter<std::string>(transport_param, "can");
         control->declare_parameter<int>(can_id_param, 0);
@@ -55,6 +58,8 @@ std::vector<std::shared_ptr<rclcpp::Node>> Parsec::initialize(
         control->declare_parameter<int>(publish_rate_param, 15);
         control->declare_parameter<std::vector<std::string>>(
             publish_outputs_param, std::vector<std::string>{"grid"});
+        control->declare_parameter<int>(resolution_param, 0);
+        control->declare_parameter<std::string>(zone_mask_param, "");
 
         const ParsecTransport transport =
             parse_transport(control->get_parameter(transport_param).as_string());
@@ -64,6 +69,8 @@ std::vector<std::shared_ptr<rclcpp::Node>> Parsec::initialize(
         const int publish_rate_hz = control->get_parameter(publish_rate_param).as_int();
         const std::vector<std::string> publish_outputs =
             control->get_parameter(publish_outputs_param).as_string_array();
+        const int resolution = control->get_parameter(resolution_param).as_int();
+        const std::string zone_mask = control->get_parameter(zone_mask_param).as_string();
 
         RCLCPP_INFO(control->get_logger(),
                     "%s -> transport: %s, frame_id: %s, publish_rate_hz: %d, publish_outputs: [%s]",
@@ -87,7 +94,8 @@ std::vector<std::shared_ptr<rclcpp::Node>> Parsec::initialize(
         }
 
         parsec_nodes.push_back(std::make_shared<Parsec>(
-            vmx, sensor, transport, can_id, serial_port, frame_id, publish_rate_hz, publish_outputs));
+            vmx, sensor, transport, can_id, serial_port, frame_id, publish_rate_hz, publish_outputs,
+            resolution, zone_mask));
     }
 
     return parsec_nodes;
@@ -100,35 +108,52 @@ Parsec::Parsec(const rclcpp::NodeOptions &options) : Node("parsec", options) {}
 Parsec::Parsec(std::shared_ptr<VMXPi> vmx, const std::string &name,
                ParsecTransport transport, uint8_t can_id, const std::string &serial_port,
                const std::string &frame_id, int publish_rate_hz,
-               const std::vector<std::string> &publish_outputs)
+               const std::vector<std::string> &publish_outputs,
+               int resolution, const std::string &zone_mask)
     : Node(name),
       transport_(transport),
       vmx_(vmx),
       frame_id_(frame_id),
-      publish_rate_hz_(publish_rate_hz > 0 ? publish_rate_hz : 15),
+      publish_rate_hz_(publish_rate_hz >= 1 && publish_rate_hz <= 60 ? publish_rate_hz : 15),
       outputs_(parse_publish_outputs(publish_outputs))
 {
+    if (publish_rate_hz_ != publish_rate_hz) {
+        RCLCPP_WARN(this->get_logger(), "publish_rate_hz %d out of range 1-60, using 15", publish_rate_hz);
+    }
+
     if (transport_ == ParsecTransport::Usb) {
         parsec_usb_ = std::make_shared<studica_driver::ParsecUsb>(serial_port);
         if (!parsec_usb_->IsOpen()) {
             RCLCPP_ERROR(this->get_logger(), "Parsec USB failed to open %s", serial_port.c_str());
             return;
         }
-        if (!parsec_usb_->ConfigureStreaming(publish_rate_hz_)) {
+        if (!parsec_usb_->ConfigureStreaming()) {
             RCLCPP_WARN(this->get_logger(), "Parsec USB streaming config failed on %s", serial_port.c_str());
-        }
-        if (parsec_usb_->RequestConfig(&usb_config_line_)) {
-            RCLCPP_INFO(this->get_logger(), "Parsec USB ready on %s: %s",
-                        serial_port.c_str(), usb_config_line_.c_str());
-        } else {
-            RCLCPP_WARN(this->get_logger(), "Parsec USB opened %s but GETCONFIG not received yet",
-                        serial_port.c_str());
         }
     } else {
         parsec_can_ = std::make_shared<studica_driver::Parsec>(can_id, vmx_);
-        if (parsec_can_->GetCanID() != can_id) {
+        if (!parsec_can_->IsOpen()) {
             RCLCPP_ERROR(this->get_logger(), "Parsec driver failed to init for CAN ID %u", can_id);
             return;
+        }
+    }
+
+    // Resolution first: changing it restarts ranging at 15 Hz, which resets the rate.
+    if (resolution != 0) {
+        const std::string error = set_resolution(resolution);
+        if (!error.empty()) {
+            RCLCPP_WARN(this->get_logger(), "resolution %d not applied: %s", resolution, error.c_str());
+        }
+    }
+    const std::string rate_error = set_output_rate(publish_rate_hz_);
+    if (!rate_error.empty()) {
+        RCLCPP_WARN(this->get_logger(), "output rate %d Hz not applied: %s", publish_rate_hz_, rate_error.c_str());
+    }
+    if (!zone_mask.empty()) {
+        uint64_t mask = 0;
+        const std::string error = parse_zone_mask(zone_mask, mask) ? set_zone_mask(mask) : "not a hex mask";
+        if (!error.empty()) {
+            RCLCPP_WARN(this->get_logger(), "zone_mask %s not applied: %s", zone_mask.c_str(), error.c_str());
         }
     }
 
@@ -154,20 +179,21 @@ Parsec::Parsec(std::shared_ptr<VMXPi> vmx, const std::string &name,
         std::chrono::milliseconds(period_ms),
         std::bind(&Parsec::publish_zones, this));
 
-    if (transport_ == ParsecTransport::Can && parsec_can_) {
-        uint8_t config[64] = {0};
-        if (parsec_can_->RequestConfig()) {
-            vmx_->time.DelayMilliseconds(50);
-            if (parsec_can_->GetConfigResponse(config, sizeof(config)) && config[0] != 0) {
-                RCLCPP_INFO(this->get_logger(),
-                            "Parsec ready on CAN ID %u (fw version %u, reported_id %u)",
-                            can_id, config[0], config[4]);
-            } else {
-                RCLCPP_WARN(this->get_logger(),
-                            "Parsec started on CAN ID %u but GETCONFIG response not received yet",
-                            can_id);
-            }
+    if (transport_ == ParsecTransport::Can) {
+        studica_driver::Parsec::Config config;
+        if (parsec_can_->GetConfig(config)) {
+            RCLCPP_INFO(this->get_logger(), "Parsec ready on CAN ID %u, firmware %u.%u.%u",
+                        can_id, config.firmware[0], config.firmware[1], config.firmware[2]);
+        } else {
+            RCLCPP_WARN(this->get_logger(),
+                        "Parsec started on CAN ID %u but GETCONFIG response not received yet", can_id);
         }
+    } else if (parsec_usb_->RequestConfig(&usb_config_line_)) {
+        RCLCPP_INFO(this->get_logger(), "Parsec USB ready on %s: %s",
+                    serial_port.c_str(), usb_config_line_.c_str());
+    } else {
+        RCLCPP_WARN(this->get_logger(), "Parsec USB opened %s but GETCONFIG not received yet",
+                    serial_port.c_str());
     }
 
     std::ostringstream topics;
@@ -255,23 +281,48 @@ void Parsec::cmd(const std::string &params,
             response->message = "CAN driver not initialized";
             return;
         }
-        uint8_t config[64] = {0};
-        if (!parsec_can_->RequestConfig()) {
-            response->success = false;
-            response->message = "failed to send GETCONFIG";
-            return;
-        }
-        vmx_->time.DelayMilliseconds(50);
-        const int n = parsec_can_->Read(parsec_can_->GetAddress(17), config, sizeof(config));
-        if (n < 8) {
+        studica_driver::Parsec::Config config;
+        if (!parsec_can_->GetConfig(config)) {
             response->success = false;
             response->message = "no GETCONFIG response";
             return;
         }
         response->success = true;
-        response->message = "version=" + std::to_string(config[0]) +
-                            ", fdist_en=" + std::to_string(config[1]) +
-                            ", can_id=" + std::to_string(config[4]);
+        response->message = "firmware=" + std::to_string(config.firmware[0]) + "." +
+                            std::to_string(config.firmware[1]) + "." +
+                            std::to_string(config.firmware[2]) +
+                            ", version=" + std::to_string(config.version) +
+                            ", fdist_en=" + std::to_string(config.distance_enabled) +
+                            ", can_id=" + std::to_string(config.can_id);
+        return;
+    }
+
+    // Settings: "" back means it worked.
+    auto reply = [&](const std::string &error, const std::string &done) {
+        response->success = error.empty();
+        response->message = error.empty() ? done : error;
+    };
+    const int value = request.initparams.int_value;
+    if (params == "set_resolution") {
+        reply(set_resolution(value), "resolution set to " + std::to_string(value) + " zones");
+        return;
+    }
+    if (params == "set_output_rate") {
+        reply(set_output_rate(value), "output rate set to " + std::to_string(value) + " Hz");
+        return;
+    }
+    if (params == "set_frequency") {
+        reply(set_frequency(value), "ranging frequency set to " + std::to_string(value) + " Hz");
+        return;
+    }
+    if (params.rfind("set_zone_mask", 0) == 0) {
+        const auto comma = params.find(',');
+        uint64_t mask = 0;
+        if (comma == std::string::npos || !parse_zone_mask(params.substr(comma + 1), mask)) {
+            reply("usage: set_zone_mask,<hex mask>, e.g. set_zone_mask,FFFF", "");
+            return;
+        }
+        reply(set_zone_mask(mask), "zone mask set to " + params.substr(comma + 1));
         return;
     }
 
@@ -301,7 +352,100 @@ void Parsec::cmd(const std::string &params,
 
     response->success = false;
     response->message = "unknown command '" + params +
-                        "' — use get_config, get_zone_distance, or get_min_distance";
+                        "' — use get_config, get_zone_distance, get_min_distance, set_resolution, "
+                        "set_output_rate, set_frequency or set_zone_mask,<hex>";
+}
+
+
+std::string Parsec::can_result(int ack_status)
+{
+    switch (ack_status) {
+        case PARSEC_ACK_OK: return "";
+        case PARSEC_ACK_BAD_ARGUMENT: return "rejected by sensor";
+        case PARSEC_ACK_TIMEOUT: return "no reply";
+        default: return "sensor error " + std::to_string(ack_status);
+    }
+}
+
+
+std::string Parsec::usb_result(studica_driver::ParsecUsb::Result result)
+{
+    if (result == studica_driver::ParsecUsb::Result::Ok) {
+        return "";
+    }
+    return studica_driver::ParsecUsb::ResultString(result);
+}
+
+
+std::string Parsec::set_resolution(int zones)
+{
+    if (zones != 16 && zones != 64) {
+        return "resolution must be 16 or 64";
+    }
+    if (parsec_can_) {
+        return can_result(parsec_can_->SetResolution(static_cast<uint8_t>(zones)));
+    }
+    if (parsec_usb_) {
+        return usb_result(parsec_usb_->SetResolution(zones));
+    }
+    return "driver not initialized";
+}
+
+
+std::string Parsec::set_output_rate(int hz)
+{
+    if (hz < 1 || hz > 60) {
+        return "output rate must be 1-60 Hz";
+    }
+    if (parsec_can_) {
+        return can_result(parsec_can_->SetOutputRate(static_cast<uint8_t>(hz)));
+    }
+    if (parsec_usb_) {
+        return usb_result(parsec_usb_->SetOutputRate(hz));
+    }
+    return "driver not initialized";
+}
+
+
+std::string Parsec::set_frequency(int hz)
+{
+    if (hz < 1 || hz > 60) {
+        return "ranging frequency must be 1-60 Hz";
+    }
+    if (parsec_can_) {
+        return can_result(parsec_can_->SetRangingFrequency(static_cast<uint8_t>(hz)));
+    }
+    if (parsec_usb_) {
+        return usb_result(parsec_usb_->SetRangingFrequency(hz));
+    }
+    return "driver not initialized";
+}
+
+
+std::string Parsec::set_zone_mask(uint64_t mask)
+{
+    if (parsec_can_) {
+        return can_result(parsec_can_->SetZoneMask(mask));
+    }
+    if (parsec_usb_) {
+        return usb_result(parsec_usb_->SetZoneMask(mask));
+    }
+    return "driver not initialized";
+}
+
+
+bool Parsec::parse_zone_mask(const std::string &text, uint64_t &mask)
+{
+    std::string hex = text;
+    if (hex.rfind("0x", 0) == 0 || hex.rfind("0X", 0) == 0) {
+        hex = hex.substr(2);
+    }
+    if (hex.empty() || hex.size() > 16 ||
+        hex.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos) {
+        return false;
+    }
+    mask = std::stoull(hex, nullptr, 16);
+    return mask != 0;
 }
 
 
@@ -450,6 +594,7 @@ bool Parsec::read_fdist(uint8_t *seq, uint8_t *zones, int16_t *fdist, int max_zo
     if (!parsec_can_) {
         return false;
     }
+    // Non-blocking: 0 when no new frame finished since the last tick.
     *filled_out = parsec_can_->ReadDataStreamCAN2(seq, zones, fdist, max_zones);
     return *filled_out > 0;
 }

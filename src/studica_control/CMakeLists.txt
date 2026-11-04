@@ -54,6 +54,8 @@ set(studica_control_HDRS
   include/studica_control/ultrasonic_component.hpp
   include/studica_control/colore_component.hpp
   include/studica_control/parsec_component.hpp
+  include/studica_control/navx3_component.hpp
+  include/studica_control/control_panel_component.hpp
 )
 
 set(dependencies
@@ -137,6 +139,16 @@ ament_target_dependencies(parsec_component ${dependencies})
 target_link_libraries(parsec_component "${cpp_typesupport_target}")
 rclcpp_components_register_nodes(parsec_component "studica_control::Parsec")
 
+add_library(navx3_component SHARED src/components/navx3_component.cpp)
+ament_target_dependencies(navx3_component ${dependencies})
+target_link_libraries(navx3_component "${cpp_typesupport_target}")
+rclcpp_components_register_nodes(navx3_component "studica_control::Navx3")
+
+add_library(control_panel_component SHARED src/components/control_panel_component.cpp)
+ament_target_dependencies(control_panel_component ${dependencies})
+target_link_libraries(control_panel_component "${cpp_typesupport_target}")
+rclcpp_components_register_nodes(control_panel_component "studica_control::ControlPanel")
+
 install(TARGETS
   cobra_component
   dc_encoder_component
@@ -152,6 +164,8 @@ install(TARGETS
   ultrasonic_component
   colore_component
   parsec_component
+  navx3_component
+  control_panel_component
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
     PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
@@ -174,6 +188,8 @@ target_link_libraries(manual_composition
   ultrasonic_component
   colore_component
   parsec_component
+  navx3_component
+  control_panel_component
   /usr/local/lib/vmxpi/libvmxpi_hal_cpp.so
   /usr/local/lib/studica_drivers/libstudica_drivers.so
 )
@@ -224,6 +240,8 @@ ament_export_libraries(
   ultrasonic_component
   colore_component
   parsec_component
+  navx3_component
+  control_panel_component
 )
 ament_export_dependencies(${dependencies})
 

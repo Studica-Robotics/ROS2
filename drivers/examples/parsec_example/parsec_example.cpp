@@ -75,9 +75,6 @@ void print_usage(const char* prog)
     printf("  %s                         CAN on ID 0\n", prog);
     printf("  %s can [can_id]            VMX CAN bus (default CAN ID 0)\n", prog);
     printf("  %s usb [port]              USB serial (default port /dev/ttyACM0)\n", prog);
-    printf("\n");
-    printf("Environment:\n");
-    printf("  PARSEC_CAN_CHANNEL=1       Use VMX CAN1 instead of CAN0\n");
 }
 
 Options parse_args(int argc, char* argv[])
@@ -135,8 +132,13 @@ void run_usb(const Options& opts)
         return;
     }
 
-    if (!parsec.ConfigureStreaming(opts.odr_hz)) {
+    if (!parsec.ConfigureStreaming()) {
         printf("Warning: streaming config failed on %s\n", opts.serial_port.c_str());
+    }
+    const auto rate = parsec.SetOutputRate(opts.odr_hz);
+    if (rate != studica_driver::ParsecUsb::Result::Ok) {
+        printf("Warning: output rate %d Hz not set: %s\n", opts.odr_hz,
+               studica_driver::ParsecUsb::ResultString(rate));
     }
 
     std::string config;
@@ -169,24 +171,28 @@ void run_can(const Options& opts)
 {
     std::shared_ptr<VMXPi> vmx = std::make_shared<VMXPi>(true, 50);
     studica_driver::Parsec parsec(opts.can_id, vmx);
-    if (parsec.GetCanID() != opts.can_id) {
+    if (!parsec.IsOpen()) {
         printf("Failed to init Parsec on CAN ID %u\n", opts.can_id);
         return;
     }
 
-    uint8_t config[64] = {0};
-    if (parsec.RequestConfig()) {
-        vmx->time.DelayMilliseconds(50);
-        if (parsec.GetConfigResponse(config, sizeof(config)) && config[0] != 0) {
-            printf("Parsec CAN config: version=%u fdist_en=%u can_id=%u\n",
-                   config[0], config[1], config[4]);
-        }
+    studica_driver::Parsec::Config config;
+    if (parsec.GetConfig(config)) {
+        printf("Parsec CAN config: firmware %u.%u.%u can_id=%u\n",
+               config.firmware[0], config.firmware[1], config.firmware[2], config.can_id);
+    } else {
+        printf("Warning: no GETCONFIG reply on CAN ID %u\n", opts.can_id);
+    }
+    const int rate = parsec.SetOutputRate(static_cast<uint8_t>(opts.odr_hz));
+    if (rate != PARSEC_ACK_OK) {
+        printf("Warning: output rate %d Hz not set (ack status %d)\n", opts.odr_hz, rate);
     }
 
     std::vector<int16_t> fdist(studica_driver::ParsecUsb::kMaxZones, 0);
     for (int i = 0; i < opts.iterations; ++i) {
         uint8_t seq = 0;
         uint8_t zones = 0;
+        // Non-blocking: 0 until a new frame has finished arriving.
         const int n = parsec.ReadDataStreamCAN2(&seq, &zones, fdist.data(),
                                                 static_cast<int>(fdist.size()));
         if (n <= 0) {

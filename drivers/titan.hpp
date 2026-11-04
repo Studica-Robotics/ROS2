@@ -12,10 +12,8 @@ namespace studica_driver
 {
 
 /* CAN address = BASE + canID + (OFFSET * index). GetAddress(index) at runtime. */
-#define TITAN_DEVICE_TYPE 33554432
-#define TITAN_MANUFACTURER_ID 786432
+#define BASE 0x020C0000u
 #define TITAN_OFFSET 64
-#define BASE (TITAN_DEVICE_TYPE + TITAN_MANUFACTURER_ID)
 #define OFFSET TITAN_OFFSET
 
 /*
@@ -127,8 +125,8 @@ namespace studica_driver
             /** SET_MOTOR_SPEED (one frame per motor). Only applied when device is enabled; resend within
              * TITAN_CAN_KEEPALIVE_MS to avoid 200 ms timeout. */
             void SetSpeed(uint8_t motor, double speedCfg);
-            /** Set all 4 channels to same duty (0..1). Sends 4 CAN frames, one per motor (Titan format [motor, duty,
-             * inA, inB]). Resend within TITAN_CAN_KEEPALIVE_MS when holding. */
+            /** Set all 4 channels to the same duty (-1..1). Calls SetSpeed per motor, so each channel's inversion
+             * applies. Resend within TITAN_CAN_KEEPALIVE_MS when holding. */
             void SetSpeedAll(double duty);
             void InvertMotorDirection(uint8_t motor);
             void InvertMotorRPM(uint8_t motor);

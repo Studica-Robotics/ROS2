@@ -1,23 +1,44 @@
 #include "parsec.hpp"
 #include "VMXPi.h"
-#include <cstdlib>
 #include <cstring>
 #include <stdio.h>
-#include <array>
-#include <map>
+#include <thread>
 #include <vector>
 
 namespace studica_driver {
 
-static unsigned s_canChannel = 0;
+namespace {
 
-unsigned Parsec::GetCANChannel() { return s_canChannel; }
+constexpr int kZonesPerBlock = 3;
+// A burst takes a few ms; an unfinished frame older than this is dropped, so
+// distances from before a bus dropout never come back as new.
+constexpr auto kMaxPartialAge = std::chrono::milliseconds(100);
+constexpr auto kReplyTimeout = std::chrono::milliseconds(200);
+// SET_RESOLUTION stops and restarts the sensor before it answers.
+constexpr auto kResolutionTimeout = std::chrono::milliseconds(1000);
+
+int16_t rd16(const uint8_t* p)
+{
+    return static_cast<int16_t>(static_cast<uint16_t>(p[0]) | (static_cast<uint16_t>(p[1]) << 8));
+}
+
+int blocksFor(int zones)
+{
+    return (zones + kZonesPerBlock - 1) / kZonesPerBlock;
+}
+
+int countBits(uint32_t v)
+{
+    int n = 0;
+    for (; v; v &= v - 1) n++;
+    return n;
+}
+
+} // namespace
 
 Parsec::Parsec(uint8_t canID, std::shared_ptr<VMXPi> vmx)
     : vmx_(vmx), canID_(canID)
 {
-    const char* chEnv = std::getenv("PARSEC_CAN_CHANNEL");
-    s_canChannel = (chEnv && chEnv[0] == '1' && chEnv[1] == '\0') ? 1u : 0u;
     if (canID_ > 63)
     {
         printf("Parsec CAN ID %u is out of range (0..63).\n", canID_);
@@ -33,31 +54,22 @@ Parsec::Parsec(uint8_t canID, std::shared_ptr<VMXPi> vmx)
         return;
     }
 
-    /* Filter: only accept Parsec IDs 0x0609xxxx (ignore Titan 0x020C0xxx and others) */
-    if (!vmx_->can.OpenReceiveStream(canrxhandle_, PARSEC_BASE, 0x1FFF0000u, 100, &vmxerr))
-        printf("Parsec: Error opening CAN RX Stream.\n");
-    else
+    /* Filter: this device only (base and CAN ID; any API). No FIFO
+     * flushes: sensors start after the Titan, and flushing TX could drop its
+     * repeating enable frame. */
+    if (!vmx_->can.OpenReceiveStream(canrxhandle_, PARSEC_BASE + canID_, 0x1FFF003Fu, 100, &vmxerr))
     {
-        printf("Parsec: Opened CAN RX Stream (filter 0x0609xxxx), handle %d\n", canrxhandle_);
-        if (vmx_->can.EnableReceiveStreamBlackboard(canrxhandle_, true, &vmxerr))
-            printf("Parsec: Blackboard enabled.\n");
-        else
-            printf("Parsec: Error enabling Blackboard.\n");
+        printf("Parsec: Error opening CAN RX Stream.\n");
+        fflush(stdout);
+        return;
     }
-
-    if (!vmx_->can.FlushRxFIFO(&vmxerr))
-        printf("Parsec: Error flushing CAN RX FIFO.\n");
-    if (!vmx_->can.FlushTxFIFO(&vmxerr))
-        printf("Parsec: Error flushing CAN TX FIFO.\n");
+    if (!vmx_->can.EnableReceiveStreamBlackboard(canrxhandle_, true, &vmxerr))
+        printf("Parsec: Error enabling Blackboard.\n");
     if (!vmx_->can.SetMode(VMXCAN::VMXCAN_NORMAL, &vmxerr))
         printf("Parsec: Error setting CAN mode to Normal.\n");
-    else
-        printf("Parsec: CAN mode Normal.\n");
 
-    vmx_->time.DelayMilliseconds(20);
-    printf("Parsec driver started (CAN ID %u, VMX CAN channel %u).\n", canID_, s_canChannel);
-    if (s_canChannel == 0)
-        printf("  (Use: sudo PARSEC_CAN_CHANNEL=1 ./parsec_example for VMX CAN1)\n");
+    open_ = true;
+    printf("Parsec driver started (CAN ID %u).\n", canID_);
     fflush(stdout);
 }
 
@@ -70,7 +82,7 @@ Parsec::~Parsec()
 
 uint32_t Parsec::GetAddress(uint32_t index) const
 {
-    return PARSEC_BASE + canID_ + (PARSEC_OFFSET * index);
+    return GetAddressForCanID(canID_, index);
 }
 
 uint32_t Parsec::GetAddressForCanID(uint8_t canID, uint32_t index)
@@ -80,8 +92,8 @@ uint32_t Parsec::GetAddressForCanID(uint8_t canID, uint32_t index)
 
 bool Parsec::Write(uint32_t address, const uint8_t* data, size_t len, int32_t periodMS)
 {
-    if (!vmx_ || !vmx_->IsOpen() || !data) return false;
-    if (len > 8) len = 8;  // VMX classic CAN typically 8 bytes
+    if (!open_ || !data) return false;
+    if (len > 8) len = 8;  // VMX is classic CAN only
     VMXCANMessage msg;
     msg.dataSize = static_cast<int>(len);
     msg.setData(const_cast<uint8_t*>(data), static_cast<int>(len));
@@ -90,43 +102,42 @@ bool Parsec::Write(uint32_t address, const uint8_t* data, size_t len, int32_t pe
     return vmx_->can.SendMessage(msg, periodMS, &vmxerr);
 }
 
-void Parsec::PullCANData()
+static int readBlackboard(VMXPi& vmx, unsigned int handle, uint32_t address,
+                          uint8_t* data, size_t maxLen, bool& alreadyRetrieved)
 {
-    /* VMXPi(true, rate_hz) already calls RetrieveAllCANData on its IO thread.
-     * A manual call here races that thread and spams "Empty Packet entry" in VMXCAN.cpp. */
-}
-
-int Parsec::Read(uint32_t address, uint8_t* data, size_t maxLen)
-{
-    if (!vmx_ || !data || maxLen == 0) return 0;
-    return ReadCached(address, data, maxLen);
-}
-
-int Parsec::ReadCached(uint32_t address, uint8_t* data, size_t maxLen)
-{
-    if (!vmx_ || !data || maxLen == 0) return 0;
     VMXCANTimestampedMessage blackboard_msg;
     uint64_t sys_timestamp;
-    bool already_retrieved;
     VMXErrorCode vmxerr;
     /* Try plain ID first, then with extended-ID bit (0x80000000) in case VMX keys by that */
-    uint32_t key = address;
-    if (!vmx_->can.GetBlackboardEntry(canrxhandle_, key, blackboard_msg, sys_timestamp, already_retrieved, &vmxerr))
-    {
-        key = address | 0x80000000u;
-        if (!vmx_->can.GetBlackboardEntry(canrxhandle_, key, blackboard_msg, sys_timestamp, already_retrieved, &vmxerr))
-            return 0;
-    }
+    if (!vmx.can.GetBlackboardEntry(handle, address, blackboard_msg, sys_timestamp, alreadyRetrieved, &vmxerr) &&
+        !vmx.can.GetBlackboardEntry(handle, address | 0x80000000u, blackboard_msg, sys_timestamp,
+                                    alreadyRetrieved, &vmxerr))
+        return 0;
     int n = blackboard_msg.dataSize;
-    if (n <= 0 || n > 64) n = 8;
+    if (n <= 0 || n > 8) n = 8;
     size_t copyLen = (maxLen < (size_t)n) ? maxLen : (size_t)n;
     std::memcpy(data, blackboard_msg.data, copyLen);
     return (int)copyLen;
 }
 
+int Parsec::Read(uint32_t address, uint8_t* data, size_t maxLen)
+{
+    if (!open_ || !data || maxLen == 0) return 0;
+    bool alreadyRetrieved = false;
+    return readBlackboard(*vmx_, canrxhandle_, address, data, maxLen, alreadyRetrieved);
+}
+
+int Parsec::ReadNew(uint32_t address, uint8_t* data, size_t maxLen)
+{
+    if (!open_ || !data || maxLen == 0) return 0;
+    bool alreadyRetrieved = true;
+    int n = readBlackboard(*vmx_, canrxhandle_, address, data, maxLen, alreadyRetrieved);
+    return alreadyRetrieved ? 0 : n;
+}
+
 void Parsec::DumpReceiveStream(unsigned maxMessages)
 {
-    if (!vmx_ || maxMessages == 0) return;
+    if (!open_ || maxMessages == 0) return;
     std::vector<VMXCANTimestampedMessage> msgs(maxMessages);
     uint32_t numRead = 0;
     VMXErrorCode vmxerr;
@@ -138,138 +149,139 @@ void Parsec::DumpReceiveStream(unsigned maxMessages)
     for (uint32_t i = 0; i < numRead; i++) {
         uint32_t id = msgs[i].messageID;
         int n = msgs[i].dataSize;
-        if (n <= 0 || n > 64) n = 8;
+        if (n <= 0 || n > 8) n = 8;
         bool ext = true;
         if (id & 0x80000000u) { ext = false; id &= 0x7FFFFFFFu; }
         printf("    [%u] ID=0x%08X (%s) len=%d  data:", i, id, ext ? "ext" : "std", n);
-        for (int j = 0; j < n && j < 8; j++) printf(" %02X", msgs[i].data[j]);
-        if (n > 8) printf(" ...");
+        for (int j = 0; j < n; j++) printf(" %02X", msgs[i].data[j]);
         printf("\n");
     }
 }
 
-bool Parsec::RequestConfig()
+bool Parsec::GetConfig(Config& out)
 {
-    uint8_t req[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-    return Write(GetAddress(PARSEC_GETCONFIG), req, 8, 0);
+    const uint32_t replyId = GetAddress(PARSEC_CMD_RESP);
+    uint8_t data[8] = {0};
+    ReadNew(replyId, data, sizeof(data));  // drop a stale reply so it isn't taken for the answer
+
+    const uint8_t req[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    if (!Write(GetAddress(PARSEC_GETCONFIG), req, 8)) return false;
+
+    const auto deadline = std::chrono::steady_clock::now() + kReplyTimeout;
+    while (ReadNew(replyId, data, sizeof(data)) < 8) {
+        if (std::chrono::steady_clock::now() >= deadline) return false;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    out.version = data[0];
+    out.distance_enabled = data[1] != 0;
+    out.can_fd = data[2] != 0;
+    out.can_brs = data[3] != 0;
+    out.can_id = data[4] & 0x3F;
+    out.firmware[0] = data[5];
+    out.firmware[1] = data[6];
+    out.firmware[2] = data[7];
+    return true;
 }
 
-bool Parsec::GetConfigResponse(uint8_t* configOut, unsigned maxLen)
+int Parsec::SendCommand(uint32_t index, const uint8_t* payload, size_t len, std::chrono::milliseconds timeout)
 {
-    if (!configOut || maxLen < 8) return false;
-    return Read(GetAddress(PARSEC_CMD_RESP), configOut, maxLen) >= 8;
+    const uint32_t ackId = GetAddress(PARSEC_ACK);
+    uint8_t ack[8] = {0};
+    ReadNew(ackId, ack, sizeof(ack));  // drop a stale ACK
+
+    if (!Write(GetAddress(index), payload, len)) return PARSEC_ACK_TIMEOUT;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (ReadNew(ackId, ack, sizeof(ack)) >= 6 && ack[0] == index)
+            return ack[1];
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return PARSEC_ACK_TIMEOUT;
 }
 
-int Parsec::ReadDataChunk(uint32_t dataIndex, uint8_t* dataOut, unsigned maxLen)
+int Parsec::SetOutputRate(uint8_t hz)
 {
-    if (dataIndex > 3 || !dataOut || maxLen < 2) return 0;
-    uint32_t id = GetAddress(PARSEC_DATA0 + dataIndex);
-    int n = Read(id, dataOut, maxLen);
-    if (n < 2) return 0;
-    // Payload: [0]=seq, [1]=zones or block_idx (CAN2), [2..] = int16 LE per zone. Classic CAN = 8 bytes; FD can send up to 34 per chunk.
-    return n;
+    return SendCommand(PARSEC_SET_OUTPUT_RATE, &hz, 1, kReplyTimeout);
+}
+
+int Parsec::SetResolution(uint8_t zones)
+{
+    return SendCommand(PARSEC_SET_RESOLUTION, &zones, 1, kResolutionTimeout);
+}
+
+int Parsec::SetRangingFrequency(uint8_t hz)
+{
+    return SendCommand(PARSEC_SET_FREQUENCY, &hz, 1, kReplyTimeout);
+}
+
+int Parsec::SetZoneMask(uint64_t mask)
+{
+    uint8_t payload[8];
+    for (int i = 0; i < 8; i++) payload[i] = static_cast<uint8_t>(mask >> (8 * i));
+    return SendCommand(PARSEC_SET_ZONE_MASK, payload, sizeof(payload), kReplyTimeout);
+}
+
+bool Parsec::FeedBlock(const uint8_t* d, std::chrono::steady_clock::time_point now)
+{
+    const uint8_t seq = d[0];
+    const int block = d[1] & ~PARSEC_BLOCK_64_ZONES;
+    const uint8_t zones = (d[1] & PARSEC_BLOCK_64_ZONES) ? 64 : 16;
+
+    /* Also stops a stale frame being completed by a later one whose 5-bit
+     * sequence number happens to match. */
+    if (partial_active_ && now - partial_start_ > kMaxPartialAge)
+        partial_active_ = false;
+
+    if (!partial_active_ || partial_seq_ != seq || partial_zones_ != zones) {
+        partial_active_ = true;
+        partial_seq_ = seq;
+        partial_zones_ = zones;
+        partial_blocks_ = 0;
+        partial_start_ = now;
+        for (int i = 0; i < 64; i++) partial_fdist_[i] = -1;
+    }
+
+    const int expected = blocksFor(zones);
+    if (block >= expected) return false;
+    for (int i = 0; i < kZonesPerBlock; i++) {
+        const int zone = block * kZonesPerBlock + i;
+        if (zone < zones) partial_fdist_[zone] = rd16(d + 2 + 2 * i);
+    }
+    partial_blocks_ |= 1u << block;
+    if (countBits(partial_blocks_) == expected) {
+        partial_active_ = false;
+        return true;
+    }
+    return false;
 }
 
 int Parsec::ReadDataStreamCAN2(uint8_t* seqOut, uint8_t* zonesOut, int16_t* fdist, int maxZones)
 {
-    if (!vmx_ || !fdist || maxZones <= 0 || maxZones > 64) return -1;
+    if (!open_ || !fdist || maxZones <= 0 || maxZones > 64) return -1;
 
+    /* Drain the receive stream (the VMX IO thread fills it). Do not call
+     * RetrieveAllCANData here: that races the IO thread. */
     const uint32_t data0Id = GetAddress(PARSEC_DATA0);
-    std::map<uint8_t, std::map<uint8_t, std::array<int16_t, 3>>> bySeq;
-    auto rd16 = [](const uint8_t* p) {
-        return (int16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
-    };
-
-    /* Drain receive stream (VMX IO thread fills it). Multiple rounds collect burst DATA0
-     * frames (64 zones = 22 frames). Do not call RetrieveAllCANData here — that races the IO thread. */
-    std::vector<VMXCANTimestampedMessage> msgs(128);
-    auto drainData0Frames = [&]() {
-        for (;;) {
-            uint32_t numRead = 0;
-            VMXErrorCode vmxerr;
-            if (!vmx_->can.ReadReceiveStream(canrxhandle_, msgs.data(), static_cast<unsigned>(msgs.size()),
-                                             numRead, &vmxerr) || numRead == 0) {
-                break;
-            }
-            for (uint32_t i = 0; i < numRead; i++) {
-                uint32_t id = msgs[i].messageID & 0x7FFFFFFFu;
-                if (id != data0Id) continue;
-                int n = msgs[i].dataSize;
-                if (n < 8) continue;
-                const uint8_t* d = msgs[i].data;
-                uint8_t seq = d[0], blk = d[1];
-                bySeq[seq][blk] = {{ rd16(d + 2), rd16(d + 4), rd16(d + 6) }};
-            }
-        }
-    };
-    for (int round = 0; round < 3; round++) {
-        drainData0Frames();
-        if (round < 2) vmx_->time.DelayMilliseconds(12);
-    }
-
-    if (bySeq.empty()) return 0;
-
-    // Choose seq with most blocks (prefer one that has block 0)
-    uint8_t bestSeq = 0;
-    size_t bestCount = 0;
-    for (const auto& kv : bySeq) {
-        size_t cnt = kv.second.size();
-        if (cnt > bestCount || (cnt == bestCount && kv.second.count(0))) {
-            bestCount = cnt;
-            bestSeq = kv.first;
+    VMXCANTimestampedMessage msgs[32];
+    int filled = 0;
+    const auto now = std::chrono::steady_clock::now();
+    for (;;) {
+        uint32_t numRead = 0;
+        VMXErrorCode vmxerr;
+        if (!vmx_->can.ReadReceiveStream(canrxhandle_, msgs, 32, numRead, &vmxerr) || numRead == 0)
+            break;
+        for (uint32_t i = 0; i < numRead; i++) {
+            if ((msgs[i].messageID & 0x7FFFFFFFu) != data0Id || msgs[i].dataSize < 8) continue;
+            if (!FeedBlock(msgs[i].data, now)) continue;
+            // A complete frame; a later one in this drain replaces it.
+            filled = partial_zones_ < maxZones ? partial_zones_ : maxZones;
+            for (int z = 0; z < filled; z++) fdist[z] = partial_fdist_[z];
+            if (seqOut) *seqOut = partial_seq_;
+            if (zonesOut) *zonesOut = partial_zones_;
         }
     }
-    const auto& blocks = bySeq[bestSeq];
-    if (blocks.empty()) return 0;
-
-    unsigned int maxBlk = 0;
-    for (const auto& kv : blocks)
-        if (kv.first > maxBlk) maxBlk = kv.first;
-
-    const int blocksNeeded = (maxZones + 2) / 3;
-    int zonesFilled = 0;
-    for (int b = 0; b < blocksNeeded && (b * 3) < maxZones; b++) {
-        auto it = blocks.find(static_cast<uint8_t>(b));
-        const bool have = (it != blocks.end());
-        for (int i = 0; i < 3; i++) {
-            int zi = b * 3 + i;
-            if (zi >= maxZones) break;
-            fdist[zi] = have ? it->second[i] : -1;
-            zonesFilled = zi + 1;
-        }
-    }
-    /* Effective zone count = last index with non-padding (-1) + 1, so 16 zones shows 16 not 18 */
-    int effectiveZones = 0;
-    for (int i = 0; i < zonesFilled; i++)
-        if (fdist[i] != -1) effectiveZones = i + 1;
-
-    if (seqOut) *seqOut = bestSeq;
-    if (zonesOut) *zonesOut = (uint8_t)(effectiveZones > 0 ? effectiveZones : zonesFilled);
-    return zonesFilled;
-}
-
-void Parsec::ParseConfigApiIds(const uint8_t* config, uint32_t* meta, uint32_t* data0, uint32_t* data1,
-                               uint32_t* data2, uint32_t* data3, uint32_t* getconfig, uint32_t* cmdResp)
-{
-    auto rd32 = [](const uint8_t* p) {
-        return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-    };
-    if (meta)     *meta     = rd32(config + 8);
-    if (data0)    *data0    = rd32(config + 12);
-    if (data1)    *data1    = rd32(config + 16);
-    if (data2)    *data2    = rd32(config + 20);
-    if (data3)    *data3    = rd32(config + 24);
-    if (getconfig)*getconfig= rd32(config + 28);
-    if (cmdResp)  *cmdResp  = rd32(config + 32);
-}
-
-uint64_t Parsec::ParseConfigZoneMask(const uint8_t* config)
-{
-    auto rd64 = [](const uint8_t* p) {
-        return (uint64_t)p[0] | ((uint64_t)p[1] << 8) | ((uint64_t)p[2] << 16) | ((uint64_t)p[3] << 24)
-             | ((uint64_t)p[4] << 32) | ((uint64_t)p[5] << 40) | ((uint64_t)p[6] << 48) | ((uint64_t)p[7] << 56);
-    };
-    return rd64(config + 36);
+    return filled;
 }
 
 } // namespace studica_driver

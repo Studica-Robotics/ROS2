@@ -13,11 +13,19 @@
  *   get_config          - firmware version and CAN ID (CAN) or GETCONFIG line (USB)
  *   get_zone_distance   - distance for zone index in initparams.n_encoder (mm)
  *   get_min_distance    - nearest valid zone distance (mm)
+ *   set_resolution      - initparams.int_value 16 or 64; restarts ranging at 15 Hz
+ *   set_output_rate     - initparams.int_value 1-60 Hz
+ *   set_frequency       - ranging frequency, initparams.int_value 1-60 Hz
+ *   set_zone_mask,<hex> - enabled zones, one bit each, e.g. set_zone_mask,FFFF
+ *   settings only change the sensor's RAM; a power cycle restores its saved values.
  *
  * params (per sensor in params.yaml):
  *   transport     - can (default) or usb
  *   can_id        - CAN only; device CAN ID 0..63
  *   serial_port   - USB only; e.g. /dev/ttyACM0
+ *   publish_rate_hz - also sets the sensor's output rate (1-60)
+ *   resolution    - 16 or 64 zones, 0 leaves the sensor's setting
+ *   zone_mask     - hex string of enabled zones, "" leaves the sensor's setting
  *   publish_outputs - zones, grid, pointcloud (any combination)
  */
 
@@ -64,7 +72,8 @@ public:
     Parsec(std::shared_ptr<VMXPi> vmx, const std::string &name,
            ParsecTransport transport, uint8_t can_id, const std::string &serial_port,
            const std::string &frame_id, int publish_rate_hz,
-           const std::vector<std::string> &publish_outputs);
+           const std::vector<std::string> &publish_outputs,
+           int resolution = 0, const std::string &zone_mask = "");
 
     ~Parsec();
 
@@ -96,6 +105,19 @@ private:
              std::shared_ptr<studica_control::srv::SetData::Response> response);
 
     void publish_zones();
+
+    // Settings on whichever transport is in use. Each returns "" on success,
+    // otherwise why it failed.
+    std::string set_resolution(int zones);
+    std::string set_output_rate(int hz);
+    std::string set_frequency(int hz);
+    std::string set_zone_mask(uint64_t mask);
+    // "" on success; maps a CAN ACK status or a USB result to a reason.
+    static std::string can_result(int ack_status);
+    static std::string usb_result(studica_driver::ParsecUsb::Result result);
+    // Parses a hex zone mask ("FFFF" or "0xFFFF"); false if it isn't one or is 0.
+    static bool parse_zone_mask(const std::string &text, uint64_t &mask);
+
     bool read_fdist(uint8_t *seq, uint8_t *zones, int16_t *fdist, int max_zones, int *filled_out);
 
     static ParsecTransport parse_transport(const std::string &value);

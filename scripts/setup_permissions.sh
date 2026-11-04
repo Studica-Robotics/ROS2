@@ -7,6 +7,9 @@
 #   - Installs a NOPASSWD sudoers rule so ros2 launch can run the node as
 #     root (required by pigpio to access /dev/mem and lock its PID file)
 #   - Installs a udev rule for I2C device access
+#   - Installs a udev rule that drops a Bluetooth gamepad's link within 1 s of
+#     it losing power (the default is 20 s, and until then the joy node keeps
+#     repeating the last stick position, so the robot keeps driving)
 #
 # Usage:
 #   ./scripts/setup_permissions.sh              # assumes ~/studica_ws
@@ -56,6 +59,33 @@ if [ ! -f "$UDEV_RULE" ]; then
 else
     echo "OK  I2C udev rule already present"
 fi
+
+# Bluetooth gamepad link supervision timeout
+# A controller that dies or goes out of range sends no disconnect, so Linux
+# keeps the link for its supervision timeout (20 s by default). Meanwhile the
+# joy node repeats the last stick position and joy_timeout never fires. The
+# timeout is per connection and only the link's central can set it, so udev
+# sets it each time a Bluetooth input device connects. BlueZ has no setting
+# for it. udev's sandbox blocks Bluetooth sockets, so the rule hands the
+# helper to systemd-run instead of running it directly.
+BT_HELPER=/usr/local/bin/studica-bt-supervision
+cat <<'EOF' | sudo tee "$BT_HELPER" > /dev/null
+#!/bin/sh
+# Called by udev with a new input device's Bluetooth address. Sets the link
+# supervision timeout to 1 s (1600 slots of 0.625 ms).
+ADDR="$1"
+/usr/bin/hcitool con | grep -qi "$ADDR" || exit 0   # no Bluetooth link: not a Bluetooth device
+if /usr/bin/hcitool lst "$ADDR" 1600 > /dev/null 2>&1; then
+    logger -t studica-bt "link supervision timeout for $ADDR set to 1 s"
+else
+    logger -t studica-bt "could not set link supervision timeout for $ADDR (not the link's central?)"
+fi
+EOF
+sudo chmod 0755 "$BT_HELPER"
+echo 'ACTION=="add", SUBSYSTEM=="input", KERNEL=="input[0-9]*", ATTR{uniq}=="??:??:??:??:??:??", RUN+="/usr/bin/systemd-run --no-block /usr/local/bin/studica-bt-supervision %s{uniq}"' \
+    | sudo tee /etc/udev/rules.d/99-studica-bluetooth.rules > /dev/null
+sudo udevadm control --reload-rules
+echo "OK  Bluetooth gamepads drop within 1 s of losing power (applies from the next connection)"
 
 echo ""
 echo "Setup complete. You can now run:"

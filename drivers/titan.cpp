@@ -1,5 +1,8 @@
 #include "titan.hpp"
 
+#include <cmath>
+#include <cstdint>
+
 using namespace studica_driver;
 
 static constexpr float kRpmScale = 100.0f; /* matches firmware RPM_SCALE (CAN_RPM_* and SET_TARGET_VELOCITY) */
@@ -157,6 +160,7 @@ bool Titan::ReadWithFreshFlag(uint32_t address, uint8_t* data, bool& is_fresh, u
     VMXCANTimestampedMessage blackboard_msg;
     uint64_t sys_timestamp;
     bool already_retrieved = false;
+    is_fresh = false;
     if (!vmx_->can.GetBlackboardEntry(canrxhandle, address, blackboard_msg, sys_timestamp, already_retrieved, &vmxerr))
     {
         return false;
@@ -201,12 +205,15 @@ bool Titan::GetEncoderDistanceFresh(uint8_t motor, double& distance, bool& is_fr
 void Titan::Enable(bool enable)
 {
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    // Both frames repeat until cancelled, so each direction must cancel the other.
     if (enable)
     {
+        Titan::Write(GetAddress(DISABLED_FLAG), data, VMXCAN_SEND_PERIOD_STOP_REPEATING);
         Titan::Write(GetAddress(ENABLED_FLAG), data, 100);
     }
     else
     {
+        Titan::Write(GetAddress(ENABLED_FLAG), data, VMXCAN_SEND_PERIOD_STOP_REPEATING);
         for (int i = 0; i < 3; i++)
         {
             Titan::Write(GetAddress(DISABLED_FLAG), data, 10);
@@ -293,7 +300,7 @@ float Titan::GetControllerTemp()
 
 bool Titan::GetLimitSwitch(uint8_t motor, uint8_t direction)
 {
-    uint8_t data[8];
+    uint8_t data[8] = {0};
     Titan::Read(GetAddress(LIMIT_SWITCH), data);
     uint8_t index = 0;
     if (direction == 1)
@@ -412,7 +419,7 @@ std::string Titan::GetSerialNumber()
 
 double Titan::GetEncoderDistance(uint8_t motor)
 {
-    uint8_t data[8];
+    uint8_t data[8] = {0};
     int32_t ticks = 0;
     if (motor == 0)
     {
@@ -540,7 +547,7 @@ void Titan::ResetEncoder(uint8_t motor)
 
 double Titan::GetCypherAngle(uint8_t port)
 {
-    uint8_t data[8];
+    uint8_t data[8] = {0};
     int index = port * 2;
     Titan::Read(GetAddress(CYPHER_OUTPUT), data);
     return ((static_cast<double>(data[index]) + (static_cast<double>(data[index + 1] << 8))) / 100.0);
@@ -560,6 +567,9 @@ void Titan::SetSpeed(uint8_t motor, double speedCfg)
 {
     if (motor > 3)
         return;
+    /* NaN slips past the clamps below and the int cast is undefined, so treat it as a stop. */
+    if (!std::isfinite(speedCfg))
+        speedCfg = 0.0;
     /* Apply invert (direction) for this channel. */
     if (motor == 0 && invertMotor0)
         speedCfg *= -1;
@@ -596,24 +606,9 @@ void Titan::SetSpeed(uint8_t motor, double speedCfg)
 
 void Titan::SetSpeedAll(double duty)
 {
-    if (duty > 1.0)
-        duty = 1.0;
-    if (duty < 0.0)
-        duty = 0.0;
-    int d = static_cast<int>(duty * 100.0);
-    if (d > 100)
-        d = 100;
-    if (d < 0)
-        d = 0;
-    uint8_t u = static_cast<uint8_t>(d);
-    lastDuty_[0] = lastDuty_[1] = lastDuty_[2] = lastDuty_[3] = u;
-    lastDirection_ = 0x0F; /* all forward */
-    /* Titan format: one frame per motor [motor, duty, inA, inB]; send 4 frames. */
+    /* Same path as SetSpeed so sign, inversion and brake-on-zero match a per-motor command. */
     for (uint8_t m = 0; m < 4; m++)
-    {
-        uint8_t data[8] = {m, u, 1, 0, 0, 0, 0, 0};
-        Write(GetAddress(SET_MOTOR_SPEED), data, 0);
-    }
+        SetSpeed(m, duty);
 }
 
 void Titan::InvertMotorDirection(uint8_t motor)
@@ -728,7 +723,12 @@ void Titan::SetTargetVelocity(uint8_t motor, float velocityRpm)
 {
     if (motor >= 4)
         return;
-    float rpmScaled = velocityRpm * kRpmScale;
+    float rpmScaled = std::isfinite(velocityRpm) ? velocityRpm * kRpmScale : 0.0f;
+    /* Out-of-range float to int conversion is undefined, so clamp to what int32 can hold. */
+    if (rpmScaled > static_cast<float>(INT32_MAX))
+        rpmScaled = static_cast<float>(INT32_MAX);
+    if (rpmScaled < static_cast<float>(INT32_MIN))
+        rpmScaled = static_cast<float>(INT32_MIN);
     int32_t rpm32 =
         (rpmScaled >= 0.0f) ? static_cast<int32_t>(rpmScaled + 0.5f) : static_cast<int32_t>(rpmScaled - 0.5f);
     uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -754,7 +754,7 @@ void Titan::SetTargetDistance(uint8_t motor, int32_t distanceCounts)
 
 void Titan::SetTargetAngle(uint8_t motor, double angleDeg)
 {
-    if (motor >= 4)
+    if (motor >= 4 || !std::isfinite(angleDeg))
         return;
     if (angleDeg < angleLimitMin_[motor])
         angleDeg = angleLimitMin_[motor];

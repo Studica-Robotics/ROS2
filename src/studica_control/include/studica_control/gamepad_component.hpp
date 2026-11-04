@@ -19,6 +19,10 @@
  *
  * topic (publishes): <cmd_vel_topic> (geometry_msgs/Twist)
  *   velocity command published at publish_rate hz (default 50hz, configurable in params).
+ *
+ * if no valid /joy arrives for joy_timeout seconds (default 0.5, 0 disables) the command is
+ * forced to zero and keeps publishing. the joy node must have autorepeat_rate above 0 (its
+ * default is 20 hz), otherwise a stick held still looks like a lost controller.
  */
 
 #ifndef STUDICA_CONTROL__GAMEPAD_COMPONENT_H_
@@ -56,6 +60,9 @@ private:
     // builds and publishes a twist message from the current movement state
     void publish_twist();
 
+    // zeroes the movement state once /joy has been quiet for longer than joy_timeout_
+    void check_joy_timeout();
+
     rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_subscription_;
     rclcpp::Subscription<std_msgs::msg::Int32MultiArray>::SharedPtr gamepad_button_subscription_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_publisher_;
@@ -66,6 +73,14 @@ private:
     double angular_scale_;
     double turbo_multiplier_;
     double deadzone_;
+
+    // lost controller detection (updated by joy_callback, read by check_joy_timeout)
+    double joy_timeout_;
+    rclcpp::Time last_joy_time_;
+    // steady so a system clock adjustment can't delay a stop or cause a false one
+    rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
+    bool joy_seen_ = false;
+    bool joy_timed_out_ = false;
 
     // current movement state (updated by joy_callback, read by publish_twist)
     double linear_x_;

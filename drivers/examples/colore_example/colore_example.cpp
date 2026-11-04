@@ -16,10 +16,6 @@
  * Run — USB (Pi USB port; dialout group or sudo if permission denied):
  *   ./colore_example usb                     # default /dev/ttyACM0
  *   ./colore_example usb /dev/ttyACM1        # other port (ls /dev/ttyACM*)
- *
- * Environment:
- *   COLORE_CAN_CHANNEL=1       Use VMX CAN1 instead of CAN0
- *   COLORE_CAN_BITRATE=500     Match the device bitrate (1000 default | 500 | 250)
  */
 
 #include "colore.hpp"
@@ -53,10 +49,6 @@ void print_usage(const char* prog)
     printf("  %s                         CAN on ID 0\n", prog);
     printf("  %s can [can_id]            VMX CAN bus (default CAN ID 0)\n", prog);
     printf("  %s usb [port]              USB serial (default port /dev/ttyACM0)\n", prog);
-    printf("\n");
-    printf("Environment:\n");
-    printf("  COLORE_CAN_CHANNEL=1       Use VMX CAN1 instead of CAN0\n");
-    printf("  COLORE_CAN_BITRATE=500     Match the device bitrate (1000 | 500 | 250)\n");
 }
 
 Options parse_args(int argc, char* argv[])
@@ -87,18 +79,6 @@ Options parse_args(int argc, char* argv[])
     std::exit(1);
 }
 
-// Decode the 8-byte CAN telemetry frame: [seq_u16_le, x_i16, y_i16, z_i16], XYZ scaled x10000.
-bool decode_xyz(const uint8_t* d, int n, uint16_t& seq, float& x, float& y, float& z)
-{
-    if (n < 8) return false;
-    auto u16 = [](uint8_t lo, uint8_t hi) { return static_cast<uint16_t>(lo | (hi << 8)); };
-    seq = u16(d[0], d[1]);
-    x = static_cast<int16_t>(u16(d[2], d[3])) / 10000.0f;
-    y = static_cast<int16_t>(u16(d[4], d[5])) / 10000.0f;
-    z = static_cast<int16_t>(u16(d[6], d[7])) / 10000.0f;
-    return true;
-}
-
 void run_usb(const Options& opts)
 {
     studica_driver::ColoreUsb colore(opts.serial_port);
@@ -108,7 +88,10 @@ void run_usb(const Options& opts)
     }
 
     // ROS uses "xyz"; the driver can also request "srgb"/"hex"/"rgb"/"raw".
-    colore.ConfigureStreaming("xyz", 1000 / opts.rate_hz);
+    const auto result = colore.ConfigureStreaming("xyz", 1000 / opts.rate_hz);
+    if (result != studica_driver::ColoreUsb::Result::Ok) {
+        printf("Warning: streaming config: %s\n", studica_driver::ColoreUsb::ResultString(result));
+    }
 
     std::string config;
     if (colore.RequestConfig(&config)) {
@@ -135,18 +118,26 @@ void run_can(const Options& opts)
     }
 
     studica_driver::Colore colore(opts.can_id, vmx);
+    if (!colore.IsCanReceiveStreamOpen()) {
+        printf("Failed to init Colore on CAN ID %u\n", opts.can_id);
+        return;
+    }
 
     // Configure the sensor: XYZ output, sample interval from the rate, LED at 50%.
-    colore.SetColorFormat(studica_driver::Colore::ColorFormat::XYZ);
+    if (!colore.SetColorFormat(studica_driver::Colore::ColorFormat::XYZ)) {
+        printf("Warning: no ACK from CAN ID %u (check the ID and firmware)\n", opts.can_id);
+    }
     colore.SetSampleTimeMs(static_cast<uint16_t>(1000 / opts.rate_hz));
     colore.SetBrightness(50);
 
-    for (int i = 0; i < opts.iterations; ++i) {
-        uint8_t buf[8] = {0};
-        const int n = colore.Read(COLORE_CAN_TELEM_XYZ, buf, sizeof(buf));
+    uint32_t fw = 0;
+    if (colore.GetConfig(COLORE_CONFIG_FIRMWARE_VERSION, fw)) {
+        printf("Colore firmware %u.%u.%u\n", (fw >> 16) & 0xFF, (fw >> 8) & 0xFF, fw & 0xFF);
+    }
 
+    for (int i = 0; i < opts.iterations; ++i) {
         uint16_t seq; float x, y, z;
-        if (decode_xyz(buf, n, seq, x, y, z)) {
+        if (colore.ReadXyz(seq, x, y, z, std::chrono::milliseconds(3000 / opts.rate_hz))) {
             printf("%3d | seq=%u  X=%.4f  Y=%.4f  Z=%.4f\n", i, seq, x, y, z);
         } else {
             printf("%3d | waiting for frame...\n", i);

@@ -17,6 +17,7 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
 - [Component Reference](#component-reference)
   - [Titan](#titan--can-bus-motor-controller)
   - [IMU](#imu--9-axis-inertial-measurement-unit)
+  - [NavX3](#navx3--imu-over-can-or-usb)
   - [Power](#power--battery-monitor)
   - [Encoder](#encoder--quadrature-encoder)
   - [DutyCycleEncoder](#dutycycleencoder--absolute-encoder)
@@ -29,6 +30,7 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
   - [Cobra](#cobra--reflectance-sensor-array)
   - [Colore](#colore--color-sensor)
   - [Gamepad](#gamepad--joystick-to-cmd_vel)
+  - [Control Panel](#control-panel--start-stop-and-reset-buttons)
 - [Python Examples](#python-examples)
 - [C++ Examples](#c-examples)
 - [Standalone Driver Examples](#standalone-driver-examples)
@@ -42,6 +44,7 @@ A ROS2 hardware abstraction layer for the **Studica Robotics VMX** platform. Eac
 |---|---|---|
 | **Titan** | Motor Controller | CAN bus DC motor controller, up to 4 motors per unit |
 | **IMU** | 9-axis Sensor | Onboard NavX orientation, velocity, and acceleration |
+| **NavX3** | 9-axis Sensor | Studica NavX3 IMU over CAN or USB |
 | **Encoder** | Position Sensor | Quadrature encoder via two digital input channels |
 | **DutyCycleEncoder** | Absolute Encoder | Absolute position from PWM duty cycle |
 | **Servo** | Actuator | Standard (position), continuous (velocity), or linear |
@@ -351,8 +354,13 @@ Topics are auto-generated from the sensor name. Using `"titan0"` as an example:
 | `/titan0/m_1/cmd` | `std_msgs/Float64` | Duty cycle motor 1 |
 | `/titan0/m_2/cmd` | `std_msgs/Float64` | Duty cycle motor 2 |
 | `/titan0/m_3/cmd` | `std_msgs/Float64` | Duty cycle motor 3 |
+| `/motors_enabled` | `std_msgs/Bool` | `false` stops and disables the Titan until `true` arrives. Transient local. Published by the [Control Panel](#control-panel--start-stop-and-reset-buttons) |
 
-**Topics (publish) — feedback at `encoder_rate_hz` Hz (default 20), topics depend on `encoder_mode`:**
+Publish the `/cmd` topics continuously. If a motor's last non-zero command is older than `cmd_timeout` seconds (default 0.5, `0` disables), that motor is stopped so a crashed publisher can't leave it running. A single `ros2 topic pub --once` therefore only runs the motor for `cmd_timeout` seconds. Service commands such as `set_speed` and `set_target_velocity` are one-shot and don't time out. `/cmd` is ignored while a motor is in a closed-loop PID type; changing PID type stops the motor and clears its setpoints.
+
+While `/motors_enabled` is `false`, the service rejects `enable` and any command that starts motion.
+
+**Topics (publish) — feedback at `encoder_rate_hz` Hz (default 20), topics depend on `encoder_mode`.** Feedback publishes whether or not the motors are enabled. A failed CAN read is never published.
 
 *Quadrature mode (default):*
 
@@ -380,14 +388,14 @@ Inputs are pull-high with hardware debouncing (active-low). The driver inverts t
 
 **Service:** `/titan0/titan_cmd` → `studica_control/SetData`
 
-Use the service for configuration and closed-loop control. Direct speed commands should use the `/cmd` topics above.
+Use the service for configuration and closed-loop control. Direct speed commands should use the `/cmd` topics above. `n_encoder` must be 0 to 3, on every command.
 
 | Command | Required Fields | Description |
 |---|---|---|
 | `enable` | — | Power on the controller |
 | `disable` | — | Power off; all motors stop immediately |
 | `set_speed` | `n_encoder`, `speed` | Set motor duty cycle (−1.0 to 1.0) |
-| `set_speed_all` | `speed` | Set all 4 motors to the same duty cycle |
+| `set_speed_all` | `speed` | Set all 4 motors to the same duty cycle (−1.0 to 1.0, each motor's inversion applies) |
 | `stop` | `n_encoder` | Set one motor speed to 0 |
 | `disable_motor` | `n_encoder` | Cut power to one motor only |
 | `set_target_velocity` | `n_encoder`, `speed` (RPM) | Closed-loop velocity (Titan2 firmware) |
@@ -434,7 +442,7 @@ titan:
       dist_per_tick: 0.0006830601
 ```
 
-All per-motor fields default to `encoder_mode: "quadrature"`, `dist_per_tick: 1.0`, and all invert flags `false` if omitted. `encoder_rate_hz` and `motor_update_rate_hz` default to `20` and `50` respectively if omitted.
+All per-motor fields default to `encoder_mode: "quadrature"`, `dist_per_tick: 1.0`, and all invert flags `false` if omitted. `encoder_rate_hz` and `motor_update_rate_hz` default to `20` and `50` respectively if omitted. Valid ranges are 1–1000 and 10–1000 Hz; a Titan with a rate outside them is not started.
 
 ---
 
@@ -458,6 +466,43 @@ imu:
   name: "imu"
   topic: "imu"
   frame_id: "imu_link"
+```
+
+---
+
+### NavX3 — IMU over CAN or USB
+
+The Studica **NavX3** IMU, connected over **CAN** (VMX CAN bus) or **USB** (`/dev/ttyACM*`). Separate from the IMU above, which is the navX built into the VMX-pi; enable either or both. Needs current NavX3 firmware.
+
+**Topic (publishes):** `<topic>` (default `/<name>/imu`) → `sensor_msgs/Imu`, at `update_rate_hz`
+- Orientation quaternion (6-axis, or 9-axis with the magnetometer when `yaw_axes: 9`), angular velocity in rad/s, linear acceleration in m/s²
+- Values are in the NavX3's own axes, with yaw counter-clockwise positive. Publish a TF from `base_link` to `frame_id` that describes how it is mounted.
+- Covariance diagonals come from the `*_variance` params (all `0` means unknown). A field the NavX3 hasn't sent recently is marked not provided (`covariance[0] = -1`).
+
+**Service:** `/<name>/navx3_cmd` → `studica_control/SetData`
+
+| Command | Description |
+|---|---|
+| `reset_yaw` | Zero the yaw at the current heading |
+| `get_data` | Current yaw, pitch, roll and temperature |
+| `get_info` | Firmware version and the sensor's unique ID |
+| `self_test` | Runs the IMU self test (~4 s; keep the robot still, no data meanwhile) |
+
+**params.yaml:**
+```yaml
+navx3:
+  enabled: true
+  sensors: ["navx3"]
+  navx3:
+    transport: can            # can | usb
+    can_id: 0                 # CAN only - must match the device (0..63)
+    serial_port: /dev/ttyACM0 # USB only
+    frame_id: "navx3_link"
+    update_rate_hz: 50        # sensor output rate and publish rate, 1-200
+    yaw_axes: 6               # 6 = gyro + accelerometer, 9 = also magnetometer
+    orientation_variance: 0.0
+    angular_velocity_variance: 0.0
+    linear_acceleration_variance: 0.0
 ```
 
 ---
@@ -598,7 +643,7 @@ sharp:
 
 The **Parsec** is a Studica multi-zone time-of-flight sensor. It reports distance
 for each cell in a **4×4 (16 zones)** or **8×8 (64 zones)** grid. Connect over **CAN**
-(default) or **USB** on the Pi (`/dev/ttyACM0`).
+(default) or **USB** on the Pi (`/dev/ttyACM0`). Needs current Parsec firmware.
 
 Topics are auto-generated from the sensor name. Using `"parsec"` as an example:
 
@@ -611,7 +656,7 @@ Topics are auto-generated from the sensor name. Using `"parsec"` as an example:
 | `/parsec/pointcloud` | `sensor_msgs/PointCloud2` (`xyz`) | **metres** (`float32` x, y, z) | RViz 3D, PCL, fusion with your own TF/odom |
 | `/parsec/min_range` | `sensor_msgs/Range` | **metres** — nearest valid zone | Simple obstacle / “closest hit” (always published) |
 
-Rate: `publish_rate_hz` (default 15 Hz).
+Rate: `publish_rate_hz` (default 15 Hz, 1–60) also sets the sensor's output rate. An 8×8 grid tops out at 15 Hz; 4×4 reaches 60 Hz.
 
 All three optional topics carry the **same underlying grid** — different ROS message packaging.
 Enable any combination in `publish_outputs`. If omitted or empty, **`grid`** is published by default.
@@ -631,7 +676,7 @@ Enable any combination in `publish_outputs`. If omitted or empty, **`grid`** is 
 On `/grid`, disabled and invalid zones are published as pixel value `0`.
 
 **Zone index layout** — row-major, top row first (index 0 = top-left). Grid is 4×4 or 8×8
-depending on firmware resolution (`RESOLUTION,16` or `RESOLUTION,64` on the device).
+depending on the sensor's resolution (the `resolution` parameter, or `set_resolution`).
 
 **Decoding `/grid` (`16UC1`):**
 
@@ -664,9 +709,15 @@ The driver does **not** publish TF. Set `frame_id` in `params.yaml` and provide 
 
 | Command | Required fields | Description |
 |---|---|---|
-| `get_config` | — | Device settings as a string in `response.message`. **USB:** full line from firmware (serial, resolution, CAN ID, zone mask, etc.). **CAN:** short summary only (`version=…, fdist_en=…, can_id=…`) — Classic CAN returns 8 bytes, not the full config |
+| `get_config` | — | Device settings as a string in `response.message`. **USB:** full line from firmware (serial, resolution, CAN ID, zone mask, etc.). **CAN:** short summary only (`firmware=…, version=…, fdist_en=…, can_id=…`) — Classic CAN returns 8 bytes, not the full config |
 | `get_zone_distance` | `initparams.n_encoder` = zone index (0..zones−1) | Distance for one zone (**mm**) |
 | `get_min_distance` | — | Nearest valid zone distance (**mm**) |
+| `set_resolution` | `initparams.int_value` = 16 or 64 | Grid size. Restarts ranging at 15 Hz, so set rates afterwards |
+| `set_output_rate` | `initparams.int_value` = 1–60 | Frames per second the sensor sends |
+| `set_frequency` | `initparams.int_value` = 1–60 | Ranging frequency, Hz |
+| `set_zone_mask,<hex>` | — | Enabled zones, one bit each (e.g. `set_zone_mask,FFFF`); masked zones read `-1` |
+
+Settings only change the sensor's RAM: a power cycle restores its saved values, so put the ones you need in `params.yaml`.
 
 **params.yaml:**
 
@@ -679,7 +730,9 @@ parsec:
     can_id: 5                 # CAN only — must match device CANID (0..63)
     serial_port: /dev/ttyACM0 # USB only — run: ls /dev/ttyACM*
     frame_id: "parsec_link"
-    publish_rate_hz: 15
+    publish_rate_hz: 15       # also the sensor's output rate, 1-60
+    resolution: 0             # 16 or 64; 0 leaves the sensor's setting
+    zone_mask: ""             # hex, e.g. "FFFF"; "" leaves the sensor's setting
     publish_outputs: ["zones", "grid", "pointcloud"]  # any of: zones, grid, pointcloud
 ```
 
@@ -893,7 +946,7 @@ cobra:
 
 ### Colore — Color Sensor
 
-A color sensor that connects over **CAN** or **USB**. The main output is the color as sRGB on `/color`; everything else is optional. For most robots, `/color` (an RGB reading) and `/color_match` (a named color) are all you need.
+A color sensor that connects over **CAN** or **USB** (needs current Colore firmware). The main output is the color as sRGB on `/color`; everything else is optional. For most robots, `/color` (an RGB reading) and `/color_match` (a named color) are all you need.
 
 **Topics (publish):** auto-generated from the sensor name. Using `"color0"`:
 
@@ -930,7 +983,7 @@ Then read `/color0/color_match`: `label` is the closest taught color and `confid
 
 **Rate:** `publish_rate_hz` sets how often ROS publishes to enabled topics *and* how often the sensor reads. ~1–20 Hz is the useful range; the sensor's ~50 ms integration caps fresh data near 20 Hz, so higher publish rates will repeat stale readings.
 
-**measmode (advanced):** a firmware multi-flash mode for more accurate color; leave `"off"` for normal use. `"auto"` flashes the LED at several brightness levels to auto-detect and account for distance (slow — only ~1 reading/sec); `"fixed"` uses a known distance between sensor and object of interest `measmode_z_mm`.
+**measmode (advanced):** a firmware multi-flash mode for more accurate color; leave `"off"` for normal use. `"fixed"` uses a known distance between sensor and object of interest, `measmode_z_mm`.
 
 **Advanced (optional):** `/color_info` also carries the sensor's raw color values `x`, `y`, `z`; most users never need these. Matching compares colors in **CIE xy** (hue independent of brightness); `match_<color>_xy` is the `[x, y]` point for each color, which `learn_color` computes for you. `/color_match` also reports the measured `x`, `y` chromaticity.
 
@@ -966,7 +1019,9 @@ Converts joystick input from a `joy` node into `geometry_msgs/Twist` velocity co
 **Requires:** `ros2 run joy joy_node` running in a separate terminal.
 
 **Topic (publishes):** `<cmd_vel_topic>` → `geometry_msgs/Twist`
-- Published at `publish_rate` Hz (default 50 Hz). Increase to reduce stop latency — at 50 Hz the worst-case delay after stick release is 20 ms vs 100 ms at 10 Hz. The `joy` node publishes at 100 Hz by default so there is no benefit going above that.
+- Published at `publish_rate` Hz (default 50 Hz). Increase to reduce stop latency — at 50 Hz the worst-case delay after stick release is 20 ms vs 100 ms at 10 Hz.
+
+**Lost controller:** if no valid `/joy` arrives for `joy_timeout` seconds (default 0.5, `0` disables), `cmd_vel` is held at zero until `/joy` returns. Keep the `joy` node's `autorepeat_rate` above 0 (its default is 20 Hz), or a stick held still will look like a lost controller. Over Bluetooth, the `joy` node keeps repeating its last message until the operating system reports the disconnect, so the robot can keep moving for that long before the timeout starts.
 
 **Topic (subscribes):** `/gamepad_axis_remap` → `std_msgs/Int32MultiArray`
 - Publish `[x_axis, y_axis, z_axis]` indices to remap axes at runtime without restarting. Use `-1` for any axis to leave it unmapped (outputs 0). Uses transient-local QoS so late-joining nodes receive the last mapping.
@@ -985,11 +1040,57 @@ gamepad:
   angular_scale: 1.0
   deadzone: 0.05        # axis values below this are treated as zero
   turbo_multiplier: 2.0
-  publish_rate: 50      # cmd_vel publish rate in Hz (max useful: 100 — joy node rate)
+  publish_rate: 50      # cmd_vel publish rate in Hz
+  joy_timeout: 0.5      # seconds without /joy before cmd_vel is held at zero (0 = disabled)
   cmd_vel_topic: "cmd_vel"
 ```
 
 Run `ros2 topic echo /joy` and move each stick to identify which `axes[]` index to use.
+
+### Control Panel — Start, Stop and Reset Buttons
+
+An operator panel with three buttons and an LED for each. Buttons connect their pin to ground when pressed. The component owns all six pins, so don't also list them under `dio`.
+
+While the panel is enabled, motors stay off until Start is pressed:
+
+| State | Motors | Start LED | Stop LED | Reset LED | Next |
+|---|---|---|---|---|---|
+| `waiting` | Disabled | Blinking | Off | Off | Start → `running` |
+| `running` | Enabled | Solid | Off | Off | Stop → `stopped` |
+| `stopped` | Disabled | Off | Solid | Blinking | Reset → `waiting` |
+
+Stop also works from `waiting`, and Start is refused while the Stop button is held. Restarting doesn't need a relaunch: press Reset, then Start.
+
+> **This is a software stop, not an e-stop.** It relies on the control server and Titan components running. Keep a hardware e-stop on any robot that needs one.
+
+**Topics (publish):**
+
+| Topic | Type | Description |
+|---|---|---|
+| `/control_panel/state` | `std_msgs/String` | `waiting`, `running` or `stopped`. Transient local, so late subscribers get the current state |
+| `/control_panel/reset` | `std_msgs/Empty` | Published on every Reset press, in any state |
+| `/motors_enabled` | `std_msgs/Bool` | `true` only while `running`. Transient local |
+
+**Topic (subscribes):** `/control_panel/press` → `std_msgs/String`
+- Software button press: `start`, `stop` or `reset`. Shares the press lockout with the physical buttons, except that Stop is never locked out.
+
+User code can watch `/control_panel/state` to know when to run.
+
+**params.yaml:**
+```yaml
+control_panel:
+  enabled: true
+  button_start: 8       # DIO pins, all six are required
+  button_stop: 10
+  button_reset: 9
+  led_start: 12
+  led_stop: 14
+  led_reset: 13
+  press_lockout_ms: 300 # ignore repeat presses of a button inside this window
+  blink_hz: 2.0         # LED blink rate
+```
+
+If a pin is missing or fails to open, the panel doesn't start and the motors stay off.
 
 ---
 

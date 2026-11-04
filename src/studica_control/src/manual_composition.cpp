@@ -1,3 +1,6 @@
+#include <atomic>
+#include <csignal>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -18,7 +21,17 @@
 #include "studica_control/ultrasonic_component.hpp"
 #include "studica_control/colore_component.hpp"
 #include "studica_control/parsec_component.hpp"
+#include "studica_control/navx3_component.hpp"
+#include "studica_control/control_panel_component.hpp"
 #include "VMXPi.h"
+
+namespace {
+std::atomic<bool> g_shutdown_requested{false};
+
+extern "C" void handle_shutdown_signal(int) {
+    g_shutdown_requested.store(true);
+}
+}  // namespace
 
 class ControlServer : public rclcpp::Node {
 public:
@@ -47,6 +60,8 @@ public:
         this->declare_parameter<bool>("ultrasonic.enabled", false);
         this->declare_parameter<bool>("colore.enabled", false);
         this->declare_parameter<bool>("parsec.enabled", false);
+        this->declare_parameter<bool>("navx3.enabled", false);
+        this->declare_parameter<bool>("control_panel.enabled", false);
 
         if (!vmx_ready_) {
             RCLCPP_ERROR(this->get_logger(), "VMX-pi connection failed during startup. Aborting component initialization.");
@@ -70,6 +85,8 @@ public:
         bool ultrasonic_enabled = this->get_parameter("ultrasonic.enabled").as_bool();
         bool colore_enabled = this->get_parameter("colore.enabled").as_bool();
         bool parsec_enabled = this->get_parameter("parsec.enabled").as_bool();
+        bool navx3_enabled = this->get_parameter("navx3.enabled").as_bool();
+        bool control_panel_enabled = this->get_parameter("control_panel.enabled").as_bool();
 
         if (cobra_enabled) {
             auto cobra_nodes = studica_control::Cobra::initialize(this, vmx_);
@@ -136,6 +153,18 @@ public:
             component_nodes.insert(component_nodes.end(), parsec_nodes.begin(), parsec_nodes.end());
         }
 
+        if (navx3_enabled) {
+            auto navx3_nodes = studica_control::Navx3::initialize(this, vmx_);
+            component_nodes.insert(component_nodes.end(), navx3_nodes.begin(), navx3_nodes.end());
+        }
+
+        if (control_panel_enabled) {
+            auto control_panel_node = studica_control::ControlPanel::initialize(this, vmx_);
+            if (control_panel_node) {
+                component_nodes.push_back(control_panel_node);
+            }
+        }
+
         for (const auto &node : component_nodes) {
             executor_->add_node(node);
         }
@@ -145,6 +174,12 @@ public:
 
     void run() {
         executor_->add_node(this->shared_from_this());
+        shutdown_timer_ = this->create_wall_timer(
+            std::chrono::milliseconds(20), [this]() {
+                if (g_shutdown_requested.load()) {
+                    executor_->cancel();
+                }
+            });
         executor_->spin();
     }
 
@@ -152,6 +187,7 @@ private:
     std::shared_ptr<VMXPi> vmx_;
     std::shared_ptr<rclcpp::executors::MultiThreadedExecutor> executor_;
     std::vector<std::shared_ptr<rclcpp::Node>> component_nodes;
+    rclcpp::TimerBase::SharedPtr shutdown_timer_;
     bool vmx_ready_ = false;
 };
 
@@ -160,6 +196,16 @@ int main(int argc, char *argv[]) {
     rclcpp::init(argc, argv);
 
     auto control_server = std::make_shared<ControlServer>();
+
+    // installed after VMXPi, which replaces the signal handlers with ones that exit()
+    // straight away. leaving through main instead lets the component destructors stop the motors.
+    struct sigaction action;
+    std::memset(&action, 0, sizeof(action));
+    action.sa_handler = handle_shutdown_signal;
+    sigemptyset(&action.sa_mask);
+    sigaction(SIGINT, &action, nullptr);
+    sigaction(SIGTERM, &action, nullptr);
+
     if (control_server->initialize()) {
         control_server->run();
     }

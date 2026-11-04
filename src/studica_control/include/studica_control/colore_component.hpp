@@ -15,7 +15,7 @@
  * params (per sensor):
  *   transport (can|usb), can_id, serial_port, publish_rate_hz,
  *   publish_outputs, brightness,
- *   measmode (off|auto|fixed), measmode_z_mm,
+ *   measmode (off|fixed), measmode_z_mm,
  *   match_references, match_<name>_xy, match_threshold
  */
 #ifndef COLORE_COMPONENT_H
@@ -70,6 +70,7 @@ private:
     std::shared_ptr<studica_driver::ColoreUsb> colore_usb_;
     std::shared_ptr<VMXPi> vmx_;
     int publish_rate_hz_;
+    int sample_ms_{100};
     ColorePublishOutputs outputs_;
     std::vector<ColoreReference> references_;
     float match_threshold_{0.05f};
@@ -91,7 +92,7 @@ private:
 
     void publish_color();
 
-    // Apply the measurement mode at startup. mode is off|auto|fixed (case-insensitive);
+    // Apply the measurement mode at startup. mode is off|fixed (case-insensitive);
     // z_mm is the fixed user Z (used only for "fixed").
     void apply_measmode(const std::string &mode, float z_mm);
 

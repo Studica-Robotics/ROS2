@@ -1,7 +1,7 @@
 /*
  * colore_component.cpp
  * ROS2 component for the Studica Colore color sensor.
- *   CAN: studica_driver::Colore  (XYZ telemetry @ COLORE_CAN_TELEM_XYZ, scaled x10000)
+ *   CAN: studica_driver::Colore  (XYZ telemetry on API 1, scaled x10000)
  *   USB: studica_driver::ColoreUsb (text color lines on /dev/ttyACM0)
  */
 #include "studica_control/colore_component.hpp"
@@ -112,7 +112,7 @@ Colore::Colore(std::shared_ptr<VMXPi> vmx, const std::string &name,
 {
     // One knob: the publish rate also sets how often the sensor samples, so CAN/USB
     // traffic matches the publish rate. Clamp to the firmware's 20-2000 ms window.
-    const int sample_ms = std::max(20, std::min(2000, 1000 / publish_rate_hz_));
+    sample_ms_ = std::max(20, std::min(2000, 1000 / publish_rate_hz_));
 
     if (transport_ == ColoreTransport::Usb) {
         colore_usb_ = std::make_shared<studica_driver::ColoreUsb>(serial_port);
@@ -122,22 +122,36 @@ Colore::Colore(std::shared_ptr<VMXPi> vmx, const std::string &name,
         }
         // ROS always streams XYZ; the host derives sRGB/hex and colour-matching from it.
         // (Other USB clients can still request SRGB/HEX/RGB/RAW directly from the firmware.)
-        colore_usb_->ConfigureStreaming("xyz", sample_ms);
-        if (brightness >= 0) colore_usb_->SendCommand("BRIGHTNESS," + std::to_string(brightness));
+        const auto streaming = colore_usb_->ConfigureStreaming("xyz", sample_ms_);
+        if (streaming != studica_driver::ColoreUsb::Result::Ok)
+            RCLCPP_WARN(this->get_logger(), "Colore USB streaming config on %s: %s", serial_port.c_str(),
+                        studica_driver::ColoreUsb::ResultString(streaming));
+        if (brightness >= 0) {
+            const auto result = colore_usb_->SetBrightness(brightness);
+            if (result != studica_driver::ColoreUsb::Result::Ok)
+                RCLCPP_WARN(this->get_logger(), "brightness %d not applied: %s", brightness,
+                            studica_driver::ColoreUsb::ResultString(result));
+        }
         std::string cfg;
         if (colore_usb_->RequestConfig(&cfg))
             RCLCPP_INFO(this->get_logger(), "Colore USB ready on %s", serial_port.c_str());
     } else {
         colore_can_ = std::make_shared<studica_driver::Colore>(can_id, vmx_);
-        if (colore_can_->GetCanID() != can_id) {
+        if (!colore_can_->IsCanReceiveStreamOpen()) {
             RCLCPP_ERROR(this->get_logger(), "Colore CAN driver failed to init for ID %u", can_id);
             return;
         }
         // Force the onboard status LED to render calibrated colour (CAN telemetry
         // is XYZ regardless; this only affects the sensor's own indicator LED).
-        colore_can_->SetColorFormat(studica_driver::Colore::ColorFormat::XYZ);
-        colore_can_->SetSampleTimeMs(static_cast<uint16_t>(sample_ms));
+        if (!colore_can_->SetColorFormat(studica_driver::Colore::ColorFormat::XYZ))
+            RCLCPP_WARN(this->get_logger(), "Colore on CAN ID %u did not acknowledge setup; check the CAN ID "
+                        "and that the firmware is current", can_id);
+        colore_can_->SetSampleTimeMs(static_cast<uint16_t>(sample_ms_));
         if (brightness >= 0) colore_can_->SetBrightness(static_cast<uint8_t>(brightness));
+        uint32_t fw = 0;
+        if (colore_can_->GetConfig(COLORE_CONFIG_FIRMWARE_VERSION, fw))
+            RCLCPP_INFO(this->get_logger(), "Colore ready on CAN ID %u, firmware %u.%u.%u", can_id,
+                        (fw >> 16) & 0xFF, (fw >> 8) & 0xFF, fw & 0xFF);
     }
 
     // Measurement mode is a startup parameter (off|auto|fixed), not a runtime
@@ -258,18 +272,14 @@ void Colore::publish_color() {
         fill_from_xyz(s.x, s.y, s.z);
     } else {
         if (!colore_can_) return;
-        uint8_t buf[8] = {0};
-        int n = colore_can_->Read(COLORE_CAN_TELEM_XYZ, buf, sizeof(buf));
-        if (n < 8) return;
-        const uint16_t seq = static_cast<uint16_t>(buf[0] | (buf[1] << 8));
-        auto i16 = [](uint8_t lo, uint8_t hi) {
-            return static_cast<int16_t>(static_cast<uint16_t>(lo) | (static_cast<uint16_t>(hi) << 8));
-        };
-        const float scale = 10000.0f;
+        // Stale after three missed readings (at least 300 ms), so a sensor that
+        // drops off the bus stops publishing instead of repeating its last colour.
+        const auto max_age = std::chrono::milliseconds(std::max(300, 3 * sample_ms_));
+        uint16_t seq = 0;
+        float X = 0.0f, Y = 0.0f, Z = 0.0f;
+        if (!colore_can_->ReadXyz(seq, X, Y, Z, max_age)) return;
         info.seq = seq;
-        fill_from_xyz(i16(buf[2], buf[3]) / scale,
-                      i16(buf[4], buf[5]) / scale,
-                      i16(buf[6], buf[7]) / scale);
+        fill_from_xyz(X, Y, Z);
     }
 
     if (have_color) color_publisher_->publish(color);
@@ -310,16 +320,27 @@ void Colore::cmd(const std::string &params,
             return ok(line);
         }
         if (colore_can_) {
-            uint32_t v = 0;
-            if (colore_can_->GetConfig(/*item=*/1, v)) return ok("colorformat=" + std::to_string(v));
-            return err("GETCONFIG (CAN) failed");
+            uint32_t fw = 0, sample = 0, bright = 0, id = 0;
+            if (!colore_can_->GetConfig(COLORE_CONFIG_FIRMWARE_VERSION, fw) ||
+                !colore_can_->GetConfig(COLORE_CONFIG_SAMPLE_TIME, sample) ||
+                !colore_can_->GetConfig(COLORE_CONFIG_BRIGHTNESS, bright) ||
+                !colore_can_->GetConfig(COLORE_CONFIG_CAN_ID, id))
+                return err("GETCONFIG (CAN) failed");
+            return ok("firmware=" + std::to_string((fw >> 16) & 0xFF) + "." + std::to_string((fw >> 8) & 0xFF) +
+                      "." + std::to_string(fw & 0xFF) + ", sampletime=" + std::to_string(sample) +
+                      " ms, brightness=" + std::to_string(bright) + ", canid=" + std::to_string(id));
         }
         return err("driver not initialized");
     }
     if (params == "set_brightness") {
         const int b = request.initparams.n_encoder;   // reuse an int field for the value
-        if (transport_ == ColoreTransport::Usb && colore_usb_)
-            return colore_usb_->SendCommand("BRIGHTNESS," + std::to_string(b)) ? ok("brightness set") : err("send failed");
+        if (b < 0 || b > 100) return err("brightness must be 0-100");
+        if (transport_ == ColoreTransport::Usb && colore_usb_) {
+            const auto result = colore_usb_->SetBrightness(b);
+            return result == studica_driver::ColoreUsb::Result::Ok
+                       ? ok("brightness set")
+                       : err(studica_driver::ColoreUsb::ResultString(result));
+        }
         if (colore_can_)
             return colore_can_->SetBrightness(static_cast<uint8_t>(b)) ? ok("brightness set") : err("ack failed");
         return err("driver not initialized");
@@ -350,24 +371,25 @@ void Colore::cmd(const std::string &params,
 void Colore::apply_measmode(const std::string &mode, float z_mm) {
     const std::string m = to_lower(mode);
 
-    if (m != "off" && m != "auto" && m != "fixed") {
-        RCLCPP_WARN(this->get_logger(), "colore: unknown measmode '%s' — using off "
-                    "(valid: off, auto, fixed)", mode.c_str());
+    // "auto" was an experimental firmware mode and is no longer supported.
+    if (m != "off" && m != "fixed") {
+        RCLCPP_WARN(this->get_logger(), "colore: unsupported measmode '%s' — using off "
+                    "(valid: off, fixed)", mode.c_str());
     }
 
     if (transport_ == ColoreTransport::Usb) {
         if (!colore_usb_) return;
-        if (m == "auto")
-            colore_usb_->SendCommand("MEASMODE,-1,0");
-        else if (m == "fixed")
-            colore_usb_->SendCommand("MEASMODE," + std::to_string(z_mm) + ",0");
-        else
-            colore_usb_->SendCommand("MEASMODE,OFF");
+        const auto result = (m == "fixed") ? colore_usb_->SetMeasureModeFixed(z_mm)
+                                           : colore_usb_->SetMeasureModeOff();
+        if (result != studica_driver::ColoreUsb::Result::Ok)
+            RCLCPP_WARN(this->get_logger(), "colore: measmode not applied: %s",
+                        studica_driver::ColoreUsb::ResultString(result));
     } else {
         if (!colore_can_) return;
-        if (m == "auto")        colore_can_->SetMeasureModeAuto();
-        else if (m == "fixed")  colore_can_->SetMeasureModeFixed(z_mm);
-        else                    colore_can_->SetMeasureModeOff();
+        const bool applied = (m == "fixed") ? colore_can_->SetMeasureModeFixed(z_mm)
+                                            : colore_can_->SetMeasureModeOff();
+        if (!applied)
+            RCLCPP_WARN(this->get_logger(), "colore: measmode not acknowledged");
     }
 }
 

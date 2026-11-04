@@ -14,12 +14,16 @@
  *
  * command topics (always active):
  *     subscribe /name/m_N/cmd (Float64, duty cycle -1.0 to 1.0)
+ *     publish continuously: a motor is zeroed after cmd_timeout seconds without a command
+ *
+ * topic (subscribes): /motors_enabled (Bool, transient local) — false stops and disables
  *
  * service: /name/titan_cmd (studica_control/SetData)
  *   see titan_component.h for the full command reference.
  */
 
 #include "studica_control/titan_component.hpp"
+#include <cmath>
 #include <thread>
 
 namespace studica_control {
@@ -39,6 +43,7 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
         std::string motor_update_rate_param = "titan." + sensor + ".motor_update_rate_hz";
         std::string limit_switches_param      = "titan." + sensor + ".limit_switches";
         std::string enable_freshness_param   = "titan." + sensor + ".enable_freshness";
+        std::string cmd_timeout_param        = "titan." + sensor + ".cmd_timeout";
 
         control->declare_parameter<int> (can_id_param, -1);
         control->declare_parameter<int> (motor_freq_param, -1);
@@ -46,6 +51,7 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
         control->declare_parameter<int> (motor_update_rate_param, 50);
         control->declare_parameter<bool>(limit_switches_param, false);
         control->declare_parameter<bool>(enable_freshness_param, false);
+        control->declare_parameter<double>(cmd_timeout_param, 0.5);
 
         uint8_t  can_id               = static_cast<uint8_t>(control->get_parameter(can_id_param).as_int());
         uint16_t motor_freq           = static_cast<uint16_t>(control->get_parameter(motor_freq_param).as_int());
@@ -53,6 +59,20 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
         int      motor_update_rate_hz = control->get_parameter(motor_update_rate_param).as_int();
         bool     limit_switches       = control->get_parameter(limit_switches_param).as_bool();
         bool     enable_freshness     = control->get_parameter(enable_freshness_param).as_bool();
+        double   cmd_timeout          = control->get_parameter(cmd_timeout_param).as_double();
+
+        // both rates set timer periods. resends slower than 10 hz let the Titan's 200 ms watchdog
+        // trip between frames, and over 1000 hz is beyond what the timers can keep up with.
+        if (encoder_rate_hz < 1 || encoder_rate_hz > 1000 ||
+            motor_update_rate_hz < 10 || motor_update_rate_hz > 1000) {
+            RCLCPP_ERROR(control->get_logger(),
+                         "titan.%s: encoder_rate_hz must be 1-1000 and motor_update_rate_hz 10-1000, "
+                         "got %d and %d. titan not started",
+                         sensor.c_str(), encoder_rate_hz, motor_update_rate_hz);
+            continue;
+        }
+        // with a control panel the motors stay off until start is pressed
+        bool     start_disabled       = control->get_parameter("control_panel.enabled").as_bool();
 
         std::array<MotorConfig, 4> motor_configs;
         for (int m = 0; m < 4; m++) {
@@ -80,7 +100,8 @@ std::vector<std::shared_ptr<rclcpp::Node>> Titan::initialize(rclcpp::Node *contr
 
         auto titan = std::make_shared<Titan>(vmx, sensor, can_id, motor_freq, motor_configs,
                                              encoder_rate_hz, motor_update_rate_hz,
-                                             limit_switches, enable_freshness);
+                                             limit_switches, enable_freshness,
+                                             cmd_timeout, start_disabled);
         titan_nodes.push_back(titan);
     }
 
@@ -93,8 +114,10 @@ Titan::Titan(const rclcpp::NodeOptions &options) : Node("titan_", options) {}
 
 Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID,
              const uint16_t &motor_freq, const std::array<MotorConfig, 4> &motor_configs,
-             int encoder_rate_hz, int motor_update_rate_hz, bool limit_switches, bool enable_freshness)
+             int encoder_rate_hz, int motor_update_rate_hz, bool limit_switches, bool enable_freshness,
+             double cmd_timeout, bool start_disabled)
     : Node(name), vmx_(vmx), canID_(canID), motor_freq_(motor_freq), motor_configs_(motor_configs),
+      cmd_timeout_(cmd_timeout), motors_allowed_(!start_disabled),
       limit_switches_enabled_(limit_switches), freshness_enabled_(enable_freshness) {
 
     titan_ = std::make_shared<studica_driver::Titan>(canID_, motor_freq_, 1, vmx_);
@@ -111,8 +134,22 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
             prefix + "/cmd", 1,
             [this, i](std_msgs::msg::Float64::SharedPtr msg) {
                 if (!enabled_) return;
+                if (!std::isfinite(msg->data)) {
+                    RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                         "m_%d: ignoring non-finite /cmd", i);
+                    return;
+                }
+                // duty commands only apply open loop. accepting one here would clear the position
+                // latch below and let the velocity keepalive pull the motor out of a position move.
+                if (pid_type_[i] != 0) {
+                    RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                                         "m_%d: ignoring /cmd, motor is in pid type %d", i, pid_type_[i]);
+                    return;
+                }
                 speeds_[i] = static_cast<float>(msg->data);  // store only — resend_speeds is the sole sender
                 position_active_[i] = false;
+                topic_cmd_active_[i] = (msg->data != 0.0);
+                last_cmd_time_[i] = steady_clock_.now();
             });
 
         // feedback publishers — depend on encoder mode
@@ -137,15 +174,23 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
         }
     }
 
+    // transient local so a stop published before this node started still applies
+    motors_enabled_sub_ = this->create_subscription<std_msgs::msg::Bool>(
+        "/motors_enabled", rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local(),
+        std::bind(&Titan::motors_enabled_callback, this, std::placeholders::_1));
+
+    // microseconds so rates that don't divide 1000 evenly keep their period
     encoder_timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(1000 / encoder_rate_hz),
+        std::chrono::microseconds(1000000 / encoder_rate_hz),
         std::bind(&Titan::publish_encoders, this));
 
     watchdog_timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(1000 / motor_update_rate_hz),
+        std::chrono::microseconds(1000000 / motor_update_rate_hz),
         std::bind(&Titan::resend_speeds, this));
 
     for (int i = 0; i < 4; i++) {
+        // a previous process may have left this motor running
+        titan_->SetSpeed(i, 0.0);
         titan_->ConfigureEncoder(i, motor_configs_[i].dist_per_tick);
         titan_->ResetEncoder(i);
         if (motor_configs_[i].invert_motor)   titan_->InvertMotorDirection(i);
@@ -175,13 +220,54 @@ Titan::Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t 
     // accept the enable command. See drivers/examples/titan_example/titan_example.cpp.
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    titan_->Enable(true);
-    enabled_ = true;
+    if (motors_allowed_) {
+        titan_->Enable(true);
+        enabled_ = true;
+    }
 
-    RCLCPP_INFO(this->get_logger(), "titan ready. can_id: %d, freq: %d hz", canID_, motor_freq_);
+    RCLCPP_INFO(this->get_logger(), "titan ready. can_id: %d, freq: %d hz, cmd_timeout: %.2f s, motors %s",
+                canID_, motor_freq_, cmd_timeout_, enabled_ ? "enabled" : "held off");
 }
 
-Titan::~Titan() {}
+Titan::~Titan() {
+    if (titan_) stop_all_motors();
+}
+
+void Titan::zero_motor(int motor)
+{
+    position_active_[motor] = false;
+    speeds_[motor] = 0.0f;
+    target_rpm_[motor] = 0.0f;
+    topic_cmd_active_[motor] = false;
+    if (pid_type_[motor] == 0)
+        titan_->SetSpeed(motor, 0.0);
+    else
+        titan_->SetTargetVelocity(motor, 0.0f);
+}
+
+void Titan::stop_all_motors()
+{
+    enabled_ = false;
+    for (int i = 0; i < 4; i++)
+        zero_motor(i);
+    titan_->Enable(false);
+}
+
+void Titan::motors_enabled_callback(const std_msgs::msg::Bool::SharedPtr msg)
+{
+    if (msg->data == motors_allowed_)
+        return;
+
+    motors_allowed_ = msg->data;
+    if (motors_allowed_) {
+        titan_->Enable(true);
+        enabled_ = true;
+        RCLCPP_INFO(this->get_logger(), "motors enabled");
+    } else {
+        stop_all_motors();
+        RCLCPP_WARN(this->get_logger(), "motors stopped by /motors_enabled");
+    }
+}
 
 void Titan::resume_motion_resend(int motor, bool all_motors)
 {
@@ -204,7 +290,33 @@ void Titan::cmd(std::string params,
                 std::shared_ptr<studica_control::srv::SetData::Request> request,
                 std::shared_ptr<studica_control::srv::SetData::Response> response) {
 
+    // checked before the cast: the per-motor arrays below are indexed without further checks
+    if (request->initparams.n_encoder < 0 || request->initparams.n_encoder > 3) {
+        response->success = false;
+        response->message = "invalid motor " + std::to_string(request->initparams.n_encoder)
+                            + ", must be 0-3";
+        return;
+    }
     uint8_t motor = static_cast<uint8_t>(request->initparams.n_encoder);
+
+    // NaN and infinity pass every range check below, so stop them before they reach the driver
+    if (!std::isfinite(request->initparams.speed) || !std::isfinite(request->initparams.dist_per_tick)) {
+        response->success = false;
+        response->message = params + " rejected: speed and dist_per_tick must be finite";
+        return;
+    }
+
+    // a stop must hold: anything latched now would start moving as soon as motors are re-enabled
+    const bool starts_motion =
+        params == "enable" || params == "set_speed" || params == "set_speed_all" ||
+        params == "set_target_velocity" || params == "set_target_distance" ||
+        params == "set_target_angle" || params == "set_position_hold" ||
+        params == "autotune" || params == "autotune_motor";
+    if (!motors_allowed_ && starts_motion) {
+        response->success = false;
+        response->message = params + " rejected: motors are stopped by /motors_enabled";
+        return;
+    }
 
     // --- basic control ---
 
@@ -215,13 +327,7 @@ void Titan::cmd(std::string params,
         response->message = "titan enabled";
 
     } else if (params == "disable") {
-        resume_motion_resend(0, true);
-        for (int i = 0; i < 4; i++) {
-            speeds_[i] = 0.0f;
-            target_rpm_[i] = 0.0f;
-        }
-        enabled_ = false;
-        titan_->Enable(false);
+        stop_all_motors();
         response->success = true;
         response->message = "titan disabled";
 
@@ -235,6 +341,7 @@ void Titan::cmd(std::string params,
             float speed = request->initparams.speed;
             resume_motion_resend(motor, false);
             speeds_[motor] = speed;
+            topic_cmd_active_[motor] = false;
             titan_->SetSpeed(motor, speed);
             response->success = true;
             response->message = "motor " + std::to_string(motor) + " speed set to " + std::to_string(speed);
@@ -252,7 +359,10 @@ void Titan::cmd(std::string params,
         }
         float speed = request->initparams.speed;
         resume_motion_resend(0, true);
-        for (int i = 0; i < 4; i++) speeds_[i] = speed;
+        for (int i = 0; i < 4; i++) {
+            speeds_[i] = speed;
+            topic_cmd_active_[i] = false;
+        }
         titan_->SetSpeedAll(static_cast<double>(speed));
         response->success = true;
         response->message = "all motors set to " + std::to_string(speed);
@@ -368,16 +478,22 @@ void Titan::cmd(std::string params,
     // --- pid tuning (titan2 firmware) ---
 
     } else if (params == "set_pid_type") {
-        uint8_t type = static_cast<uint8_t>(request->initparams.int_value);
-        titan_->SetPIDType(type);
-        for (int i = 0; i < 4; i++) {
-            pid_type_[i] = type;
-            position_active_[i] = false;
-            if (type == 0)
-                target_rpm_[i] = 0.0f;
+        // checked before the cast: an out-of-range value would alias a valid type
+        const int32_t type = request->initparams.int_value;
+        if (type < 0 || type > static_cast<int32_t>(TITAN_PID_TYPE_MAX)) {
+            response->success = false;
+            response->message = "invalid pid type " + std::to_string(type) + ", must be 0-"
+                                + std::to_string(TITAN_PID_TYPE_MAX);
+            return;
         }
+        // a mode change stops the motors: a setpoint from the old mode must not resume in the new one
+        for (int i = 0; i < 4; i++) {
+            zero_motor(i);
+            pid_type_[i] = static_cast<uint8_t>(type);
+        }
+        titan_->SetPIDType(static_cast<uint8_t>(type));
         response->success = true;
-        response->message = "pid type set to " + std::to_string(type);
+        response->message = "pid type set to " + std::to_string(type) + ", motors stopped";
 
     } else if (params == "set_sensitivity") {
         titan_->SetSensitivity(motor, static_cast<uint8_t>(request->initparams.int_value));
@@ -396,15 +512,19 @@ void Titan::cmd(std::string params,
         response->message = "autotune started on motor " + std::to_string(motor);
 
     } else if (params == "set_motor_pid_type") {
-        uint8_t type = static_cast<uint8_t>(request->initparams.int_value);
-        titan_->SetMotorPIDType(motor, type);
-        pid_type_[motor] = type;
-        position_active_[motor] = false;
-        if (type == 0)
-            target_rpm_[motor] = 0.0f;
+        const int32_t type = request->initparams.int_value;
+        if (type < 0 || type > static_cast<int32_t>(TITAN_PID_TYPE_MAX)) {
+            response->success = false;
+            response->message = "invalid pid type " + std::to_string(type) + ", must be 0-"
+                                + std::to_string(TITAN_PID_TYPE_MAX);
+            return;
+        }
+        zero_motor(motor);
+        pid_type_[motor] = static_cast<uint8_t>(type);
+        titan_->SetMotorPIDType(motor, static_cast<uint8_t>(type));
         response->success = true;
         response->message = "motor " + std::to_string(motor) + " pid type set to "
-                            + std::to_string(type);
+                            + std::to_string(type) + ", motor stopped";
 
     // --- encoder configuration ---
 
@@ -527,51 +647,48 @@ void Titan::cmd(std::string params,
 }
 
 
-void Titan::publish_encoders() {
-    if (!enabled_) return;
+// Decides whether a feedback read can be published. A failed read is never published: its value
+// is a placeholder, not a measurement. With freshness on, a repeat of an old frame is held back
+// too, and either case counts toward the stale warning.
+bool Titan::feedback_ok(bool read_ok, bool fresh, uint8_t &stale_count, const std::string &what) {
+    if (read_ok && (fresh || !freshness_enabled_)) {
+        stale_count = 0;
+        return true;
+    }
+    if (++stale_count == 5)
+        RCLCPP_WARN(get_logger(), "%s: %s for %d consecutive cycles", what.c_str(),
+                    read_ok ? "stale" : "read failed", stale_count);
+    return false;
+}
 
+// Runs whether or not the motors are enabled: feedback describes the hardware, not the command
+// state, and odometry needs it while the motors are held off too.
+void Titan::publish_encoders() {
     // Quadrature encoder
     for (int i = 0; i < 4; i++) {
         if (motor_configs_[i].encoder_mode != EncoderMode::Quadrature) continue;
-        if (freshness_enabled_) {
-            double enc_dist; bool enc_fresh;
-            titan_->GetEncoderDistanceFresh(i, enc_dist, enc_fresh, nullptr);
-            if (enc_fresh) {
-                stale_count_[i] = 0;
-                std_msgs::msg::Float64 msg; msg.data = enc_dist;
-                encoder_pubs_[i]->publish(msg);
-            } else {
-                if (++stale_count_[i] == 5)
-                    RCLCPP_WARN(get_logger(), "m_%d: encoder stale for %d consecutive cycles",
-                                i, stale_count_[i]);
-            }
-        } else {
-            std_msgs::msg::Float64 msg; msg.data = titan_->GetEncoderDistance(i);
+        double enc_dist = 0.0;
+        bool enc_fresh = false;
+        bool ok = titan_->GetEncoderDistanceFresh(i, enc_dist, enc_fresh, nullptr);
+        if (feedback_ok(ok, enc_fresh, stale_count_[i], "m_" + std::to_string(i) + " encoder")) {
+            std_msgs::msg::Float64 msg; msg.data = enc_dist;
             encoder_pubs_[i]->publish(msg);
         }
     }
 
-    // Cypher Max
-    {
-        if (freshness_enabled_) {
-            double angles[4] = {};
-            bool cypher_fresh;
-            titan_->GetCypherAnglesFresh(angles, cypher_fresh, nullptr);
-            if (!cypher_fresh) {
-                if (++cypher_stale_count_ == 5)
-                    RCLCPP_WARN(get_logger(), "cypher: stale for %d consecutive cycles", cypher_stale_count_);
-            } else {
-                cypher_stale_count_ = 0;
-                for (int i = 0; i < 4; i++) {
-                    if (motor_configs_[i].encoder_mode != EncoderMode::Absolute) continue;
-                    std_msgs::msg::Float64 msg; msg.data = angles[i];
-                    angle_pubs_[i]->publish(msg);
-                }
-            }
-        } else {
+    // Cypher Max: one frame for all four ports, skipped when none are absolute or the read
+    // would fail every cycle and warn about an encoder that isn't fitted
+    bool any_absolute = false;
+    for (const auto &config : motor_configs_)
+        any_absolute = any_absolute || config.encoder_mode == EncoderMode::Absolute;
+    if (any_absolute) {
+        double angles[4] = {};
+        bool cypher_fresh = false;
+        bool ok = titan_->GetCypherAnglesFresh(angles, cypher_fresh, nullptr);
+        if (feedback_ok(ok, cypher_fresh, cypher_stale_count_, "cypher")) {
             for (int i = 0; i < 4; i++) {
                 if (motor_configs_[i].encoder_mode != EncoderMode::Absolute) continue;
-                std_msgs::msg::Float64 msg; msg.data = titan_->GetCypherAngle(i);
+                std_msgs::msg::Float64 msg; msg.data = angles[i];
                 angle_pubs_[i]->publish(msg);
             }
         }
@@ -579,20 +696,11 @@ void Titan::publish_encoders() {
 
     // RPM
     for (int i = 0; i < 4; i++) {
-        if (freshness_enabled_) {
-            float rpm_val; bool rpm_fresh;
-            titan_->GetRPMFresh(i, rpm_val, rpm_fresh, nullptr);
-            if (rpm_fresh) {
-                rpm_stale_count_[i] = 0;
-                std_msgs::msg::Float64 msg; msg.data = static_cast<double>(rpm_val);
-                rpm_pubs_[i]->publish(msg);
-            } else {
-                if (++rpm_stale_count_[i] == 5)
-                    RCLCPP_WARN(get_logger(), "m_%d: rpm stale for %d consecutive cycles",
-                                i, rpm_stale_count_[i]);
-            }
-        } else {
-            std_msgs::msg::Float64 msg; msg.data = static_cast<double>(titan_->GetRPM(i));
+        float rpm_val = 0.0f;
+        bool rpm_fresh = false;
+        bool ok = titan_->GetRPMFresh(i, rpm_val, rpm_fresh, nullptr);
+        if (feedback_ok(ok, rpm_fresh, rpm_stale_count_[i], "m_" + std::to_string(i) + " rpm")) {
+            std_msgs::msg::Float64 msg; msg.data = static_cast<double>(rpm_val);
             rpm_pubs_[i]->publish(msg);
         }
     }
@@ -600,27 +708,10 @@ void Titan::publish_encoders() {
     // Limit switches
     if (limit_switches_enabled_) {
         bool fwd[4] = {}, rev[4] = {};
-        bool do_publish = true;
+        bool fresh = false;
+        bool ok = titan_->GetLimitSwitchesFresh(fwd, rev, fresh, nullptr);
 
-        if (freshness_enabled_) {
-            bool fresh;
-            titan_->GetLimitSwitchesFresh(fwd, rev, fresh, nullptr);
-            if (!fresh) {
-                if (++ls_stale_count_ == 5)
-                    RCLCPP_WARN(get_logger(), "limit switches: stale for %d consecutive cycles",
-                                ls_stale_count_);
-                do_publish = false;
-            } else {
-                ls_stale_count_ = 0;
-            }
-        } else {
-            for (int i = 0; i < 4; i++) {
-                fwd[i] = titan_->GetLimitSwitch(i, 0);
-                rev[i] = titan_->GetLimitSwitch(i, 1);
-            }
-        }
-
-        if (do_publish) {
+        if (feedback_ok(ok, fresh, ls_stale_count_, "limit switches")) {
             for (int i = 0; i < 4; i++) {
                 std_msgs::msg::Bool fwd_msg, rev_msg;
                 fwd_msg.data = !fwd[i];  // active-low: invert so true = triggered
@@ -634,7 +725,15 @@ void Titan::publish_encoders() {
 
 void Titan::resend_speeds() {
     if (!enabled_) return;
+    const rclcpp::Time stamp = steady_clock_.now();
     for (int i = 0; i < 4; i++) {
+        // this resend would otherwise keep a dead publisher's last speed going forever
+        if (topic_cmd_active_[i] && cmd_timeout_ > 0.0 &&
+            (stamp - last_cmd_time_[i]).seconds() > cmd_timeout_) {
+            topic_cmd_active_[i] = false;
+            speeds_[i] = 0.0f;
+            RCLCPP_WARN(this->get_logger(), "m_%d: no /cmd for %.2f s, stopping motor", i, cmd_timeout_);
+        }
         if (position_active_[i])
             continue;
         if (pid_type_[i] == 0)

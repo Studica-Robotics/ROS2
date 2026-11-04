@@ -7,7 +7,7 @@
 # sharp, titan, ultrasonic) support multiple sensors by adding names to the
 # "sensors" list and adding a matching config block for each name.
 #
-# Single-instance components (gamepad, imu) have a flat config.
+# Single-instance components (control_panel, gamepad, imu) have a flat config.
 #
 
 control_server:
@@ -43,6 +43,7 @@ control_server:
         motor_update_rate_hz: 50  # how often motor speeds are sent to hardware, in Hz (default 50)
         limit_switches: false     # true = publish /m_N/limit_fwd and /m_N/limit_rev (std_msgs/Bool)
         enable_freshness: false   # true = skip publish on stale CAN frames (encoder, RPM, cypher max, limit switch); warn after 5 consecutive stale reads
+        cmd_timeout: 0.5          # seconds before a motor stops if its /cmd topic goes quiet (0 = disabled)
         m_0:
           encoder_mode: "quadrature"  # "quadrature" or "absolute"
           dist_per_tick: 1.0          # metres per encoder tick (1.0 = raw counts)
@@ -173,6 +174,7 @@ control_server:
     #   get_config, set_brightness, learn_color,<name>
     #
     # See the README for color matching, rate, and measmode (advanced) details.
+    # Needs current Colore firmware.
     # USB port: ls /dev/ttyACM*
     # -------------------------------------------------------------------------
     colore:
@@ -185,7 +187,7 @@ control_server:
         publish_rate_hz: 10       # readings per second (Hz); also sets the sensor sample rate. (Max useful 20 Hz)
         publish_outputs: ["info"] # add "match" to detect named colors
         brightness: 50            # white LED 0-100
-        measmode: "off"           # advanced: leave "off" for normal use (see README)
+        measmode: "off"           # advanced: "off" or "fixed"; leave "off" for normal use (see README)
         # measmode_z_mm: -1.0     # sensor distance in mm, use only when measmode: "fixed"
         # --- color matching (only when "match" is in publish_outputs; see README) ---
         # match_threshold: 0.05
@@ -207,9 +209,13 @@ control_server:
     #   pointcloud — /<name>/pointcloud (sensor_msgs/PointCloud2) 3D points in frame_id
     #
     # Service: /<name>/parsec_cmd (SetData)
-    #   Commands: get_config, get_zone_distance, get_min_distance
+    #   Commands: get_config, get_zone_distance, get_min_distance,
+    #             set_resolution, set_output_rate, set_frequency, set_zone_mask,<hex>
     #   get_zone_distance uses initparams.n_encoder as the zone index (0..zones-1)
+    #   set_resolution / set_output_rate / set_frequency use initparams.int_value
+    #   Settings only change the sensor's RAM; a power cycle restores its saved values.
     #
+    # Needs current Parsec firmware.
     # USB on Pi: add user to dialout — sudo usermod -aG dialout $USER (re-login)
     # -------------------------------------------------------------------------
     parsec:
@@ -220,8 +226,36 @@ control_server:
         can_id: 5                 # CAN only - must match device CANID (0..63)
         serial_port: /dev/ttyACM0 # USB only - use 'ls /dev/ttyACM*' to find your port
         frame_id: "parsec_link"
-        publish_rate_hz: 15
+        publish_rate_hz: 15       # also sets the sensor's output rate, 1-60 (8x8 tops out at 15)
+        resolution: 0             # 16 (4x4) or 64 (8x8); 0 leaves the sensor's setting
+        zone_mask: ""             # hex, one bit per zone, e.g. "FFFF"; "" leaves the sensor's setting
         publish_outputs: ["zones", "grid", "pointcloud"]  # any of: zones, grid, pointcloud
+
+    # -------------------------------------------------------------------------
+    # NavX3 — IMU (CAN or USB). Separate from "imu" (the navX built into the VMX-pi).
+    #
+    # Topic:   <topic> (sensor_msgs/Imu) — default /<name>/imu, at update_rate_hz
+    #   In the NavX3's own axes (yaw counter-clockwise positive): publish a TF
+    #   from base_link to frame_id that describes how it is mounted.
+    # Service: /<name>/navx3_cmd (SetData)
+    #   Commands: reset_yaw, get_data, get_info, self_test (~4 s, keep still)
+    #
+    # Needs current NavX3 firmware. USB port: ls /dev/ttyACM*
+    # -------------------------------------------------------------------------
+    navx3:
+      enabled: false
+      sensors: ["navx3"]
+      navx3:
+        transport: can            # can | usb
+        can_id: 0                 # CAN only - must match the device (0..63)
+        serial_port: /dev/ttyACM0 # USB only
+        frame_id: "navx3_link"
+        update_rate_hz: 50        # sensor output rate and publish rate, 1-200
+        yaw_axes: 6               # 6 = gyro + accelerometer, 9 = also magnetometer
+        # Diagonal variances for the Imu message; all 0 means "unknown".
+        orientation_variance: 0.0
+        angular_velocity_variance: 0.0
+        linear_acceleration_variance: 0.0
     # -------------------------------------------------------------------------
     # DIO — digital input or output pin
     #
@@ -277,4 +311,31 @@ control_server:
       deadzone: 0.05        # axis values below this are treated as zero
       turbo_multiplier: 2.0 # speed multiplier when turbo button is held
       publish_rate: 50      # cmd_vel publish rate in Hz (higher = lower stop latency)
+      joy_timeout: 0.5      # seconds without /joy before cmd_vel is held at zero (0 = disabled)
       cmd_vel_topic: "cmd_vel"
+
+    # -------------------------------------------------------------------------
+    # Control panel — start, stop and reset buttons with an LED for each
+    # Buttons connect the pin to ground when pressed. Pins are owned by this
+    # component, so don't also list them under dio.
+    #
+    # While enabled, motors stay off until start is pressed:
+    #   waiting -> start -> running -> stop -> stopped -> reset -> waiting
+    #
+    # Topic:   /control_panel/state (std_msgs/String, latched) — waiting, running, stopped
+    #          /control_panel/reset (std_msgs/Empty)  — published on every reset press
+    #          /motors_enabled      (std_msgs/Bool, latched)   — true only while running
+    # Subscribes: /control_panel/press (std_msgs/String) — "start", "stop" or "reset"
+    #
+    # This is a software stop, not an e-stop.
+    # -------------------------------------------------------------------------
+    control_panel:
+      enabled: false
+      button_start: -1      # DIO pin for the start button (all six pins are required)
+      button_stop: -1
+      button_reset: -1
+      led_start: -1         # DIO pin for the start LED
+      led_stop: -1
+      led_reset: -1
+      press_lockout_ms: 300 # ignore repeat presses of a button inside this window
+      blink_hz: 2.0         # LED blink rate

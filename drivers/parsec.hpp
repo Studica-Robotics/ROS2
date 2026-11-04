@@ -1,47 +1,64 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <vector>
 
 struct VMXPi;
 
 /**
  * Host-side driver for Parsec ToF sensor over CAN.
- * CAN ID layout matches firmware: address = (DEVICE_TYPE + MANID + canID) + OFFSET * index.
+ * CAN address = BASE + (OFFSET * API index) + canID.
  * Use GetAddress(INDEX) to get the CAN ID for a given API index.
  */
 namespace studica_driver {
 
-// Match Parsec firmware: fdcan_cmd.h (OFFSET*index: 0x40*16=0x400, so GETCONFIG id0=0x06090400)
-#define PARSEC_DEVICE_TYPE  0x06000000u
-#define PARSEC_MANID        0x00090000u
+#define PARSEC_BASE         0x060C0000u
 #define PARSEC_OFFSET       0x40u
-#define PARSEC_BASE         (PARSEC_DEVICE_TYPE + PARSEC_MANID)  // 0x06090000
 
-// API indices (GetAddress(index)); GETCONFIG=16 => BASE+0x400+canID e.g. 0x06090400 for canID 0
-#define PARSEC_META         0
-#define PARSEC_DATA0        1
-#define PARSEC_DATA1        2
-#define PARSEC_DATA2        3
-#define PARSEC_DATA3        4
-#define PARSEC_GETCONFIG    16
-#define PARSEC_CMD_RESP     17
+// API indices (GetAddress(index)); GETCONFIG=16 => BASE+0x400+canID e.g. 0x060C0400 for canID 0
+#define PARSEC_META                 0
+#define PARSEC_DATA0                1
+#define PARSEC_DATA1                2
+#define PARSEC_DATA2                3
+#define PARSEC_DATA3                4
+#define PARSEC_ACK                  5   // answers every SET_* command
+#define PARSEC_GETCONFIG            16
+#define PARSEC_CMD_RESP             17  // GETCONFIG reply
+#define PARSEC_SET_OUTPUT_RATE      18  // [hz]
+#define PARSEC_SET_RESOLUTION       19  // [16 | 64]
+#define PARSEC_SET_FREQUENCY        20  // [hz]
+#define PARSEC_SET_ZONE_MASK        21  // [mask u64 LE]
 
-// GETCONFIG response layout:
-// - CAN FD: CMD_RESP can be up to 44 bytes (full config with API IDs and zone mask).
-// - CAN2 (Classic): CMD_RESP is 8 bytes only: [0]=version, [1]=fdist_en, [2]=can_fd_enabled,
-//   [3]=can_brs_status, [4]=CAN_ID, [5..7]=reserved. Use fixed PARSEC_* indices for addresses.
-// Full 44-byte layout (when len>=44): [8..11] META, [12..15] DATA0, ... [32..35] CMD_RESP, [36..43] zone mask.
+// ACK payload: [0]=command API index, [1]=status, [2..5]=value u32 LE
+#define PARSEC_ACK_OK               0
+#define PARSEC_ACK_BAD_LENGTH       1
+#define PARSEC_ACK_BAD_ARGUMENT     2
+#define PARSEC_ACK_EEPROM           3
+#define PARSEC_ACK_DEVICE           4
+/** SendCommand result when no ACK arrived. */
+#define PARSEC_ACK_TIMEOUT          -1
 
-// DATA frames:
-// - CAN FD: DATA0..DATA3, each [0]=seq, [1]=zones, [2..]=int16 LE (16 zones per chunk).
-// - CAN2: only DATA0 is used; multiple 8-byte frames: [0]=seq, [1]=block_idx, [2..7]=3×int16 LE.
-//   Reassemble with ReadDataStreamCAN2().
+// GETCONFIG reply (classic CAN, 8 bytes): [0]=version, [1]=fdist_en, [2]=can_fd_enabled,
+// [3]=can_brs_status, [4]=CAN_ID, [5..7]=firmware major, minor, patch.
+
+// DATA frames (classic CAN): a burst of 8-byte frames on DATA0, each
+// [0]=seq, [1]=block, [2..7]=3 x int16 LE zones. Block bits 0-6 are the block
+// index; bit 7 is set when the frame has 64 zones (else 16).
+#define PARSEC_BLOCK_64_ZONES       0x80u
 
 class Parsec {
 public:
+    struct Config {
+        uint8_t version = 0;
+        bool distance_enabled = false;
+        bool can_fd = false;
+        bool can_brs = false;
+        uint8_t can_id = 0;
+        uint8_t firmware[3] = {0, 0, 0};
+    };
+
     /**
      * @param canID Device CAN ID (0..63), must match device's CANID setting.
      * @param vmx    VMXPi instance (e.g. std::make_shared<VMXPi>(true, 50)).
@@ -49,61 +66,76 @@ public:
     Parsec(uint8_t canID, std::shared_ptr<VMXPi> vmx);
     ~Parsec();
 
-    /** CAN address for this device: (PARSEC_BASE + canID_) + PARSEC_OFFSET * index */
+    /** CAN address for this device: PARSEC_BASE + PARSEC_OFFSET * index + canID */
     uint32_t GetAddress(uint32_t index) const;
 
-    /** CAN address for any canID (for scanning). address = PARSEC_BASE + canID + PARSEC_OFFSET * index */
+    /** CAN address for any canID (for scanning). */
     static uint32_t GetAddressForCanID(uint8_t canID, uint32_t index);
 
-    /** Send GETCONFIG request; response arrives on CMD_RESP. Returns true if send ok. */
-    bool RequestConfig();
-    /**
-     * Read GETCONFIG response from blackboard (CMD_RESP).
-     * configOut at least 8 bytes (classic CAN); 44 bytes for full config (CAN FD). Returns true if entry found.
-     */
-    bool GetConfigResponse(uint8_t* configOut, unsigned maxLen = 64);
-
-    /** Read one DATA frame (DATA0..DATA3) from blackboard. dataOut at least 64 bytes. Returns payload length or 0. */
-    int ReadDataChunk(uint32_t dataIndex, uint8_t* dataOut, unsigned maxLen = 64);
-
-    /**
-     * CAN2 only: reassemble distance data from DATA0 stream (multiple 8-byte frames with block_idx).
-     * Drains the VMX receive stream (IO thread fills it). fdist[] filled with int16 LE; -1 = invalid/missing.
-     * @param seqOut    optional; set to frame sequence number
-     * @param zonesOut  optional; set to number of zones (from received blocks)
-     * @param fdist     output array, at least maxZones elements
-     * @param maxZones  typically 16 or 64
-     * @return number of zones filled (0 if no DATA0 frames), or -1 on error
-     */
-    int ReadDataStreamCAN2(uint8_t* seqOut, uint8_t* zonesOut, int16_t* fdist, int maxZones = 64);
-
-    /** Parse CAN ID from config response bytes [8..35] (7 x uint32 LE). */
-    static void ParseConfigApiIds(const uint8_t* config, uint32_t* meta, uint32_t* data0, uint32_t* data1,
-                                  uint32_t* data2, uint32_t* data3, uint32_t* getconfig, uint32_t* cmdResp);
-    /** Parse zone mask from config bytes [36..43] (uint64 LE). */
-    static uint64_t ParseConfigZoneMask(const uint8_t* config);
+    /** False if the CAN receive stream couldn't be opened. */
+    bool IsOpen() const { return open_; }
 
     uint8_t GetCanID() const { return canID_; }
 
-    /** Raw Write: send one CAN frame to given address (8 bytes for classic). */
+    /** Sends GETCONFIG and waits for the reply. Returns false if none arrived. */
+    bool GetConfig(Config& out);
+
+    /*
+     * Settings. Each waits for the device's ACK and returns its status
+     * (PARSEC_ACK_OK on success) or PARSEC_ACK_TIMEOUT. They only change RAM,
+     * so a power cycle restores the sensor's saved values.
+     */
+    /** Frames per second sent, 1-60 (4x4 reaches 60, 8x8 15). */
+    int SetOutputRate(uint8_t hz);
+    /** 16 (4x4) or 64 (8x8). Restarts ranging at 15 Hz, so set rates afterwards. */
+    int SetResolution(uint8_t zones);
+    /** Ranging frequency, 1-60 Hz. */
+    int SetRangingFrequency(uint8_t hz);
+    /** Enabled zones, one bit each; masked zones read -1. */
+    int SetZoneMask(uint64_t mask);
+
+    /**
+     * Reassembles distance frames from the DATA0 burst. Drains whatever has
+     * arrived without waiting; a frame split across calls is kept until its
+     * last block arrives (or dropped if it is over 100 ms old).
+     * fdist[] is filled with int16 mm; -1 = masked or missing, -2 = no reading.
+     * @param seqOut    optional; set to frame sequence number
+     * @param zonesOut  optional; set to 16 or 64
+     * @param fdist     output array, at least maxZones elements
+     * @param maxZones  typically 64
+     * @return zones filled if a new frame completed since the last call, 0 if
+     *         none did, or -1 on error
+     */
+    int ReadDataStreamCAN2(uint8_t* seqOut, uint8_t* zonesOut, int16_t* fdist, int maxZones = 64);
+
+    /** Raw Write: send one CAN frame of up to 8 bytes to the given address. */
     bool Write(uint32_t address, const uint8_t* data, size_t len, int32_t periodMS = 0);
-    /** No-op when VMXPi uses periodic IO (RetrieveAllCANData runs on the VMX thread). */
-    void PullCANData();
     /** Read latest frame for address from blackboard. Returns bytes copied, 0 on failure. */
     int Read(uint32_t address, uint8_t* data, size_t maxLen);
-    /** Same as Read(); kept for callers that previously pulled before a batch read. */
-    int ReadCached(uint32_t address, uint8_t* data, size_t maxLen);
 
     /** Diagnostic: read up to maxMessages from receive stream and print ID + data. Use when no device found. */
     void DumpReceiveStream(unsigned maxMessages = 32);
 
-    /** VMX CAN channel (0 or 1). Set env PARSEC_CAN_CHANNEL=1 to use CAN1. */
-    static unsigned GetCANChannel();
-
 private:
+    /** Like Read(), but only if the frame hasn't been read before. */
+    int ReadNew(uint32_t address, uint8_t* data, size_t maxLen);
+    /** Sends a SET_* command and waits for its ACK. */
+    int SendCommand(uint32_t index, const uint8_t* payload, size_t len, std::chrono::milliseconds timeout);
+    /** Adds one DATA0 block to the frame being assembled. Returns true when it completes. */
+    bool FeedBlock(const uint8_t* d, std::chrono::steady_clock::time_point now);
+
     std::shared_ptr<VMXPi> vmx_;
     uint8_t canID_;
     unsigned int canrxhandle_{0};  // VMXCANReceiveStreamHandle
+    bool open_{false};
+
+    // Frame being assembled from DATA0 blocks.
+    bool partial_active_{false};
+    uint8_t partial_seq_{0};
+    uint8_t partial_zones_{0};
+    uint32_t partial_blocks_{0};  // received blocks, one bit each
+    std::chrono::steady_clock::time_point partial_start_{};
+    int16_t partial_fdist_[64] = {0};
 };
 
 } // namespace studica_driver

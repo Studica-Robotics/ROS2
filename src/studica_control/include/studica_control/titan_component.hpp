@@ -20,6 +20,18 @@
  *     /titan0/m_2/cmd  ...
  *     /titan0/m_3/cmd  ...
  *
+ *   the /cmd topics are meant to be published continuously. a motor is zeroed if its last
+ *   non-zero duty cycle is older than cmd_timeout seconds (default 0.5, 0 disables), so a
+ *   crashed publisher can't leave it running. service commands are one-shot and don't time out.
+ *   /cmd only applies in pid type 0; it is ignored while a motor is closed loop.
+ *
+ *   feedback publishes whether or not the motors are enabled. a failed read is never
+ *   published; with enable_freshness, a repeat of an old frame isn't either.
+ *
+ * topic (subscribes): /motors_enabled (std_msgs/Bool, transient local)
+ *   false zeroes and disables the controller and rejects motion commands until true arrives.
+ *   published by the control panel. without a publisher nothing changes.
+ *
  * service: /titan0/titan_cmd (studica_control/SetData)
  *   use the service for configuration and closed-loop control.
  *   send commands via the params field. initparams carries extra values:
@@ -55,14 +67,14 @@
  *
  *   pid tuning (titan2 firmware):
  *     set_pid_type         — select the pid algorithm (see firmware docs for type codes)
- *                            requires: int_value
+ *                            requires: int_value. stops all motors and clears their setpoints
  *     set_sensitivity      — tune how aggressively the pid responds (0–255)
  *                            requires: n_encoder, int_value
  *     autotune             — automatically tune pid for all motors
  *     autotune_motor       — automatically tune pid for one motor
  *                            requires: n_encoder
  *     set_motor_pid_type   — per-motor pid type (0=OFF, 1=legacy, 2=MCV2)
- *                            requires: n_encoder, int_value
+ *                            requires: n_encoder, int_value. stops the motor and clears its setpoints
  *
  *   encoder configuration:
  *     setup_encoder        — prepare an encoder channel for use
@@ -151,7 +163,8 @@ public:
     Titan(std::shared_ptr<VMXPi> vmx, const std::string &name, const uint8_t &canID,
           const uint16_t &motor_freq, const std::array<MotorConfig, 4> &motor_configs,
           int encoder_rate_hz = 20, int motor_update_rate_hz = 50,
-          bool limit_switches = false, bool enable_freshness = false);
+          bool limit_switches = false, bool enable_freshness = false,
+          double cmd_timeout = 0.5, bool start_disabled = false);
 
     ~Titan();
 
@@ -170,6 +183,14 @@ private:
     // Set while a position/angle move is in flight: suppresses the velocity keepalive so it
     // cannot drag the motor out of firmware POSITION mode. Cleared by resume_motion_resend().
     std::array<bool, 4> position_active_ = {false, false, false, false};
+    // Set while speeds_[i] came from a non-zero /cmd message, so only topic commands time out.
+    std::array<bool, 4> topic_cmd_active_ = {false, false, false, false};
+    std::array<rclcpp::Time, 4> last_cmd_time_;
+    // Steady so a system clock adjustment can't delay a stop or cause a false one.
+    rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
+    double cmd_timeout_ = 0.5;
+    // Cleared by /motors_enabled: motion commands are rejected until it is set again.
+    bool motors_allowed_ = true;
     bool enabled_ = false;
     bool limit_switches_enabled_ = false;
     bool freshness_enabled_ = false;
@@ -193,12 +214,24 @@ private:
 
     // command subscribers — always created regardless of encoder mode
     std::array<rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr, 4> cmd_subs_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr motors_enabled_sub_;
 
     rclcpp::TimerBase::SharedPtr encoder_timer_;
     rclcpp::TimerBase::SharedPtr watchdog_timer_;
 
     // Clear the position latch so resend_speeds() resumes sending motion commands.
     void resume_motion_resend(int motor, bool all_motors);
+
+    // Zero one motor in its current control mode and clear every stored setpoint for it.
+    void zero_motor(int motor);
+
+    // Zero every motor in its current control mode, then disable the controller.
+    void stop_all_motors();
+
+    // True when a feedback read can be published; otherwise counts toward the stale warning.
+    bool feedback_ok(bool read_ok, bool fresh, uint8_t &stale_count, const std::string &what);
+
+    void motors_enabled_callback(const std_msgs::msg::Bool::SharedPtr msg);
 
     void cmd_callback(std::shared_ptr<studica_control::srv::SetData::Request> request,
                       std::shared_ptr<studica_control::srv::SetData::Response> response);

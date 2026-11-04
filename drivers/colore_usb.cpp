@@ -1,12 +1,16 @@
 #include "colore_usb.hpp"
 
 #include <fcntl.h>
+#include <poll.h>
+#include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 
 #include <algorithm>
 #include <cctype>
-#include <chrono>
+#include <cerrno>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <sstream>
 #include <vector>
@@ -14,6 +18,10 @@
 namespace studica_driver {
 
 namespace {
+
+// Keeps commands from merging into one USB packet.
+constexpr auto kCommandSpacing = std::chrono::milliseconds(5);
+constexpr auto kConfigTimeout = std::chrono::milliseconds(500);
 
 // Uppercases a string (e.g. for COLORFORMAT command).
 std::string to_upper(std::string s) {
@@ -39,25 +47,38 @@ std::vector<std::string> split_csv(const std::string& s) {
     return out;
 }
 
-// Telemetry lines the firmware streams continuously after COLORFORMAT.
-bool is_telemetry_line(const std::string& line) {
-    return line.rfind("XYZ:", 0) == 0
-        || line.rfind("SRGB:", 0) == 0
-        || line.rfind("HEX:", 0) == 0
-        || line.rfind("RGB:", 0) == 0
-        || line.rfind("RAW:", 0) == 0
-        || line.rfind("DIST:", 0) == 0;
+bool starts_with(const std::string& s, const char* prefix) {
+    return s.rfind(prefix, 0) == 0;
 }
 
 // Lines that belong to a GETCONFIG dump (see firmware usb_cmd.c CMD_GETCONFIG).
+// It has no OK line; GAIN: is the last one.
 bool is_getconfig_line(const std::string& line) {
-    return line.rfind("SN:", 0) == 0
-        || line.rfind("BRIGHTNESS:", 0) == 0
-        || line.rfind("CALIB:", 0) == 0
-        || line.rfind("STATUSLED:", 0) == 0
-        || line.rfind("SAMPLETIME:", 0) == 0
-        || line.rfind("MEASMODE:", 0) == 0
-        || line.rfind("GAIN:", 0) == 0;
+    return starts_with(line, "SN:")
+        || starts_with(line, "BRIGHTNESS:")
+        || starts_with(line, "CALIB:")
+        || starts_with(line, "STATUSLED:")
+        || starts_with(line, "SAMPLETIME:")
+        || starts_with(line, "MEASMODE:")
+        || starts_with(line, "GAIN:");
+}
+
+// Replies: "SAMPLETIME,100 OK", "MEASMODE OFF OK", "ERR usage: ...", "Unknown command: ...".
+bool ends_with_ok(const std::string& line) {
+    return line.size() >= 3 && line.compare(line.size() - 3, 3, " OK") == 0;
+}
+
+// True if `line` contains the command's name (the part before its first comma) as a whole word.
+bool mentions_command(const std::string& line, const std::string& cmd) {
+    const std::string name = cmd.substr(0, cmd.find(','));
+    if (name.empty()) return false;
+    auto is_word = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
+    for (size_t at = line.find(name); at != std::string::npos; at = line.find(name, at + 1)) {
+        const size_t end = at + name.size();
+        if ((at == 0 || !is_word(line[at - 1])) && (end == line.size() || !is_word(line[end])))
+            return true;
+    }
+    return false;
 }
 
 }  // namespace
@@ -76,6 +97,7 @@ ColoreUsb::ColoreUsb(const std::string& port, int baud) : port_(port) {
     tty.c_cc[VMIN] = 0;
     tty.c_cc[VTIME] = 0;
     if (tcsetattr(fd_, TCSANOW, &tty) != 0) { ::close(fd_); fd_ = -1; return; }
+    tcflush(fd_, TCIOFLUSH);
 
     startReader();
 }
@@ -86,7 +108,7 @@ ColoreUsb::~ColoreUsb() {
     if (fd_ >= 0) ::close(fd_);
 }
 
-// Starts the reader thread. 
+// Starts the reader thread.
 void ColoreUsb::startReader() {
     running_ = true;
     reader_ = std::thread(&ColoreUsb::readerLoop, this);
@@ -99,63 +121,111 @@ void ColoreUsb::stopReader() {
     line_buf_.clear();
 }
 
-// Sends a command to the device.
+// Sends one command as its own USB packet. The firmware takes each packet as a
+// whole command, so there is no terminator; wait for it to leave before the next.
 bool ColoreUsb::SendCommand(const std::string& cmd) {
     if (fd_ < 0) return false;
-    std::string out = cmd + "\r\n";
-    ssize_t n = ::write(fd_, out.data(), out.size());
-    return n == static_cast<ssize_t>(out.size());
-}
-
-// Configures the streaming of data from the device.
-bool ColoreUsb::ConfigureStreaming(const std::string& color_format, int sample_ms) {
-    if (fd_ < 0) return false;
-    bool ok = SendCommand("COLORFORMAT," + to_upper(color_format));
-    if (sample_ms > 0) ok = SendCommand("SAMPLETIME," + std::to_string(sample_ms)) && ok;
-    return ok;
-}
-
-// Requests the configuration of the device.
-// Pause the reader, drain stale samples, then collect only GETCONFIG lines.
-bool ColoreUsb::RequestConfig(std::string* response_out) {
-    if (fd_ < 0) return false;
-
-    const bool was_running = running_;
-    if (was_running) stopReader();
-
-    // Discard buffered telemetry so GETCONFIG is not buried under XYZ backlog.
-    {
-        auto drain_end = std::chrono::steady_clock::now() + std::chrono::milliseconds(150);
-        std::string line;
-        while (std::chrono::steady_clock::now() < drain_end) {
-            if (!readLineBlocking(&line, 20)) break;
+    std::lock_guard<std::mutex> lk(write_mutex_);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    const char* data = cmd.data();
+    size_t left = cmd.size();
+    while (left > 0) {
+        ssize_t n = ::write(fd_, data, left);
+        if (n < 0) {
+            if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) return false;
+            if (std::chrono::steady_clock::now() >= deadline) return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
         }
-        // Drop any partial line left in the OS buffer mid-frame.
-        tcflush(fd_, TCIFLUSH);
+        data += n;
+        left -= static_cast<size_t>(n);
     }
-
-    if (!SendCommand("GETCONFIG")) {
-        if (was_running) startReader();
-        return false;
+    int queued = 0;
+    while (ioctl(fd_, TIOCOUTQ, &queued) == 0 && queued > 0 &&
+           std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+    std::this_thread::sleep_for(kCommandSpacing);
+    return true;
+}
 
-    std::string acc;
-    std::string line;
-    bool saw_sn = false;
-    auto t_end = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
-    while (std::chrono::steady_clock::now() < t_end) {
-        if (!readLineBlocking(&line, 80)) continue;
-        if (line.empty() || is_telemetry_line(line)) continue;
-        if (!is_getconfig_line(line)) continue;
-        acc += line + "\n";
-        if (line.rfind("SN:", 0) == 0) saw_sn = true;
-        if (line.rfind("GAIN:", 0) == 0) break;  // last GETCONFIG line
+// Sends a command and waits for the reply that names it.
+ColoreUsb::Result ColoreUsb::command(const std::string& cmd, std::chrono::milliseconds timeout) {
+    if (fd_ < 0 || !running_) return Result::NotOpen;
+    std::lock_guard<std::mutex> command_lock(command_mutex_);
+    {
+        // Before sending: the reply can arrive before this thread waits for it.
+        std::lock_guard<std::mutex> lk(reply_mutex_);
+        awaiting_ = cmd;
+        reply_ = Reply::None;
     }
+    const bool sent = SendCommand(cmd);
+    std::unique_lock<std::mutex> lk(reply_mutex_);
+    const bool answered = sent && reply_cv_.wait_for(lk, timeout, [this] { return reply_ != Reply::None; });
+    const Reply reply = reply_;
+    awaiting_.clear();
+    reply_ = Reply::None;
+    if (!sent) return Result::NotOpen;
+    if (!answered) return Result::Timeout;
+    switch (reply) {
+        case Reply::Ok: return Result::Ok;
+        case Reply::Unknown: return Result::Unsupported;
+        default: return Result::Rejected;
+    }
+}
 
-    if (was_running) startReader();
+// Configures the streaming of data from the device. The first command also wakes it.
+ColoreUsb::Result ColoreUsb::ConfigureStreaming(const std::string& color_format, int sample_ms) {
+    Result result = command("COLORFORMAT," + to_upper(color_format));
+    if (result == Result::Ok && sample_ms > 0) result = SetSampleTime(sample_ms);
+    return result;
+}
 
-    if (!saw_sn || acc.empty()) return false;
-    if (response_out) *response_out = trim(acc);
+ColoreUsb::Result ColoreUsb::SetSampleTime(int ms) {
+    return command("SAMPLETIME," + std::to_string(ms));
+}
+
+ColoreUsb::Result ColoreUsb::SetBrightness(int percent) {
+    return command("BRIGHTNESS," + std::to_string(percent));
+}
+
+ColoreUsb::Result ColoreUsb::SetStatusLed(bool enable, int percent) {
+    return command(std::string("STATUSLED,") + (enable ? "1," : "0,") + std::to_string(percent));
+}
+
+ColoreUsb::Result ColoreUsb::SetMeasureModeOff() {
+    return command("MEASMODE,OFF");
+}
+
+ColoreUsb::Result ColoreUsb::SetMeasureModeFixed(float z_mm) {
+    // "MEASMODE,<distance mm>,<ambient 0|1>"; ambient compensation off.
+    char cmd[48];
+    std::snprintf(cmd, sizeof(cmd), "MEASMODE,%g,0", static_cast<double>(z_mm));
+    return command(cmd);
+}
+
+const char* ColoreUsb::ResultString(Result result) {
+    switch (result) {
+        case Result::Ok: return "ok";
+        case Result::Rejected: return "rejected by sensor";
+        case Result::Unsupported: return "not supported by this firmware";
+        case Result::Timeout: return "no reply";
+        default: return "port not open";
+    }
+}
+
+// Requests the configuration of the device; the reader thread collects the reply.
+bool ColoreUsb::RequestConfig(std::string* response_out) {
+    if (fd_ < 0 || !running_) return false;
+    uint64_t before;
+    {
+        std::lock_guard<std::mutex> lk(reply_mutex_);
+        before = config_count_;
+    }
+    if (!SendCommand("GETCONFIG")) return false;
+    std::unique_lock<std::mutex> lk(reply_mutex_);
+    if (!reply_cv_.wait_for(lk, kConfigTimeout, [&] { return config_count_ != before; })) return false;
+    if (response_out) *response_out = config_done_;
     return true;
 }
 
@@ -167,61 +237,73 @@ bool ColoreUsb::ReadLatest(Sample* out) {
     return true;
 }
 
-// Reads one '\n'-terminated line from a small private buffer (used by RequestConfig
-// only; the steady-state stream is consumed by readerLoop()).
-bool ColoreUsb::readLineBlocking(std::string* line_out, int timeout_ms) {
-    auto t_end = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
-    char c;
-    std::string acc;
-    while (std::chrono::steady_clock::now() < t_end) {
-        ssize_t n = ::read(fd_, &c, 1);
-        if (n == 1) {
-            if (c == '\n') { *line_out = trim(acc); return true; }
-            if (c != '\r') acc += c;
-        } else {
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
-        }
-    }
-    *line_out = trim(acc);
-    return !acc.empty();
-}
-
 // The reader thread continuously reads from the USB port and parses lines.
 void ColoreUsb::readerLoop() {
     char buf[256];
     while (running_) {
+        pollfd pfd{fd_, POLLIN, 0};
+        const int pr = ::poll(&pfd, 1, 50);
+        if (pr < 0 && errno != EINTR) break;
+        if (pr <= 0) continue;
+        if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
+            std::fprintf(stderr, "Colore USB: %s disconnected\n", port_.c_str());
+            break;
+        }
         ssize_t n = ::read(fd_, buf, sizeof(buf));
-        if (n > 0) {
-            for (ssize_t i = 0; i < n; ++i) {
-                char c = buf[i];
-                if (c == '\n') { parseLine(trim(line_buf_)); line_buf_.clear(); }
-                else if (c != '\r') line_buf_ += c;
+        if (n < 0 && errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) break;
+        for (ssize_t i = 0; i < n; ++i) {
+            char c = buf[i];
+            if (c == '\n' || c == '\r') {
+                const std::string line = trim(line_buf_);
+                line_buf_.clear();
+                if (!line.empty() && !onTextLine(line)) parseLine(line);
+            } else if (line_buf_.size() < 1024) {
+                line_buf_ += c;
             }
-        } else {
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
     }
+    running_ = false;  // commands now fail at once instead of timing out
+}
+
+// Handles command replies and GETCONFIG lines. Returns true if the line was one.
+bool ColoreUsb::onTextLine(const std::string& line) {
+    std::lock_guard<std::mutex> lk(reply_mutex_);
+    if (is_getconfig_line(line)) {
+        if (starts_with(line, "SN:")) config_acc_.clear();
+        if (!config_acc_.empty()) config_acc_ += "\n";
+        config_acc_ += line;
+        if (starts_with(line, "GAIN:")) {
+            config_done_ = config_acc_;
+            config_acc_.clear();
+            ++config_count_;
+            reply_cv_.notify_all();
+        }
+        return true;
+    }
+
+    Reply reply = Reply::None;
+    if (starts_with(line, "Unknown command")) reply = Reply::Unknown;
+    else if (starts_with(line, "ERR")) reply = Reply::Error;
+    else if (ends_with_ok(line) || line.find(" OK ") != std::string::npos) reply = Reply::Ok;
+    if (reply == Reply::None) return false;
+
+    // Replies to anything but the awaited command are dropped, as is a second one.
+    if (!awaiting_.empty() && reply_ == Reply::None && mentions_command(line, awaiting_)) {
+        reply_ = reply;
+        reply_cv_.notify_all();
+    }
+    return true;
 }
 
 // Parses a single line of text from the device, updating the latest sample.
 void ColoreUsb::parseLine(const std::string& raw_line) {
     if (raw_line.empty()) return;
-    std::string line = raw_line;
+    const std::string& line = raw_line;
 
     Sample s;
     {
         std::lock_guard<std::mutex> lk(sample_mutex_);
         s = latest_;  // carry forward fields not in this line
-    }
-
-    // Optional "DIST: <mm>  " prefix (smart-measurement mode)
-    if (line.rfind("DIST:", 0) == 0) {
-        size_t two_spaces = line.find("  ");
-        std::string dist = line.substr(5, (two_spaces == std::string::npos ? line.size() : two_spaces) - 5);
-        s.has_dist = true;
-        s.dist_mm = std::strtof(trim(dist).c_str(), nullptr);
-        if (two_spaces == std::string::npos) { /* dist-only line */ }
-        else line = trim(line.substr(two_spaces + 2));
     }
 
     auto after_colon = [&](const std::string& l) {
@@ -263,7 +345,7 @@ void ColoreUsb::parseLine(const std::string& raw_line) {
         }
     }
 
-    if (!got) return;  // IDENTITY / GETCONFIG / unknown lines: ignore here
+    if (!got) return;  // IDENTITY / unknown lines: ignore here
 
     std::lock_guard<std::mutex> lk(sample_mutex_);
     s.seq = ++seq_counter_;

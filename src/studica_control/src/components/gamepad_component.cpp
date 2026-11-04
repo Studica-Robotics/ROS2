@@ -13,6 +13,8 @@
  * topic (subscribes): /joy (sensor_msgs/Joy) — raw joystick input
  * topic (subscribes): /gamepad_buttons (std_msgs/Int32MultiArray) — runtime axis remap
  * topic (publishes):  <cmd_vel_topic> (geometry_msgs/Twist) — velocity output
+ *
+ * if /joy stops for joy_timeout seconds the output is held at zero until it returns.
  */
 
 #include "studica_control/gamepad_component.hpp"
@@ -34,6 +36,7 @@ std::shared_ptr<rclcpp::Node> GamepadController::initialize(rclcpp::Node *contro
     control->declare_parameter("gamepad.button_turbo",     5);
     control->declare_parameter<std::string>("gamepad.cmd_vel_topic", "cmd_vel");
     control->declare_parameter<int>("gamepad.publish_rate", 50);  // Hz
+    control->declare_parameter("gamepad.joy_timeout",      0.5);  // seconds, 0 disables
 
     rclcpp::NodeOptions options;
     options.parameter_overrides({
@@ -47,6 +50,7 @@ std::shared_ptr<rclcpp::Node> GamepadController::initialize(rclcpp::Node *contro
         {"button_turbo",    control->get_parameter("gamepad.button_turbo").as_int()},
         {"cmd_vel_topic",   control->get_parameter("gamepad.cmd_vel_topic").as_string()},
         {"publish_rate",    control->get_parameter("gamepad.publish_rate").as_int()},
+        {"joy_timeout",     control->get_parameter("gamepad.joy_timeout").as_double()},
     });
     return std::make_shared<GamepadController>(options);
 }
@@ -69,7 +73,9 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
     this->declare_parameter<int>("axis_angular_z", -1);
     this->declare_parameter<int>("button_turbo", -1);
     this->declare_parameter<int>("publish_rate", 50);
+    this->declare_parameter<double>("joy_timeout", 0.5);
 
+    joy_timeout_      = this->get_parameter("joy_timeout").as_double();
     linear_scale_     = this->get_parameter("linear_scale").as_double();
     angular_scale_    = this->get_parameter("angular_scale").as_double();
     deadzone_         = this->get_parameter("deadzone").as_double();
@@ -79,7 +85,11 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
     axis_angular_z_   = this->get_parameter("axis_angular_z").as_int();
     button_turbo_     = this->get_parameter("button_turbo").as_int();
     int publish_rate  = this->get_parameter("publish_rate").as_int();
-    if (publish_rate < 1) publish_rate = 50;
+    // the timer period is 1/rate: zero divides by zero and over 1000 hz is beyond what it can keep up with
+    if (publish_rate < 1 || publish_rate > 1000) {
+        RCLCPP_WARN(this->get_logger(), "publish_rate %d out of range 1-1000, using 50", publish_rate);
+        publish_rate = 50;
+    }
 
     // subscribe to raw joystick input
     joy_subscription_ = this->create_subscription<sensor_msgs::msg::Joy>(
@@ -100,11 +110,11 @@ GamepadController::GamepadController(const rclcpp::NodeOptions &options)
 
     // publish velocity at configurable rate (default 50hz) regardless of joystick input rate
     timer_ = this->create_wall_timer(
-        std::chrono::milliseconds(1000 / publish_rate),
+        std::chrono::microseconds(1000000 / publish_rate),
         std::bind(&GamepadController::publish_twist, this));
 
-    RCLCPP_INFO(this->get_logger(), "gamepad controller ready. publishing to: %s at %d hz",
-                cmd_vel_topic.c_str(), publish_rate);
+    RCLCPP_INFO(this->get_logger(), "gamepad controller ready. publishing to: %s at %d hz, joy_timeout: %.2f s",
+                cmd_vel_topic.c_str(), publish_rate, joy_timeout_);
     RCLCPP_INFO(this->get_logger(), "gamepad controls: axis[%d/%d] = movement, axis[%d] = rotation, button[%d] = turbo",
                 axis_linear_x_, axis_linear_y_, axis_angular_z_, button_turbo_);
 
@@ -171,6 +181,14 @@ void GamepadController::joy_callback(const sensor_msgs::msg::Joy::SharedPtr msg)
         return;
     }
 
+    // stamped here, not on entry: a message we can't use must not keep the last command alive
+    last_joy_time_ = steady_clock_.now();
+    joy_seen_ = true;
+    if (joy_timed_out_) {
+        joy_timed_out_ = false;
+        RCLCPP_INFO(this->get_logger(), "/joy resumed");
+    }
+
     // apply deadzone — values below the threshold are treated as zero
     auto apply_deadzone = [this](double value) {
         return (std::abs(value) < deadzone_) ? 0.0 : value;
@@ -187,9 +205,30 @@ void GamepadController::joy_callback(const sensor_msgs::msg::Joy::SharedPtr msg)
 }
 
 
+// the timer below repeats the stored state, so without this a lost controller would
+// keep commanding the last stick position. nothing to do until the first /joy arrives.
+void GamepadController::check_joy_timeout() {
+    if (joy_timeout_ <= 0.0 || !joy_seen_) return;
+
+    const double age = (steady_clock_.now() - last_joy_time_).seconds();
+    if (age <= joy_timeout_) return;
+
+    if (!joy_timed_out_) {
+        joy_timed_out_ = true;
+        RCLCPP_WARN(this->get_logger(), "no /joy for %.2f s, holding cmd_vel at zero", age);
+    }
+    linear_x_ = 0.0;
+    linear_y_ = 0.0;
+    angular_z_ = 0.0;
+    turbo_mode_ = false;
+}
+
+
 // builds a twist message from the current movement state and publishes it.
 // if turbo mode is active, scales are multiplied by the turbo multiplier.
 void GamepadController::publish_twist() {
+    check_joy_timeout();
+
     double lin_scale = linear_scale_  * (turbo_mode_ ? turbo_multiplier_ : 1.0);
     double ang_scale = angular_scale_ * (turbo_mode_ ? turbo_multiplier_ : 1.0);
 

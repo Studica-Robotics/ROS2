@@ -66,3 +66,6 @@ libstudica_drivers.so
 # ignore executables in drivers folder
 # drivers/examples/*[^.]*
 !Makefile
+
+# Private working notes
+_local/
